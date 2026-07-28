@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: trickee
+      POSTGRES_USER: trickee
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trickee -d trickee"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      TRICKEE_DATABASE_URL: postgresql+psycopg2://trickee:${POSTGRES_PASSWORD}@db:5432/trickee
+      TRICKEE_SECRET_KEY: ${TRICKEE_SECRET_KEY:?Set TRICKEE_SECRET_KEY}
+      TRICKEE_ALLOWED_ORIGINS: ${TRICKEE_ALLOWED_ORIGINS:-https://app.trickee.in}
+      TRICKEE_GPS_RAW_RETENTION_DAYS: ${TRICKEE_GPS_RAW_RETENTION_DAYS:-90}
+      TRICKEE_DEBUG: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

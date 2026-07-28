@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Trickee Brand Colors -->
+    <color name="trickee_yellow">#FFCA20</color>
+    <color name="launch_background">#0B1325</color>
+    <color name="app_background">#04060A</color>
+    <color name="card_background">#16223F</color>
+    <color name="secondary_text">#9CA3AF</color>
+    <color name="neon_green">#39FF14</color>
+
+    <!-- Status bar / navigation bar -->
+    <color name="primaryColor">#FFCA20</color>
+    <color name="primaryDarkColor">#0B1325</color>
+</resources>

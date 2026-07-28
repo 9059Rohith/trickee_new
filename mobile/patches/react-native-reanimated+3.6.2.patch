@@ -1,0 +1,32 @@
+diff --git a/node_modules/react-native-reanimated/android/CMakeLists.txt b/node_modules/react-native-reanimated/android/CMakeLists.txt
+index 8ba4122..bbf104b 100644
+--- a/node_modules/react-native-reanimated/android/CMakeLists.txt
++++ b/node_modules/react-native-reanimated/android/CMakeLists.txt
+@@ -1,3 +1,7 @@
++# Disable CMake self-regeneration. On Windows/Ninja this RERUN rule can loop
++# forever ("manifest 'build.ninja' still dirty after 100 tries"); reanimated's
++# source set is static (a node_module), so regeneration is unnecessary.
++set(CMAKE_SUPPRESS_REGENERATION ON)
+ project(Reanimated)
+ cmake_minimum_required(VERSION 3.8)
+ 
+@@ -20,7 +24,7 @@ endif()
+ 
+ string(APPEND CMAKE_CXX_FLAGS " -DREACT_NATIVE_MINOR_VERSION=${REACT_NATIVE_MINOR_VERSION} -DREANIMATED_VERSION=${REANIMATED_VERSION} -DHERMES_ENABLE_DEBUGGER=${HERMES_ENABLE_DEBUGGER}")
+ 
+-string(APPEND CMAKE_CXX_FLAGS " -fexceptions -fno-omit-frame-pointer -frtti -fstack-protector-all -std=c++${CMAKE_CXX_STANDARD} -Wall -Werror")
++string(APPEND CMAKE_CXX_FLAGS " -fexceptions -fno-omit-frame-pointer -frtti -fstack-protector-all -std=c++${CMAKE_CXX_STANDARD} -Wall -Wno-vla-cxx-extension -Wno-deprecated-this-capture")
+ 
+ if(${IS_NEW_ARCHITECTURE_ENABLED})
+     string(APPEND CMAKE_CXX_FLAGS " -DRCT_NEW_ARCH_ENABLED")
+@@ -42,8 +46,8 @@ set (BUILD_DIR ${CMAKE_SOURCE_DIR}/build)
+ set (SRC_DIR ${CMAKE_SOURCE_DIR}/src)
+ set (COMMON_SRC_DIR "${CMAKE_SOURCE_DIR}/../Common")
+ 
+-file(GLOB_RECURSE SOURCES_COMMON CONFIGURE_DEPENDS "${COMMON_SRC_DIR}/cpp/**.cpp")
+-file(GLOB_RECURSE SOURCES_ANDROID CONFIGURE_DEPENDS "${SRC_DIR}/main/cpp/**.cpp")
++file(GLOB_RECURSE SOURCES_COMMON "${COMMON_SRC_DIR}/cpp/**.cpp")
++file(GLOB_RECURSE SOURCES_ANDROID "${SRC_DIR}/main/cpp/**.cpp")
+ 
+ if(${REACT_NATIVE_MINOR_VERSION} GREATER_EQUAL 71)
+     # Consume shared libraries and headers from prefabs

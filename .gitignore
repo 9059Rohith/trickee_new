@@ -1,0 +1,55 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# JavaScript / React Native generated files
+node_modules/
+mobile/node_modules/
+mobile/android/app/build/
+mobile/android/build/
+mobile/*.png
+mobile/*-metro.*.log
+mobile/runtime-*.log
+mobile/*window.xml
+
+# Python generated/local state
+__pycache__/
+*.py[cod]
+.pytest_cache/
+backend/venv/
+backend/.env
+backend/*.db
+backend/*.log
+
+# Secrets and signing material
+.env
+*.keystore
+!mobile/android/app/debug.keystore
+
+# Unused Android Studio starter project at repository root
+/app/
+/.kotlin/
+/gradle/
+/gradlew
+/gradlew.bat
+/gradle.properties
+/build.gradle.kts
+/settings.gradle.kts
+/local.properties
+
+# React Native generated bundles/resources
+/mobile/android/app/src/main/assets/index.android.bundle
+/mobile/android/app/src/main/res/drawable-*/node_modules_*
