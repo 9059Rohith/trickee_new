@@ -1,9 +1,9 @@
-name: CI
+name: Manual CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  # Re-enable push/pull_request triggers after the repository owner's
+  # GitHub Actions billing lock is cleared.
+  workflow_dispatch:
 
 jobs:
   backend:
