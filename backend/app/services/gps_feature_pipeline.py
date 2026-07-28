@@ -79,7 +79,6 @@ def process_trip_gps_samples(
             prev = validated[-1]
             dt = (v.timestamp - prev.timestamp).total_seconds()
             v.time_delta_s = dt
-            total_dur_s += dt
 
             dist = haversine_distance(prev.lat, prev.lng, v.lat, v.lng)
 
@@ -90,21 +89,24 @@ def process_trip_gps_samples(
                 continue
 
             v.distance_delta_m = dist
-            total_dist_m += dist
 
             # Speed — prefer device-reported, fallback to calculated
-            if raw.speed is not None and raw.speed >= 0:
-                v.speed_mps = raw.speed
+            calculated_speed = calculate_speed_mps(dist, dt)
+            if raw.speed is None or raw.speed < 0:
+                v.speed_mps = calculated_speed
+            elif raw.speed < 0.5 and calculated_speed >= 0.5:
+                # Android providers can report stale zero speed while the
+                # coordinates clearly move. Use the internally consistent
+                # coordinate-derived value in that case.
+                v.speed_mps = calculated_speed
             else:
-                v.speed_mps = calculate_speed_mps(dist, dt)
+                v.speed_mps = raw.speed
 
             # Quality gate: impossible speed
             if v.speed_mps > MAX_SPEED_MPS:
                 raw.quality = "rejected"
                 raw.rejection_reason = "impossible_speed"
                 continue
-
-            max_speed = max(max_speed, v.speed_mps)
 
             # Acceleration
             v.acceleration_mps2 = calculate_acceleration_mps2(
@@ -123,6 +125,11 @@ def process_trip_gps_samples(
                 if abs(v.altitude - prev.altitude) > MAX_ALTITUDE_CHANGE_M:
                     v.grade_pct = 0.0  # Zero out but don't reject the sample
 
+            # Only accepted segments contribute to trip-level aggregates.
+            # This keeps customer distance and physics energy on the same route.
+            total_dur_s += dt
+            total_dist_m += dist
+            max_speed = max(max_speed, v.speed_mps)
             grade_values.append(v.grade_pct)
 
             # Stop detection

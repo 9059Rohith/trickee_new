@@ -25,7 +25,7 @@ from app.models.entities import (
     User,
     Vehicle,
 )
-from app.schemas.api import ok
+from app.schemas.api import ok, utc_iso
 from app.services.auth import get_current_user
 from app.services.gps_prediction_service import compute_trip_prediction, get_vehicle_gps_summary
 
@@ -99,8 +99,8 @@ def _require_driver(db: Session, user: User) -> Driver:
 def _trip_dict(t: MobileTripSession) -> dict:
     return {
         "id": t.id, "user_id": t.user_id, "driver_id": t.driver_id,
-        "vehicle_id": t.vehicle_id, "started_at": t.started_at.isoformat() if t.started_at else None,
-        "ended_at": t.ended_at.isoformat() if t.ended_at else None,
+        "vehicle_id": t.vehicle_id, "started_at": utc_iso(t.started_at),
+        "ended_at": utc_iso(t.ended_at),
         "status": t.status, "origin_lat": t.origin_lat, "origin_lng": t.origin_lng,
         "destination_text": t.destination_text,
         "destination_lat": t.destination_lat, "destination_lng": t.destination_lng,
@@ -113,7 +113,7 @@ def _alert_dict(a: Alert) -> dict:
         "id": a.id, "vehicle_id": a.vehicle_id, "driver_id": a.driver_id,
         "alert_type": a.alert_type, "message": a.message,
         "soc_at_alert": a.soc_at_alert, "is_resolved": a.is_resolved,
-        "created_at": a.created_at.isoformat() if a.created_at else None,
+        "created_at": utc_iso(a.created_at),
     }
 
 

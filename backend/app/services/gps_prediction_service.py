@@ -19,6 +19,7 @@ from app.models.entities import (
     TripPrediction,
     Vehicle,
 )
+from app.schemas.api import utc_iso
 from app.services.gps_feature_pipeline import process_trip_gps_samples
 from app.services.physics_energy import (
     TripEnergyEstimate,
@@ -29,6 +30,20 @@ from app.services.physics_energy import (
 
 
 SOC_STALENESS_MINUTES = 120  # SOC older than this is "not recent"
+
+
+def _cap_range_to_vehicle_limit(
+    range_km: float | None,
+    vehicle: Vehicle,
+    current_soc_pct: float,
+) -> tuple[float | None, float | None, bool]:
+    """Cap short-trip extrapolation at the SOC-adjusted certified range."""
+    full_charge_range = vehicle.certified_range or vehicle.max_range_km
+    if range_km is None or not full_charge_range or full_charge_range <= 0:
+        return range_km, None, False
+    ceiling = round(full_charge_range * current_soc_pct / 100.0, 1)
+    capped = min(range_km, ceiling)
+    return round(capped, 1), ceiling, capped < range_km
 
 
 def compute_trip_prediction(
@@ -111,6 +126,8 @@ def compute_trip_prediction(
     # 4. SOC-dependent outputs
     soc_consumed = None
     range_km = None
+    range_cap_km = None
+    range_cap_applied = False
 
     if vehicle and vehicle.usable_kwh:
         soc_consumed = estimate_soc_consumed(
@@ -125,6 +142,9 @@ def compute_trip_prediction(
                 current_soc_pct=recent_soc,
                 usable_kwh=vehicle.usable_kwh,
                 wh_per_km=energy_est.wh_per_km,
+            )
+            range_km, range_cap_km, range_cap_applied = _cap_range_to_vehicle_limit(
+                range_km, vehicle, recent_soc
             )
 
     # 5. Persist prediction
@@ -148,6 +168,8 @@ def compute_trip_prediction(
             "rejected_count": len(raw_samples) - len(validated_samples),
             "distance_km": energy_est.total_distance_km,
             "duration_min": energy_est.total_duration_min,
+            "range_cap_km": range_cap_km,
+            "range_cap_applied": range_cap_applied,
         },
     )
     db.add(pred)
@@ -201,6 +223,9 @@ def get_vehicle_gps_summary(db: Session, vehicle_id: str) -> dict:
             usable_kwh=vehicle.usable_kwh,
             wh_per_km=latest_pred.wh_per_km,
         )
+        estimated_range, _, _ = _cap_range_to_vehicle_limit(
+            estimated_range, vehicle, recent_soc
+        )
 
     return {
         "vehicle_id": vehicle_id,
@@ -215,12 +240,12 @@ def get_vehicle_gps_summary(db: Session, vehicle_id: str) -> dict:
             "confidence": latest_pred.confidence if latest_pred else None,
             "source": latest_pred.source if latest_pred else None,
             "estimated": True,
-            "created_at": latest_pred.created_at.isoformat() if latest_pred else None,
+            "created_at": utc_iso(latest_pred.created_at) if latest_pred else None,
         } if latest_pred else None,
         "soc": {
             "value": latest_soc.value if latest_soc else None,
             "source": latest_soc.source if latest_soc else None,
-            "recorded_at": latest_soc.recorded_at.isoformat() if latest_soc else None,
+            "recorded_at": utc_iso(latest_soc.recorded_at) if latest_soc else None,
             "is_recent": recent_soc is not None,
         },
         "estimated_range_km": estimated_range,

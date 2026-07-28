@@ -33,10 +33,17 @@ The repository is ready for a local manager demonstration:
   successful zero-distance calculation.
 - Driver and fleet-manager demo accounts are seeded.
 - The manager dashboard aggregates fleet trips and predictions.
+- Android emulator API 36.1 has completed the driver login, start-SOC, GPS
+  movement, end-SOC, calculation result, and fleet-manager dashboard flow.
+- API timestamps are emitted as UTC (`Z`) so active-trip timers are correct in
+  non-UTC device timezones.
+- Stale zero-speed GPS readings fall back to coordinate-derived speed, rejected
+  segments are excluded from every trip aggregate, and estimated range is
+  bounded by the SOC-adjusted certified vehicle range.
 
 Last verified locally:
 
-- `31` backend tests passed.
+- `33` backend tests passed.
 - TypeScript compilation passed.
 - ESLint passed with no errors.
 - Docker Compose configuration validation passed.
@@ -119,6 +126,9 @@ an incomplete route.
   `measured_energy_wh / validated_gps_distance_km`.
 - Remaining range is only returned when recent SOC, usable battery capacity,
   and valid Wh/km all exist.
+- Remaining range is capped at `certified_range * current_soc / 100` (falling
+  back to `max_range_km`) so short low-demand samples cannot imply an impossible
+  range. The cap decision is stored in prediction provenance.
 - A short trip and dashboard SOC rounded to whole percentages can produce noisy
   SOC-calibrated Wh/km. Keep the physics estimate and provenance visible.
 - `traction_demand_proxy` and `regen_opportunity_proxy` are GPS-derived proxies,
@@ -250,7 +260,23 @@ $env:TRICKEE_SECRET_KEY = "replace-with-a-long-local-test-secret"
 docker compose config --quiet
 ```
 
-Expected backend result at handoff: `31 passed`.
+Expected backend result at handoff: `33 passed`.
+
+### Latest emulator evidence (2026-07-28)
+
+- Emulator: Android API 36.1, package `com.trickeeandroid`.
+- Driver trip: starting SOC `80%`, ending SOC `78%`, 188 raw samples and 186
+  validated samples.
+- Validated distance matched in both customer and physics paths: `0.078 km`.
+- Physics result: `30.08 Wh/km`, `2.34 Wh`, low confidence, `75.2 km` estimated
+  range. The customer result separately showed `58 Wh` from the 2% manual SOC
+  change; this is noisy because the simulated trip was only 78 metres.
+- Fleet-manager UI and `/owner/summary` both showed 1 trip, 0.08 km, recent SOC
+  78%, 30.08 Wh/km, and 75.2 km estimated range.
+- Active-trip timer began at `00:07`, confirming UTC timestamp handling.
+- A transient emulator network failure re-queued the final GPS batch; retry
+  completed successfully without losing the trip. No Android runtime crash was
+  recorded.
 
 ## 10. Main API endpoints
 
@@ -294,8 +320,6 @@ All application endpoints use the `/api/v1` prefix.
 
 ### P0 — required before claiming production-ready
 
-- Complete an emulator end-to-end trip with simulated GPS and retain screenshots
-  and logs.
 - Complete at least one real Android/vehicle drive with precise foreground GPS.
 - Deploy and verify the production API/PostgreSQL environment.
 - Confirm or replace the hard-coded Render production hostname.
@@ -335,22 +359,22 @@ All application endpoints use the `/api/v1` prefix.
 
 ## 13. Release acceptance checklist
 
-- [ ] Backend tests pass.
-- [ ] TypeScript and ESLint pass.
+- [x] Backend tests pass.
+- [x] TypeScript and ESLint pass.
 - [ ] Android debug and signed release builds pass.
 - [ ] Database migrations pass on a clean PostgreSQL database.
 - [ ] Health check and login work on the deployed API.
-- [ ] Starting SOC is persisted with the trip.
-- [ ] GPS tracking begins only for an active trip.
-- [ ] Multiple GPS batches upload without duplicates or lost points.
-- [ ] Final GPS queue is empty before end-trip calculation.
-- [ ] Ending SOC and final GPS location are persisted.
-- [ ] Valid trips produce non-zero distance and calculation values.
-- [ ] Invalid/insufficient GPS produces an honest unavailable result.
+- [x] Starting SOC is persisted with the trip.
+- [x] GPS tracking begins only for an active trip.
+- [x] Multiple GPS batches upload without duplicates or lost points.
+- [x] Final GPS queue is empty before end-trip calculation.
+- [x] Ending SOC and final GPS location are persisted.
+- [x] Valid trips produce non-zero distance and calculation values.
+- [x] Invalid/insufficient GPS produces an honest unavailable result.
 - [ ] Driver trip history shows SOC start/end, distance, and energy.
-- [ ] Fleet manager sees only the correct fleet's data.
-- [ ] Range is hidden when recent SOC is unavailable.
-- [ ] No GPS-derived value is labeled as direct BMS telemetry.
+- [x] Fleet manager sees only the correct fleet's data.
+- [x] Range is hidden when recent SOC is unavailable.
+- [x] No GPS-derived value is labeled as direct BMS telemetry.
 - [ ] Offline, permission-denied, token-expired, and retry paths are tested.
 - [ ] Real-device road test passes.
 - [ ] Production secrets, CORS, retention, backups, and monitoring are configured.
@@ -366,4 +390,3 @@ All application endpoints use the `/api/v1` prefix.
    release keystores, or generated APK/build directories.
 7. Update this document whenever the trip contract, deployment URL, hardware
    integration, or acceptance criteria change.
-

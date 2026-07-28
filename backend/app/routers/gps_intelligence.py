@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.entities import TripPrediction, User
-from app.schemas.api import ok
+from app.schemas.api import ok, utc_iso
 from app.services.auth import get_current_user
 from app.services.gps_prediction_service import compute_trip_prediction, get_vehicle_gps_summary
 
@@ -32,7 +32,7 @@ def _prediction_dict(p: TripPrediction) -> dict:
         "uncertainty_upper": p.uncertainty_upper,
         "ood_score": p.ood_score,
         "provenance": p.provenance,
-        "created_at": p.created_at.isoformat() if p.created_at else None,
+        "created_at": utc_iso(p.created_at),
     }
 
 

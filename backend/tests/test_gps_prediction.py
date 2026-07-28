@@ -10,9 +10,11 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base, get_db
 from app.main import app
 from app.models.entities import (
-    Driver, Fleet, GPSRawSample, MobileTripSession, SOCReading, User, Vehicle,
+    Driver, Fleet, GPSRawSample, MobileTripSession, SOCReading, TripFeature,
+    TripPrediction, User, Vehicle,
 )
 from app.services.auth import hash_password, create_access_token
+from app.services.gps_prediction_service import _cap_range_to_vehicle_limit
 
 # In-memory test database
 TEST_DB_URL = "sqlite:///./test_gps.db"
@@ -98,6 +100,14 @@ class TestHealthEndpoint:
 
 
 class TestOwnerSummary:
+    def test_range_is_capped_by_soc_adjusted_certified_range(self, seed_data):
+        capped, ceiling, applied = _cap_range_to_vehicle_limit(
+            500.0, seed_data["vehicle"], 78.0
+        )
+        assert capped == 81.9
+        assert ceiling == 81.9
+        assert applied is True
+
     def test_owner_sees_only_fleet_gps_results(self, seed_data):
         seed_data["user"].role = "fleet_admin"
         seed_data["db"].commit()
@@ -158,6 +168,7 @@ class TestMobileFlow:
         assert r.status_code == 200
         trip = r.json()["data"]
         assert trip["status"] == "active"
+        assert trip["started_at"].endswith("Z")
         trip_id = trip["id"]
 
         # Upload GPS batch
@@ -210,6 +221,52 @@ class TestMobileFlow:
             assert pred["source"] == "physics_baseline"
             assert pred["estimated"] is True
             assert pred["wh_per_km"] is not None
+
+    def test_moving_coordinates_override_stale_zero_speed(self, seed_data):
+        headers = {"Authorization": f"Bearer {seed_data['token']}"}
+        vehicle = seed_data["vehicle"]
+        started = client.post("/api/v1/mobile/trips/start", headers=headers, json={
+            "vehicle_id": vehicle.id, "starting_soc": 80.0,
+        }).json()["data"]
+
+        now = datetime.utcnow()
+        points = [
+            {
+                "lat": 21.17 + i * 0.000012,
+                "lng": 72.83 + i * 0.000012,
+                "timestamp": (now + timedelta(seconds=i)).isoformat(),
+                "accuracy": 5.0,
+                "speed": 0.0,
+            }
+            for i in range(30)
+        ]
+        upload = client.post(
+            f"/api/v1/mobile/v2/trips/{started['id']}/gps-batch",
+            headers=headers,
+            json={"batch_id": "stale-zero-speed", "points": points},
+        )
+        assert upload.status_code == 200
+
+        response = client.post(
+            "/api/v1/mobile/trips/end",
+            headers=headers,
+            json={"ending_soc": 78.0},
+        )
+        result = response.json()["data"]
+
+        assert response.status_code == 200
+        assert result["calculation_status"] == "complete"
+        assert result["prediction"]["wh_per_km"] > 5
+        assert result["prediction"]["range_km"] <= 81.9
+        feature = seed_data["db"].query(TripFeature).filter(
+            TripFeature.trip_id == started["id"]
+        ).one()
+        prediction = seed_data["db"].query(TripPrediction).filter(
+            TripPrediction.trip_id == started["id"]
+        ).one()
+        assert feature.distance_km == pytest.approx(
+            prediction.provenance["distance_km"], abs=0.001
+        )
 
     def test_end_trip_requires_soc(self, seed_data):
         headers = {"Authorization": f"Bearer {seed_data['token']}"}

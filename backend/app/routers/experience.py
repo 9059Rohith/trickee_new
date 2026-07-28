@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.entities import MobileTripSession, TripFeature, TripPrediction, User
-from app.schemas.api import ok
+from app.schemas.api import ok, utc_iso
 from app.services.auth import get_current_user
 from app.services.gps_prediction_service import get_vehicle_gps_summary
 
@@ -44,8 +44,8 @@ def driver_trips(
                 "id": trip.id,
                 "vehicle_id": trip.vehicle_id,
                 "driver_id": trip.driver_id,
-                "started_at": trip.started_at.isoformat(),
-                "ended_at": trip.ended_at.isoformat() if trip.ended_at else None,
+                "started_at": utc_iso(trip.started_at),
+                "ended_at": utc_iso(trip.ended_at),
                 "origin_lat": trip.origin_lat,
                 "origin_lng": trip.origin_lng,
                 "dest_lat": trip.destination_lat,

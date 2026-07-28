@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.entities import SOCReading, User, Vehicle
-from app.schemas.api import ok
+from app.schemas.api import ok, utc_iso
 from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/soc", tags=["soc"])
@@ -41,8 +41,8 @@ def _soc_dict(s: SOCReading) -> dict:
         "value": s.value,
         "source": s.source,
         "confidence": s.confidence,
-        "recorded_at": s.recorded_at.isoformat() if s.recorded_at else None,
-        "created_at": s.created_at.isoformat() if s.created_at else None,
+        "recorded_at": utc_iso(s.recorded_at),
+        "created_at": utc_iso(s.created_at),
     }
 
 

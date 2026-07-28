@@ -24,6 +24,7 @@ mobile/*.png
 mobile/*-metro.*.log
 mobile/runtime-*.log
 mobile/*window.xml
+mobile/e2e-*.xml
 
 # Python generated/local state
 __pycache__/
