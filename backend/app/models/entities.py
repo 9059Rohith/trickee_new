@@ -124,6 +124,35 @@ class Vehicle(Base):
     fleet: Mapped[Fleet] = relationship(back_populates="vehicles")
 
 
+class Device(Base):
+    __tablename__ = "devices"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    fleet_id: Mapped[str] = mapped_column(String(36), ForeignKey("fleets.id"), nullable=False, index=True)
+    vehicle_id: Mapped[str] = mapped_column(String(36), ForeignKey("vehicles.id"), nullable=False, index=True)
+    registered_by_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    installation_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    platform: Mapped[str] = mapped_column(String(20), nullable=False)
+    device_model: Mapped[str] = mapped_column(String(100), nullable=False)
+    app_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class DeviceRefreshToken(Base):
+    __tablename__ = "device_refresh_tokens"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    device_id: Mapped[str] = mapped_column(String(36), ForeignKey("devices.id"), nullable=False, index=True)
+    family_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    replaced_by_token_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 class Alert(Base):
     __tablename__ = "alerts"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)

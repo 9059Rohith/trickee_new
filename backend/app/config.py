@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440
     user_refresh_token_expire_days: int = 30
+    device_access_token_expire_minutes: int = 60
+    device_refresh_token_expire_days: int = 90
     google_oauth_client_id: str = ""
     google_workspace_domain: str = ""
     allowed_origins: str = "*"

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import SessionLocal, create_tables, get_db
-from app.routers import auth, experience, fleet_owner, gps_intelligence, mobile, soc, vehicles
+from app.routers import auth, devices, experience, fleet_owner, gps_intelligence, mobile, soc, vehicles
 from app.services.auth import get_current_user
 from app.models.entities import User
 from app.services.gps_retention import cleanup_expired_raw_samples
@@ -70,6 +70,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix=settings.api_prefix)
 app.include_router(auth.v2_router)
+app.include_router(devices.router)
 app.include_router(mobile.router, prefix=settings.api_prefix)
 app.include_router(gps_intelligence.router, prefix=settings.api_prefix)
 app.include_router(soc.router, prefix=settings.api_prefix)
