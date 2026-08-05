@@ -116,6 +116,19 @@ def rotate_user_session(
     )
 
 
+def revoke_user_session(db: Session, user: User, refresh_token: str) -> None:
+    token_hash = hash_refresh_token(refresh_token)
+    current = db.query(UserRefreshToken).filter(
+        UserRefreshToken.user_id == user.id,
+        UserRefreshToken.token_hash == token_hash,
+    ).first()
+    if current:
+        db.query(UserRefreshToken).filter(
+            UserRefreshToken.family_id == current.family_id,
+            UserRefreshToken.revoked_at.is_(None),
+        ).update({UserRefreshToken.revoked_at: datetime.utcnow()}, synchronize_session=False)
+
+
 def get_current_user(
     creds: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),

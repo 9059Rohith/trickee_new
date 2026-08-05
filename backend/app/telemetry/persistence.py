@@ -17,6 +17,7 @@ from app.models.entities import (
     TelemetryReceipt,
     TelemetryRejection,
     TelemetryWindow,
+    TripFinalization,
 )
 from app.telemetry.contracts import (
     TelemetryBatchAckV1,
@@ -196,6 +197,24 @@ def persist_telemetry_batch(
                     "accepted_sequences": compress_sequence_ranges(accepted),
                     "highest_contiguous_sequence": cursor.highest_contiguous_sequence,
                 },
+            ))
+
+        if (
+            trip.final_sequence_no is not None
+            and cursor.highest_contiguous_sequence >= trip.final_sequence_no
+            and trip.finalization_state == "waiting_for_telemetry"
+        ):
+            trip.status = "finalizing"
+            trip.finalization_state = "eligible"
+            finalization = db.query(TripFinalization).filter(TripFinalization.trip_id == trip.id).first()
+            if finalization:
+                finalization.processed_sequence_no = cursor.highest_contiguous_sequence
+                finalization.state = "eligible"
+            db.add(ServerOutbox(
+                event_type="trip.finalization_eligible",
+                aggregate_type="trip",
+                aggregate_id=trip.id,
+                payload={"trip_id": trip.id, "final_sequence_no": trip.final_sequence_no},
             ))
 
         ack = TelemetryBatchAckV1(

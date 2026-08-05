@@ -218,3 +218,25 @@ def test_refresh_token_rotates_and_replay_is_rejected(seeded_users, google_claim
     assert first.status_code == 200
     assert first.json()["data"]["refresh_token"] != signed_in["refresh_token"]
     assert replay.status_code == 401
+
+
+def test_logout_revokes_the_refresh_token_family(seeded_users, google_claims):
+    google_claims["logout-token"] = claims(
+        sub="logout-google-sub",
+        email=seeded_users["driver"]["email"],
+        nonce="nonce-1",
+    )
+    signed_in = login("logout-token").json()["data"]
+
+    logout_response = client.post(
+        "/api/v2/auth/logout",
+        headers={"Authorization": f"Bearer {signed_in['access_token']}"},
+        json={"refresh_token": signed_in["refresh_token"]},
+    )
+    refresh_response = client.post(
+        "/api/v2/auth/refresh",
+        json={"refresh_token": signed_in["refresh_token"]},
+    )
+
+    assert logout_response.status_code == 200
+    assert refresh_response.status_code == 401

@@ -44,11 +44,17 @@ class ImuSummaryV1(StrictContract):
     accel_rms_mps2: Axis3
     accel_min_mps2: Axis3
     accel_max_mps2: Axis3
+    accel_magnitude_rms_mps2: float = Field(default=0, ge=0)
+    accel_magnitude_max_mps2: float = Field(default=0, ge=0)
     jerk_rms_mps3: float = Field(ge=0)
     jerk_max_mps3: float = Field(ge=0)
     gyro_mean_rads: Axis3
     gyro_rms_rads: Axis3
     gyro_max_abs_rads: Axis3
+    accelerometer_present: bool = True
+    gyroscope_present: bool = True
+    accelerometer_accuracy: int = Field(default=0, ge=0, le=3)
+    gyroscope_accuracy: int = Field(default=0, ge=0, le=3)
 
 
 class DeviceHealthV1(StrictContract):

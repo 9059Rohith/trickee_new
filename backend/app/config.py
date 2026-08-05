@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     gps_raw_retention_days: int = 90
     max_batch_points: int = 500
     debug: bool = False
+    db_pool_size: int = 2
+    db_max_overflow: int = 1
+    db_pool_timeout_seconds: int = 10
 
     @property
     def allowed_origin_list(self) -> list[str]:

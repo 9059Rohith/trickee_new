@@ -17,6 +17,7 @@ from app.services.auth import (
     get_current_user,
     hash_password,
     rotate_user_session,
+    revoke_user_session,
     verify_password,
 )
 from app.services.google_identity import GoogleIdentityError, verify_google_identity
@@ -168,3 +169,14 @@ def refresh_session(body: RefreshRequest, db: Session = Depends(get_db)):
         "token_type": tokens.token_type,
         "user": _user_dict(user),
     })
+
+
+@v2_router.post("/logout")
+def logout_session(
+    body: RefreshRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    revoke_user_session(db, current_user, body.refresh_token)
+    db.commit()
+    return ok({"logged_out": True})

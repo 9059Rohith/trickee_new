@@ -186,6 +186,10 @@ class MobileTripSession(Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
     source: Mapped[str] = mapped_column(String(40), nullable=False, default="action_button")
     idempotency_key: Mapped[str | None] = mapped_column(String(80), nullable=True, unique=True)
+    completion_idempotency_key: Mapped[str | None] = mapped_column(String(80), nullable=True, unique=True)
+    final_sequence_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    completion_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finalization_state: Mapped[str] = mapped_column(String(30), nullable=False, default="collecting", index=True)
     context: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -271,6 +275,73 @@ class ServerOutbox(Base):
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     dispatched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ProcessorIdempotency(Base):
+    __tablename__ = "processor_idempotency"
+    __table_args__ = (UniqueConstraint("processor_name", "outbox_id", name="uq_processor_outbox"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    processor_name: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    outbox_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    processed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class VehicleLiveStateSnapshot(Base):
+    __tablename__ = "vehicle_live_state_snapshots"
+    vehicle_id: Mapped[str] = mapped_column(String(36), ForeignKey("vehicles.id"), primary_key=True)
+    trip_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("mobile_trip_sessions.id"), nullable=True, index=True)
+    state_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    sequence_no: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    event_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    received_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    freshness: Mapped[str] = mapped_column(String(20), nullable=False, default="OFFLINE", index=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gps_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    projection_status: Mapped[str] = mapped_column(String(30), nullable=False, default="SYNCING")
+    health_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class TelemetryEvent(Base):
+    __tablename__ = "telemetry_events"
+    __table_args__ = (UniqueConstraint("processor_name", "source_sample_id", "event_type", name="uq_telemetry_event_source"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    vehicle_id: Mapped[str] = mapped_column(String(36), ForeignKey("vehicles.id"), nullable=False, index=True)
+    trip_id: Mapped[str] = mapped_column(String(36), ForeignKey("mobile_trip_sessions.id"), nullable=False, index=True)
+    source_sample_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    processor_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class TripFinalization(Base):
+    __tablename__ = "trip_finalizations"
+    trip_id: Mapped[str] = mapped_column(String(36), ForeignKey("mobile_trip_sessions.id"), primary_key=True)
+    final_sequence_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    processed_sequence_no: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    state: Mapped[str] = mapped_column(String(30), nullable=False, default="waiting", index=True)
+    summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ArchiveManifest(Base):
+    __tablename__ = "archive_manifests"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    trip_id: Mapped[str] = mapped_column(String(36), ForeignKey("mobile_trip_sessions.id"), nullable=False, unique=True, index=True)
+    object_uri: Mapped[str] = mapped_column(String(1024), nullable=False)
+    object_generation: Mapped[str] = mapped_column(String(100), nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    first_sequence_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_sequence_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    restore_status: Mapped[str] = mapped_column(String(30), nullable=False, default="unverified", index=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 # ---------------------------------------------------------------------------

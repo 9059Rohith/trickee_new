@@ -1,0 +1,1 @@
+"""Telemetry cold-archive verification."""

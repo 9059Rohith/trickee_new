@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import gzip
+import time
 from io import BytesIO
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.entities import Device, MobileTripSession
+from app.models.entities import ServerOutbox
+from app.observability.metrics import INGESTED_WINDOWS, INGEST_LATENCY, OUTBOX_BACKLOG
 from app.schemas.api import ok
 from app.services.device_auth import get_current_device
 from app.telemetry.contracts import TelemetryBatchRequestV1
@@ -49,6 +52,7 @@ async def upload_telemetry_batch(
     db: Session = Depends(get_db),
     device: Device = Depends(get_current_device),
 ):
+    started = time.perf_counter()
     batch = await _parse_batch(request)
     trip = db.query(MobileTripSession).filter(
         MobileTripSession.id == trip_id,
@@ -62,4 +66,13 @@ async def upload_telemetry_batch(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Window vehicle mismatch")
 
     ack = persist_telemetry_batch(db, device, trip, batch)
+    INGEST_LATENCY.observe(time.perf_counter() - started)
+    accepted = sum(end - start + 1 for start, end in ack.accepted_sequences)
+    if accepted:
+        INGESTED_WINDOWS.labels(result="accepted").inc(accepted)
+    if ack.duplicate_sequences:
+        INGESTED_WINDOWS.labels(result="duplicate").inc(len(ack.duplicate_sequences))
+    if ack.rejections:
+        INGESTED_WINDOWS.labels(result="rejected").inc(len(ack.rejections))
+    OUTBOX_BACKLOG.set(db.query(ServerOutbox).filter(ServerOutbox.state == "pending").count())
     return ok(ack.model_dump(mode="json"))
