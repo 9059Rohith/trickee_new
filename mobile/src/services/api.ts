@@ -4,7 +4,7 @@
  * API service layer. Every method for GPS batch upload, SOC readings,
  * trip predictions, and vehicle management.
  */
-import { API_BASE_URL, REQUEST_TIMEOUT_MS } from "../config";
+import { API_BASE_URL, API_ORIGIN, REQUEST_TIMEOUT_MS } from "../config";
 import type {
   GPSBatchPayload,
   GPSVehicleSummary,
@@ -36,7 +36,9 @@ async function request<T>(
   body?: any,
   signal?: AbortSignal
 ): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
+  const url = path.startsWith("/api/")
+    ? `${API_ORIGIN}${path}`
+    : `${API_BASE_URL}${path}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -85,6 +87,34 @@ export const api = {
       password,
     }),
 
+  googleLogin: (idToken: string, nonce: string) =>
+    request<{
+      access_token: string;
+      refresh_token: string;
+      user: any;
+    }>("POST", "/api/v2/auth/google", null, {
+      id_token: idToken,
+      nonce,
+    }),
+
+  refreshAuth: (refreshToken: string) =>
+    request<{ access_token: string; refresh_token: string; user: any }>(
+      "POST",
+      "/api/v2/auth/refresh",
+      null,
+      { refresh_token: refreshToken }
+    ),
+
+  revokeAuth: (accessToken: string, refreshToken: string) =>
+    request<{ logged_out: boolean }>(
+      "POST",
+      "/api/v2/auth/logout",
+      accessToken,
+      {
+        refresh_token: refreshToken,
+      }
+    ),
+
   signup: (email: string, password: string, full_name: string) =>
     request<{ access_token: string; user: any }>("POST", "/auth/signup", null, {
       email,
@@ -95,6 +125,33 @@ export const api = {
   me: (token: string) => request<any>("GET", "/auth/me", token),
 
   logout: (token: string) => request<any>("POST", "/auth/logout", token),
+
+  registerTelemetryDevice: (
+    token: string,
+    data: {
+      installation_id: string;
+      vehicle_id: string;
+      platform: "android";
+      device_model: string;
+      app_version: string;
+    }
+  ) =>
+    request<{
+      device: { id: string; vehicle_id: string };
+      access_token: string;
+      refresh_token: string;
+    }>("POST", "/api/v2/devices/register", token, data),
+
+  completeTelemetryTrip: (
+    token: string,
+    tripId: string,
+    data: {
+      ending_soc: number;
+      final_sequence_no: number;
+      location?: { lat: number; lng: number };
+      idempotency_key: string;
+    }
+  ) => request<any>("POST", `/api/v2/trips/${tripId}/complete`, token, data),
 
   ownerSummary: (token: string, signal?: AbortSignal) =>
     request<{
@@ -144,13 +201,13 @@ export const api = {
   startTrip: (
     token: string,
     data: {
-      vehicle_id?: string;
+      vehicle_id: string;
       destination_text?: string;
       starting_soc?: number;
       origin?: { lat: number; lng: number };
-      idempotency_key?: string;
+      idempotency_key: string;
     }
-  ) => request<any>("POST", "/mobile/trips/start", token, data),
+  ) => request<any>("POST", "/api/v2/trips/start", token, data),
 
   endTrip: (
     token: string,

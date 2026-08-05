@@ -51,4 +51,20 @@ class TelemetryRepositoryTest {
         assertEquals(OutboxState.PENDING, row.state)
         assertEquals("{}", row.payloadJson)
     }
+
+    @Test
+    fun endedTripIsBackfillEligibleButNeverCaptureRecoverable() = runBlocking {
+        repository.createTrip("trip", "device", "vehicle", 1_000L)
+        repository.setTripState("trip", TripState.ACTIVE)
+        repository.commitWindowAndAdvanceCursor("trip", "sample-1", 2_000, 3_000, "{}", 2_001)
+        repository.recordEnd("trip", finalSequenceNo = 1, endedAtUtcMs = 3_001)
+
+        assertEquals(null, repository.activeTrip())
+        assertEquals("trip", repository.tripWithPendingOutbox()?.tripId)
+
+        repository.applyAcknowledgement("trip", 1, emptyMap(), 4_000)
+        assertEquals(TripState.SYNC_PENDING, repository.trip("trip")?.state)
+        assertEquals(null, repository.tripWithPendingOutbox())
+        assertEquals("trip", repository.latestEndedTrip()?.tripId)
+    }
 }

@@ -29,7 +29,11 @@ import type {
 } from "../services/types";
 import { useAuth } from "./AuthContext";
 import { useInterval } from "../hooks/useInterval";
-import { startGpsTracking, stopGpsTracking } from "../services/gpsTracking";
+import {
+  ensureTelemetryDevice,
+  startTelemetryTrip,
+  stopTelemetryTrip,
+} from "../services/telemetryNative";
 
 type LiveDataValue = {
   me: MobileMe | null;
@@ -124,11 +128,11 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
       setMe(null);
       setAlerts([]);
       setLoading(false);
-      stopGpsTracking();
+      stopTelemetryTrip().catch(() => {});
     }
     return () => {
       inFlight.current?.abort();
-      stopGpsTracking();
+      stopTelemetryTrip().catch(() => {});
     };
   }, [token, load]);
 
@@ -137,17 +141,28 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
     let cancelled = false;
     const activeTripId = me?.active_trip?.id;
     const sync = async () => {
-      if (token && activeTripId) {
-        await startGpsTracking(activeTripId, token);
-      } else if (!cancelled) {
-        await stopGpsTracking();
+      try {
+        if (token && activeTripId && me?.vehicle) {
+          await ensureTelemetryDevice(token, me.vehicle.id);
+          await startTelemetryTrip(activeTripId, me.vehicle.id);
+        } else if (!cancelled) {
+          await stopTelemetryTrip().catch(() => {});
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Telemetry collector could not start."
+          );
+        }
       }
     };
-    void sync();
+    sync();
     return () => {
       cancelled = true;
     };
-  }, [me?.active_trip?.id, token]);
+  }, [me?.active_trip?.id, me?.vehicle, token]);
 
   // Foreground/background handling
   useEffect(() => {

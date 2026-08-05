@@ -1,0 +1,200 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "e4158d21cff803f82521beb669cc2164",
+    "entities": [
+      {
+        "tableName": "local_trips",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`trip_id` TEXT NOT NULL, `device_id` TEXT NOT NULL, `vehicle_id` TEXT NOT NULL, `state` TEXT NOT NULL, `next_sequence_no` INTEGER NOT NULL, `final_sequence_no` INTEGER, `started_at_utc_ms` INTEGER NOT NULL, `ended_at_utc_ms` INTEGER, PRIMARY KEY(`trip_id`))",
+        "fields": [
+          {
+            "fieldPath": "tripId",
+            "columnName": "trip_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deviceId",
+            "columnName": "device_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleId",
+            "columnName": "vehicle_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextSequenceNo",
+            "columnName": "next_sequence_no",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finalSequenceNo",
+            "columnName": "final_sequence_no",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "startedAtUtcMs",
+            "columnName": "started_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAtUtcMs",
+            "columnName": "ended_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "trip_id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "telemetry_outbox",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sample_id` TEXT NOT NULL, `trip_id` TEXT NOT NULL, `sequence_no` INTEGER NOT NULL, `event_time_utc_ms` INTEGER NOT NULL, `monotonic_time_ns` INTEGER NOT NULL, `payload_json` TEXT NOT NULL, `state` TEXT NOT NULL, `attempt_count` INTEGER NOT NULL, `next_attempt_at_utc_ms` INTEGER NOT NULL, `lease_until_utc_ms` INTEGER, `server_committed_at_utc_ms` INTEGER, `created_at_utc_ms` INTEGER NOT NULL, `rejection_code` TEXT, PRIMARY KEY(`sample_id`))",
+        "fields": [
+          {
+            "fieldPath": "sampleId",
+            "columnName": "sample_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tripId",
+            "columnName": "trip_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sequenceNo",
+            "columnName": "sequence_no",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eventTimeUtcMs",
+            "columnName": "event_time_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "monotonicTimeNs",
+            "columnName": "monotonic_time_ns",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadJson",
+            "columnName": "payload_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attempt_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptAtUtcMs",
+            "columnName": "next_attempt_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "leaseUntilUtcMs",
+            "columnName": "lease_until_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "serverCommittedAtUtcMs",
+            "columnName": "server_committed_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "createdAtUtcMs",
+            "columnName": "created_at_utc_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rejectionCode",
+            "columnName": "rejection_code",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "sample_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_telemetry_outbox_trip_id_sequence_no",
+            "unique": true,
+            "columnNames": [
+              "trip_id",
+              "sequence_no"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_telemetry_outbox_trip_id_sequence_no` ON `${TABLE_NAME}` (`trip_id`, `sequence_no`)"
+          },
+          {
+            "name": "index_telemetry_outbox_trip_id_state_next_attempt_at_utc_ms",
+            "unique": false,
+            "columnNames": [
+              "trip_id",
+              "state",
+              "next_attempt_at_utc_ms"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_telemetry_outbox_trip_id_state_next_attempt_at_utc_ms` ON `${TABLE_NAME}` (`trip_id`, `state`, `next_attempt_at_utc_ms`)"
+          },
+          {
+            "name": "index_telemetry_outbox_state_lease_until_utc_ms",
+            "unique": false,
+            "columnNames": [
+              "state",
+              "lease_until_utc_ms"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_telemetry_outbox_state_lease_until_utc_ms` ON `${TABLE_NAME}` (`state`, `lease_until_utc_ms`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e4158d21cff803f82521beb669cc2164')"
+    ]
+  }
+}

@@ -1,14 +1,11 @@
 /**
  * TripActiveBanner — persistent banner during active GPS tracking (§5.3).
- * Shows elapsed time, point count, connection status.
+ * Shows elapsed time and the native durable collector/outbox state.
  */
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "../constants/Colors";
-import {
-  isTrackingActive,
-  getTrackingPointCount,
-} from "../services/gpsTracking";
+import { telemetryStatus } from "../services/telemetryNative";
 
 type Props = {
   tripStartedAt?: string;
@@ -16,7 +13,8 @@ type Props = {
 
 const TripActiveBanner: React.FC<Props> = ({ tripStartedAt }) => {
   const [elapsed, setElapsed] = useState("00:00");
-  const [points, setPoints] = useState(0);
+  const [pending, setPending] = useState(0);
+  const [collectorActive, setCollectorActive] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -30,7 +28,12 @@ const TripActiveBanner: React.FC<Props> = ({ tripStartedAt }) => {
           `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
         );
       }
-      setPoints(getTrackingPointCount());
+      telemetryStatus()
+        .then((status) => {
+          setCollectorActive(status.active);
+          setPending(status.pendingWindowCount);
+        })
+        .catch(() => setCollectorActive(false));
     }, 1000);
     return () => clearInterval(interval);
   }, [tripStartedAt]);
@@ -44,11 +47,11 @@ const TripActiveBanner: React.FC<Props> = ({ tripStartedAt }) => {
       <View style={styles.indicator}>
         <View style={styles.pulseDot} />
         <Text style={styles.trackingText}>
-          {isTrackingActive() ? "GPS TRACKING" : "TRIP ACTIVE"}
+          {collectorActive ? "GPS + IMU RECORDING" : "TRIP ACTIVE"}
         </Text>
       </View>
       <Text style={styles.elapsed}>{elapsed}</Text>
-      <Text style={styles.points}>{points} pts</Text>
+      <Text style={styles.points}>{pending} queued</Text>
     </View>
   );
 };

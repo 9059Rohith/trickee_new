@@ -1,13 +1,16 @@
-import { Platform } from "react-native";
+import { NativeModules, Platform } from "react-native";
 
-const HOSTED_API_ORIGIN = "https://trickee-gps-first.onrender.com";
 const USE_HOSTED_BACKEND = !__DEV__;
 
 const LOCAL_API_ORIGIN =
   Platform.OS === "android" ? "http://10.0.2.2:8001" : "http://127.0.0.1:8001";
 
+const NATIVE_API_ORIGIN = NativeModules.TrickeeTelemetry?.apiOrigin as
+  | string
+  | undefined;
+
 export const API_ORIGIN = USE_HOSTED_BACKEND
-  ? HOSTED_API_ORIGIN
+  ? NATIVE_API_ORIGIN || "https://api-not-configured.invalid"
   : LOCAL_API_ORIGIN;
 export const API_BASE_URL = `${API_ORIGIN}/api/v1`;
 export const REQUEST_TIMEOUT_MS = 60000;

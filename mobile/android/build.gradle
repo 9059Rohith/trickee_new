@@ -52,3 +52,15 @@ subprojects {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+// OneDrive can lock or reparse generated Gradle outputs while they are being
+// snapshotted. CI and local verification can redirect only generated files to
+// a stable local directory without moving or modifying the source checkout.
+def trickeeExternalBuildRoot = System.getenv("TRICKEE_ANDROID_BUILD_DIR")
+if (trickeeExternalBuildRoot) {
+    rootProject.buildDir = file("${trickeeExternalBuildRoot}/root")
+    subprojects { subproject ->
+        def projectPath = subproject.path.replace(':', '/').replaceFirst('^/', '')
+        subproject.buildDir = file("${trickeeExternalBuildRoot}/${projectPath}")
+    }
+}

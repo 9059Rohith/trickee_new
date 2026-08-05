@@ -2,8 +2,8 @@
  * DriverActionSheet — trip start/stop, SOC entry, charging, waiting, SOS.
  *
  * GPS-first additions (§5.3):
- * - Trip start triggers GPS tracking via startGpsTracking()
- * - Trip end calls stopGpsTracking()
+ * - Trip start provisions and starts the native foreground collector.
+ * - Trip end seals the native Room outbox before declaring final sequence.
  * - SOC entry prompt on trip start for GPS-only vehicles
  */
 import React, { useCallback, useState } from "react";
@@ -21,7 +21,11 @@ import { useAuth } from "../context/AuthContext";
 import { useLiveData } from "../context/LiveDataContext";
 import SOCEntryModal from "./SOCEntryModal";
 import CalculationOverlay from "./CalculationOverlay";
-import { stopGpsTracking } from "../services/gpsTracking";
+import {
+  prepareTelemetryCollector,
+  startTelemetryTrip,
+  stopTelemetryTrip,
+} from "../services/telemetryNative";
 
 type Props = {
   visible: boolean;
@@ -55,11 +59,13 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
     setLoading(true);
     setError(null);
     try {
-      await api.startTrip(token, {
+      await prepareTelemetryCollector(token, vehicle.id);
+      const trip = await api.startTrip(token, {
         vehicle_id: vehicle.id,
         starting_soc: startingSoc,
         idempotency_key: `trip-${Date.now()}`,
       });
+      await startTelemetryTrip(trip.id, vehicle.id);
       await refresh();
     } catch (err: any) {
       setError(err.message || "Failed to start trip");
@@ -86,15 +92,14 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
     setCalculationError(null);
     setCalculationVisible(true);
     try {
-      const gps = await stopGpsTracking();
-      if (gps.pendingPointCount > 0) {
-        throw new Error(
-          `${gps.pendingPointCount} GPS points are waiting to upload. Check the connection and try again.`
-        );
+      const telemetry = await stopTelemetryTrip();
+      if (!telemetry.tripId) {
+        throw new Error("No active native telemetry trip was found.");
       }
-      const result = await api.endTrip(token, {
+      const result = await api.completeTelemetryTrip(token, telemetry.tripId, {
         ending_soc: endingSoc,
-        location: gps.lastLocation || undefined,
+        final_sequence_no: telemetry.finalSequenceNo,
+        location: telemetry.lastLocation,
         idempotency_key: `end-${Date.now()}`,
       });
       setCalculationResult(result);

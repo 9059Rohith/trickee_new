@@ -14,8 +14,14 @@ abstract class TelemetryDao {
     @Query("SELECT * FROM local_trips WHERE trip_id = :tripId")
     abstract suspend fun trip(tripId: String): LocalTripEntity?
 
-    @Query("SELECT * FROM local_trips WHERE state NOT IN ('COMPLETED', 'CAPTURE_FAILED') ORDER BY started_at_utc_ms DESC LIMIT 1")
-    abstract suspend fun recoverableTrip(): LocalTripEntity?
+    @Query("SELECT * FROM local_trips WHERE state = 'ACTIVE' ORDER BY started_at_utc_ms DESC LIMIT 1")
+    abstract suspend fun activeTrip(): LocalTripEntity?
+
+    @Query("SELECT t.* FROM local_trips t WHERE EXISTS (SELECT 1 FROM telemetry_outbox o WHERE o.trip_id = t.trip_id AND o.state IN ('PENDING', 'IN_FLIGHT')) ORDER BY t.started_at_utc_ms DESC LIMIT 1")
+    abstract suspend fun tripWithPendingOutbox(): LocalTripEntity?
+
+    @Query("SELECT * FROM local_trips WHERE state IN ('SYNC_PENDING', 'FINALIZING') AND final_sequence_no IS NOT NULL ORDER BY ended_at_utc_ms DESC LIMIT 1")
+    abstract suspend fun latestEndedTrip(): LocalTripEntity?
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     protected abstract suspend fun insertOutbox(row: TelemetryOutboxEntity)
@@ -97,4 +103,7 @@ abstract class TelemetryDao {
 
     @Query("UPDATE local_trips SET state = :state, final_sequence_no = :finalSequenceNo, ended_at_utc_ms = :endedAtUtcMs WHERE trip_id = :tripId")
     abstract suspend fun recordEnd(tripId: String, state: TripState, finalSequenceNo: Long, endedAtUtcMs: Long): Int
+
+    @Query("UPDATE local_trips SET state = :state WHERE trip_id = :tripId")
+    abstract suspend fun setTripState(tripId: String, state: TripState): Int
 }

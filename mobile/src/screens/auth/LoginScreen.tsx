@@ -15,7 +15,7 @@ import { useAuth } from "../../context/AuthContext";
 import { DEMO_LOGINS, SHOW_DEMO_LOGINS } from "../../config";
 
 const LoginScreen: React.FC = () => {
-  const { login, loading, error } = useAuth();
+  const { login, googleLogin, loading, error } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -61,6 +61,19 @@ const LoginScreen: React.FC = () => {
           ) : (
             <Text style={styles.loginText}>Sign In</Text>
           )}
+        </TouchableOpacity>
+
+        <View style={styles.divider}>
+          <View style={styles.line} />
+          <Text style={styles.or}>or</Text>
+          <View style={styles.line} />
+        </View>
+        <TouchableOpacity
+          style={styles.googleBtn}
+          onPress={() => googleLogin().catch(() => {})}
+          disabled={loading}
+        >
+          <Text style={styles.googleText}>Continue with Google</Text>
         </TouchableOpacity>
 
         {SHOW_DEMO_LOGINS && DEMO_LOGINS.length > 0 && (
@@ -130,6 +143,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   loginText: { color: Colors.darkText, fontWeight: "800", fontSize: 16 },
+  divider: { flexDirection: "row", alignItems: "center", marginVertical: 18 },
+  line: { flex: 1, height: 1, backgroundColor: Colors.borderLight },
+  or: { color: Colors.secondaryText, marginHorizontal: 12 },
+  googleBtn: {
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: "center",
+  },
+  googleText: { color: Colors.primaryText, fontWeight: "700", fontSize: 15 },
   demoSection: { marginTop: 32, alignItems: "center" },
   demoLabel: {
     color: Colors.secondaryText,

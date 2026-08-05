@@ -49,9 +49,20 @@ class TelemetryRepository(private val dao: TelemetryDao) {
     }
 
     suspend fun recoverExpiredLeases(nowUtcMs: Long): Int = dao.recoverExpiredLeases(nowUtcMs)
+    suspend fun releaseForRetry(sampleIds: List<String>, nextAttemptAtUtcMs: Long): Int =
+        if (sampleIds.isEmpty()) 0 else dao.releaseForRetry(sampleIds, nextAttemptAtUtcMs)
+    suspend fun rejectBatch(tripId: String, rows: List<TelemetryOutboxEntity>, code: String) {
+        rows.forEach { dao.permanentlyReject(tripId, it.sequenceNo, code) }
+    }
     suspend fun purgeAckedBefore(cutoffUtcMs: Long): Int = dao.purgeAckedBefore(cutoffUtcMs)
-    suspend fun recoverableTrip(): LocalTripEntity? = dao.recoverableTrip()
+    suspend fun activeTrip(): LocalTripEntity? = dao.activeTrip()
+    suspend fun tripWithPendingOutbox(): LocalTripEntity? = dao.tripWithPendingOutbox()
+    suspend fun latestEndedTrip(): LocalTripEntity? = dao.latestEndedTrip()
+    suspend fun trip(tripId: String): LocalTripEntity? = dao.trip(tripId)
     suspend fun pendingCount(tripId: String): Int = dao.pendingCount(tripId)
+    suspend fun setTripState(tripId: String, state: TripState) {
+        check(dao.setTripState(tripId, state) == 1) { "Trip not found" }
+    }
 
     fun storagePressure(usedBytes: Long, maxBytes: Long = 2L * 1024 * 1024 * 1024): StoragePressure {
         require(usedBytes >= 0 && maxBytes > 0)

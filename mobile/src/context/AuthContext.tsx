@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext,
   useCallback,
@@ -9,8 +8,7 @@ import React, {
 } from "react";
 import { api, ApiError } from "../services/api";
 import type { User } from "../services/types";
-
-const TOKEN_KEY = "trickee.accessToken";
+import { nativeAuth } from "../services/authNative";
 
 type AuthContextValue = {
   token: string | null;
@@ -18,6 +16,7 @@ type AuthContextValue = {
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
+  googleLogin: () => Promise<void>;
   logout: () => Promise<void>;
   restore: () => Promise<boolean>;
   setUser: (user: User) => void;
@@ -39,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setError(null);
     try {
       const data = await api.login(email, password);
-      await AsyncStorage.setItem(TOKEN_KEY, data.access_token);
+      await nativeAuth.save({ accessToken: data.access_token });
       setToken(data.access_token);
       setUserState(data.user);
     } catch (err) {
@@ -52,13 +51,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  const googleLogin = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const credential = await nativeAuth.googleCredential();
+      const data = await api.googleLogin(credential.idToken, credential.nonce);
+      await nativeAuth.save({
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+      });
+      setToken(data.access_token);
+      setUserState(data.user);
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : "Unable to sign in with Google.";
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     const current = token;
+    const stored = await nativeAuth.load().catch(() => null);
     setToken(null);
     setUserState(null);
     setError(null);
-    await AsyncStorage.removeItem(TOKEN_KEY);
-    if (current) {
+    await nativeAuth.clear();
+    if (current && stored?.refreshToken) {
+      api.revokeAuth(current, stored.refreshToken).catch(() => {});
+    } else if (current) {
       api.logout(current).catch(() => {});
     }
   }, [token]);
@@ -69,17 +95,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     restoringRef.current = true;
     try {
-      const saved = await AsyncStorage.getItem(TOKEN_KEY);
-      if (!saved) {
+      const saved = await nativeAuth.load();
+      if (!saved?.accessToken) {
         return false;
       }
-      const me = await api.me(saved);
-      setToken(saved);
-      setUserState(me);
+      try {
+        const me = await api.me(saved.accessToken);
+        setToken(saved.accessToken);
+        setUserState(me);
+      } catch (err) {
+        if (!(err instanceof ApiError) || !err.isAuth || !saved.refreshToken) {
+          throw err;
+        }
+        const refreshed = await api.refreshAuth(saved.refreshToken);
+        await nativeAuth.save({
+          accessToken: refreshed.access_token,
+          refreshToken: refreshed.refresh_token,
+        });
+        setToken(refreshed.access_token);
+        setUserState(refreshed.user);
+      }
       return true;
     } catch (err) {
       if (err instanceof ApiError && err.isAuth) {
-        await AsyncStorage.removeItem(TOKEN_KEY);
+        await nativeAuth.clear();
       }
       return false;
     } finally {
@@ -89,8 +128,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const setUser = useCallback((next: User) => setUserState(next), []);
   const value = useMemo(
-    () => ({ token, user, loading, error, login, logout, restore, setUser }),
-    [token, user, loading, error, login, logout, restore, setUser]
+    () => ({
+      token,
+      user,
+      loading,
+      error,
+      login,
+      googleLogin,
+      logout,
+      restore,
+      setUser,
+    }),
+    [token, user, loading, error, login, googleLogin, logout, restore, setUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
