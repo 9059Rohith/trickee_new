@@ -17,7 +17,7 @@ services:
   migrate:
     build: ./backend
     restart: "no"
-    command: ["alembic", "upgrade", "head"]
+    command: ["python", "-m", "app.cli", "migrate"]
     environment:
       TRICKEE_DATABASE_URL: postgresql+psycopg2://trickee:${POSTGRES_PASSWORD}@db:5432/trickee
       TRICKEE_SECRET_KEY: ${TRICKEE_SECRET_KEY:?Set TRICKEE_SECRET_KEY}
@@ -46,5 +46,65 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  redis:
+    image: redis:7.2-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  relay:
+    build: ./backend
+    restart: unless-stopped
+    command: ["python", "-m", "app.cli", "relay"]
+    environment: &worker_environment
+      TRICKEE_DATABASE_URL: postgresql+psycopg2://trickee:${POSTGRES_PASSWORD}@db:5432/trickee
+      TRICKEE_SECRET_KEY: ${TRICKEE_SECRET_KEY:?Set TRICKEE_SECRET_KEY}
+      TRICKEE_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  live-state:
+    build: ./backend
+    restart: unless-stopped
+    command: ["python", "-m", "app.cli", "live-state"]
+    environment: *worker_environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  imu-rules:
+    build: ./backend
+    restart: unless-stopped
+    command: ["python", "-m", "app.cli", "imu-rules"]
+    environment: *worker_environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  trip-finalizer:
+    build: ./backend
+    restart: unless-stopped
+    command: ["python", "-m", "app.cli", "trip-finalizer"]
+    environment: *worker_environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+  redis_data:
