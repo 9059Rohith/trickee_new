@@ -297,13 +297,14 @@ npx tsc --noEmit
 npx eslint <changed-and-new-TypeScript-files>
 
 cd android
-$env:TRICKEE_ANDROID_BUILD_DIR = "$env:LOCALAPPDATA\Trickee\gpsdriver-gradle-gates"
 .\gradlew.bat app:testDebugUnitTest app:compileDebugAndroidTestKotlin app:assembleDebug --offline --no-daemon
 ```
 
-The external Android build directory avoids OneDrive locking generated Gradle
-outputs. Repository-wide ESLint is not a valid gate until its inherited config
-excludes Android generated reports and the pre-existing CRLF baseline is fixed.
+Repository-wide ESLint is not a valid gate until its inherited config excludes
+Android generated reports and the pre-existing CRLF baseline is fixed. If
+Gradle reports that a transformed dependency is "not a regular file", remove
+only the exact generated transform-cache directory named in the stack trace and
+rerun; the verified build required this for one corrupted `fbjni` transform.
 
 Validate deployment configuration from the repository root:
 
