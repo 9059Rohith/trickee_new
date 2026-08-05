@@ -1,21 +1,28 @@
 """Auth router — login, signup, me."""
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.models.entities import User, Driver, Fleet
 from app.schemas.api import ok
 from app.services.auth import (
     create_access_token,
+    create_user_session,
     get_current_user,
     hash_password,
+    rotate_user_session,
     verify_password,
 )
+from app.services.google_identity import GoogleIdentityError, verify_google_identity
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+v2_router = APIRouter(prefix="/api/v2/auth", tags=["auth"])
 
 
 class LoginRequest(BaseModel):
@@ -27,6 +34,15 @@ class SignupRequest(BaseModel):
     email: str = Field(max_length=255)
     password: str = Field(min_length=6, max_length=255)
     full_name: str = Field(max_length=255)
+
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str = Field(min_length=1, max_length=8192)
+    nonce: str = Field(min_length=1, max_length=255)
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=32, max_length=512)
 
 
 def _user_dict(u: User) -> dict:
@@ -95,3 +111,60 @@ def me(current_user: User = Depends(get_current_user)):
 @router.post("/logout")
 def logout(current_user: User = Depends(get_current_user)):
     return ok({"logged_out": True})
+
+
+@v2_router.post("/google")
+def google_login(body: GoogleLoginRequest, db: Session = Depends(get_db)):
+    settings = get_settings()
+    try:
+        identity = verify_google_identity(
+            body.id_token,
+            settings.google_oauth_client_id,
+            body.nonce,
+        )
+    except GoogleIdentityError as exc:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
+
+    if not identity.email_verified:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Google email is not verified")
+
+    user = db.query(User).filter(User.google_sub == identity.sub).first()
+    if not user:
+        user = db.query(User).filter(User.email == identity.email).first()
+        if not user:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "User is not provisioned")
+        if user.google_sub and user.google_sub != identity.sub:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Google identity does not match user")
+
+    if not user.is_active:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "User is inactive")
+    if (
+        user.role != "driver"
+        and settings.google_workspace_domain
+        and identity.hosted_domain != settings.google_workspace_domain.lower()
+    ):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Company Workspace account required")
+
+    user.google_sub = identity.sub
+    user.google_hd = identity.hosted_domain
+    user.last_google_login_at = datetime.utcnow()
+    tokens = create_user_session(db, user)
+    db.commit()
+    return ok({
+        "access_token": tokens.access_token,
+        "refresh_token": tokens.refresh_token,
+        "token_type": tokens.token_type,
+        "user": _user_dict(user),
+    })
+
+
+@v2_router.post("/refresh")
+def refresh_session(body: RefreshRequest, db: Session = Depends(get_db)):
+    tokens, user = rotate_user_session(db, body.refresh_token)
+    db.commit()
+    return ok({
+        "access_token": tokens.access_token,
+        "refresh_token": tokens.refresh_token,
+        "token_type": tokens.token_type,
+        "user": _user_dict(user),
+    })

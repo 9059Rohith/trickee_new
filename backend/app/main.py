@@ -69,6 +69,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix=settings.api_prefix)
+app.include_router(auth.v2_router)
 app.include_router(mobile.router, prefix=settings.api_prefix)
 app.include_router(gps_intelligence.router, prefix=settings.api_prefix)
 app.include_router(soc.router, prefix=settings.api_prefix)

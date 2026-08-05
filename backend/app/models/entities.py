@@ -49,11 +49,26 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="driver")
     fleet_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("fleets.id"), nullable=True)
     driver_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("drivers.id"), nullable=True)
+    google_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
+    google_hd: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_google_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     fleet: Mapped[Fleet | None] = relationship(back_populates="users")
     driver: Mapped["Driver | None"] = relationship(back_populates="user")
+
+
+class UserRefreshToken(Base):
+    __tablename__ = "user_refresh_tokens"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    family_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    replaced_by_token_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
 class Driver(Base):
