@@ -3,7 +3,7 @@
 This `gpsdriver` repository is the isolated Android-oriented telemetry build;
 the source repository in `trickee_new` is not modified by this work.
 
-## Live GPS/IMU Gate 0
+## Live GPS/IMU architecture
 
 The backend foundation for uninterrupted one-second trip telemetry is now in
 place for the initial two concurrent vehicles and is designed to scale to 150:
@@ -21,10 +21,14 @@ place for the initial two concurrent vehicles and is designed to scale to 150:
 - A missing GPS fix is represented as `gps_available=false` and `gps=null`; it
   is never converted into a fabricated coordinate or BMS value.
 
-Gate 0 is the server contract. The Kotlin foreground service, Room outbox,
-50 Hz IMU summarizer, uploader, Redis live projector, and fleet WebSocket layer
-remain subsequent gates in the approved master design:
-`docs/superpowers/specs/2026-08-05-android-live-gps-imu-master-system-design.md`.
+The repository-owned implementation for Gates 0–4 now includes the Kotlin
+foreground collector, Room WAL outbox, 50 Hz IMU summarizer, gzip uploader,
+Google Credential Manager sign-in, Redis Streams processing, live REST/WebSocket
+state, Prometheus metrics, verified archive manifests, Google Cloud Terraform,
+and capacity/rollout certification tools. The master contract is
+`docs/superpowers/specs/2026-08-05-android-live-gps-imu-master-system-design.md`;
+actual gate status and external evidence still required are recorded in
+`docs/evidence/gates-1-to-4-status.md`.
 
 ## Project Structure
 
@@ -71,7 +75,7 @@ gpsdriver/
         ├── services/
         │   ├── api.ts                     # All API methods
         │   ├── types.ts                   # TypeScript types
-        │   └── gpsTracking.ts            # 1Hz GPS capture service
+        │   └── telemetryNative.ts         # Native durable collector bridge
         ├── components/
         │   ├── EstimatedBadge.tsx         # "Estimated" / "Live" badge
         │   ├── ConfidenceIndicator.tsx    # 3-bar confidence visual
@@ -95,15 +99,16 @@ gpsdriver/
 ### Backend
 ```bash
 cd backend
-pip install -r requirements.txt
-python -m alembic upgrade head
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+py -3.11 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m alembic upgrade head
+.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Run Tests
 ```bash
 cd backend
-python -m pytest tests/ -v
+.venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
 ### Local demo
@@ -148,11 +153,13 @@ the conservative default is 90 days.
 
 ### Google Cloud target
 
-Use Cloud Run for the API process, Cloud SQL for PostgreSQL, Memorystore for
-Redis in the live-projection gate, and Secret Manager for the database URL,
-JWT secret, and OAuth configuration. Execute `alembic upgrade head` from one
-Cloud Run Job per release, then deploy API revisions; never run migrations in
-every autoscaled API instance.
+The reviewed topology is in `infra/gcp`: private regional Cloud SQL HA/PITR,
+private TLS Memorystore HA, separate Cloud Run API/WebSocket/relay/processor
+roles, one-shot jobs, private versioned Cloud Storage archive, Secret Manager,
+Artifact Registry, alerts, bounded instance counts/pools, and distinct service
+accounts. Execute the migration job once per release; never migrate from API
+replicas. Applying this topology and producing restore/load evidence requires
+company GCP access and is intentionally not claimed by repository tests.
 
 Set `TRICKEE_GOOGLE_OAUTH_CLIENT_ID` to the server/web OAuth client ID whose
 audience the Android Google Sign-In flow requests. Set
@@ -166,14 +173,20 @@ Relevant v2 endpoints are:
 |---|---|---|
 | `POST` | `/api/v2/auth/google` | Verify Google identity and issue Trickee user session |
 | `POST` | `/api/v2/auth/refresh` | Rotate a user refresh token |
+| `POST` | `/api/v2/auth/logout` | Revoke the user refresh-token family |
 | `POST` | `/api/v2/devices/register` | Bind an Android installation to a vehicle |
 | `POST` | `/api/v2/devices/token` | Rotate device credentials |
 | `POST` | `/api/v2/devices/{device_id}/revoke` | Revoke an installation and token family |
+| `POST` | `/api/v2/trips/start` | Idempotently create an offline-first trip |
+| `POST` | `/api/v2/trips/{trip_id}/complete` | Declare the final sequence and wait for gaps |
 | `POST` | `/api/v2/trips/{trip_id}/telemetry-batches` | Commit versioned GPS/IMU windows |
+| `GET` | `/api/v2/vehicles/{vehicle_id}/live-state` | Fetch the recoverable current snapshot |
+| `WS` | `/ws/v2/vehicles/{vehicle_id}` | Receive versioned live snapshots/updates |
 
-Android debug builds use the emulator-local API. Release builds use
-`https://trickee-gps-first.onrender.com` and disable cleartext traffic. To produce
-a store-signed release, provide these Gradle properties in a private user-level
+Android debug builds use the emulator-local API. Release builds require an
+explicit `TRICKEE_API_ORIGIN`; an unconfigured release resolves to a deliberate
+non-routable `.invalid` address and disables cleartext traffic. To produce a
+store-signed release, provide these Gradle properties in a private user-level
 `gradle.properties` file (never commit the keystore or secrets):
 
 ```properties
@@ -181,10 +194,12 @@ TRICKEE_RELEASE_STORE_FILE=C:/secure/trickee-release.keystore
 TRICKEE_RELEASE_STORE_PASSWORD=...
 TRICKEE_RELEASE_KEY_ALIAS=...
 TRICKEE_RELEASE_KEY_PASSWORD=...
+TRICKEE_GOOGLE_WEB_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+TRICKEE_API_ORIGIN=https://your-company-cloud-run-api.example.com
 ```
 
-Then run `mobile/android/gradlew.bat bundleRelease`. Confirm the production API
-hostname before store submission if it differs from the configured Render URL.
+Then run `mobile/android/gradlew.bat bundleRelease` and certify that exact signed
+artifact against the company Google Cloud API before store submission.
 
 ## Non-Negotiable Rules
 1. GPS + specs CAN estimate: route energy, Wh/km, demand score, SOC consumed

@@ -18,7 +18,7 @@ visible in the UI, API fields, and documentation.
 
 ## 2. Current status
 
-### Android live telemetry Gate 0 (implemented 2026-08-05)
+### Android live telemetry Gates 0–4 repository implementation (2026-08-05)
 
 - Google OAuth identity verification is linked to pre-provisioned users, with
   rotating Trickee user refresh-token families and replay revocation.
@@ -33,12 +33,24 @@ visible in the UI, API fields, and documentation.
 - Database uniqueness enforces `sample_id` and
   `(device_id, trip_id, sequence_no)` idempotency. Exact retries are success;
   conflicting reuse is quarantined and never overwrites telemetry.
-- Gate 0 is verified by `61` backend tests plus a clean SQLite Alembic upgrade
-  to `0002_live_telemetry_foundation`.
+- A Kotlin location foreground service owns 1 Hz fused GPS and 50 Hz
+  accelerometer/gyroscope collection. Each elapsed-second window commits to a
+  Room WAL outbox before the serialized gzip uploader may transmit it.
+- WorkManager backfill, lease recovery, bounded full-jitter retry, contiguous
+  ACKs, Android Keystore device/user sessions, and Credential Manager Google
+  sign-in are implemented.
+- Offline-first trip start and final-sequence completion are idempotent. A trip
+  cannot finalize until its canonical upload cursor reaches the declared end.
+- PostgreSQL outbox relay, Redis Streams consumer recovery, independent
+  processor idempotency, dead-lettering, live-state/IMU/finalization processors,
+  REST/WebSocket recovery, metrics, and verified archive manifests are present.
+- `infra/gcp` defines the private HA/PITR Google Cloud topology. Capacity and
+  three-day cohort evaluators are executable under `backend/scripts`.
 
-This does not yet mean the full live system is finished. The native Kotlin
-foreground collector, Room outbox, 50 Hz IMU windowing, Redis projector,
-WebSocket delivery, and 2-to-150-vehicle load/soak tests are the next gates.
+Repository completion does not equal fleet certification. Physical two-phone
+trips, company-GCP apply/failover/restore, the full 150-identity capacity run,
+and three-day cohort holds remain external evidence. See
+`docs/evidence/gates-1-to-4-status.md`.
 
 The repository is ready for a local manager demonstration:
 
@@ -63,13 +75,15 @@ The repository is ready for a local manager demonstration:
   segments are excluded from every trip aggregate, and estimated range is
   bounded by the SOC-adjusted certified vehicle range.
 
-Legacy application baseline previously verified locally:
+Final Gates 0–4 repository verification on 2026-08-05:
 
-- `61` backend tests now pass, including Gate 0 telemetry behavior.
-- TypeScript compilation passed.
-- ESLint passed with no errors.
-- Docker Compose configuration validation passed.
-- Android `assembleDebug` passed.
+- `76` backend tests pass, including identity, trip lifecycle, ingestion,
+  stream recovery, realtime/archive and capacity-tool behavior.
+- A clean database migrates through `0003_realtime_processing (head)`.
+- TypeScript and changed/new-file ESLint pass with zero warnings.
+- Docker Compose configuration and GCP HCL/static topology checks pass.
+- Android unit tests, instrumentation-test compilation and `assembleDebug`
+  pass (`313` tasks, 14m04s). Physical-device instrumentation remains pending.
 
 GitHub Actions is intentionally manual-only in `.github/workflows/ci.yml`.
 Automatic jobs could not start because the repository owner's GitHub account
@@ -80,11 +94,13 @@ triggers after that account issue is cleared.
 
 | Layer | Technology | Responsibility |
 |---|---|---|
-| Mobile | React Native 0.73 / TypeScript | Authentication, trip controls, foreground GPS capture, offline queue, results, manager UI |
-| API | FastAPI / Pydantic | Authentication, trip lifecycle, GPS ingestion, SOC, vehicle and owner endpoints |
-| Data | SQLAlchemy / Alembic | SQLite for development; PostgreSQL for deployment |
+| Mobile | React Native 0.73 + native Kotlin | UI/auth bridge; location foreground service, Room outbox, uploader and recovery own telemetry |
+| API | FastAPI / Pydantic | Human/device auth, idempotent trip lifecycle and telemetry ingestion |
+| Data | SQLAlchemy / Alembic | SQLite for development; canonical PostgreSQL plus transactional outbox in production |
+| Processing | Redis Streams + Python workers | Recoverable relay, independent idempotent processors and dead-letter flow |
+| Realtime | FastAPI REST/WebSocket + Prometheus | Fleet-isolated versioned snapshots and low-cardinality operations telemetry |
 | Intelligence | Python physics pipeline | GPS filtering, route features, physics energy estimate, confidence and range |
-| Deployment | Docker Compose | PostgreSQL and multi-worker API container |
+| Deployment | Docker Compose + Terraform | Local process roles; GCP Cloud Run, Cloud SQL HA/PITR, Memorystore HA and private archive |
 
 Important code locations:
 
@@ -93,7 +109,7 @@ Important code locations:
 | App entry | `mobile/App.tsx` |
 | Mobile API URL and feature flags | `mobile/src/config/index.ts` |
 | API client | `mobile/src/services/api.ts` |
-| GPS capture and durable queue | `mobile/src/services/gpsTracking.ts` |
+| Native collector and bridge | `mobile/android/app/src/main/java/com/trickeeandroid/telemetry/`, `mobile/src/services/telemetryNative.ts` |
 | Trip start/end UI | `mobile/src/components/DriverActionSheet.tsx` |
 | SOC input | `mobile/src/components/SOCEntryModal.tsx` |
 | Customer calculation result | `mobile/src/components/CalculationOverlay.tsx` |
@@ -107,9 +123,15 @@ Important code locations:
 | Database models | `backend/app/models/entities.py` |
 | Initial migration | `backend/alembic/versions/0001_gps_first.py` |
 | Live telemetry migration | `backend/alembic/versions/0002_live_telemetry_foundation.py` |
+| Realtime processing migration | `backend/alembic/versions/0003_realtime_processing.py` |
 | Telemetry contract | `backend/app/telemetry/contracts.py` |
 | Atomic ingestion | `backend/app/telemetry/persistence.py` |
 | Telemetry v2 route | `backend/app/telemetry/batch_routes.py` |
+| Trip lifecycle | `backend/app/telemetry/trip_routes.py` |
+| Stream relay/consumers | `backend/app/streams/` |
+| Processors and realtime gateway | `backend/app/processors/`, `backend/app/realtime/` |
+| GCP topology | `infra/gcp/` |
+| Operations/certification | `docs/runbooks/telemetry-operations.md`, `backend/scripts/telemetry_load.py`, `backend/scripts/rollout_gate.py` |
 | Demo seed | `backend/scripts/seed_demo.py` |
 
 ## 4. End-trip calculation flow
@@ -268,15 +290,20 @@ Run all of these before a release or manager submission:
 
 ```powershell
 cd backend
-.\venv\Scripts\python.exe -m pytest tests -q
+.\.venv\Scripts\python.exe -m pytest -q
 
 cd ..\mobile
 npx tsc --noEmit
-npx eslint . --quiet
+npx eslint <changed-and-new-TypeScript-files>
 
 cd android
-.\gradlew.bat assembleDebug
+$env:TRICKEE_ANDROID_BUILD_DIR = "$env:LOCALAPPDATA\Trickee\gpsdriver-gradle-gates"
+.\gradlew.bat app:testDebugUnitTest app:compileDebugAndroidTestKotlin app:assembleDebug --offline --no-daemon
 ```
+
+The external Android build directory avoids OneDrive locking generated Gradle
+outputs. Repository-wide ESLint is not a valid gate until its inherited config
+excludes Android generated reports and the pre-existing CRLF baseline is fixed.
 
 Validate deployment configuration from the repository root:
 
@@ -286,7 +313,7 @@ $env:TRICKEE_SECRET_KEY = "replace-with-a-long-local-test-secret"
 docker compose config --quiet
 ```
 
-Expected backend result at Gate 0 handoff: `61 passed`.
+Expected backend result at this handoff: `76 passed`.
 
 ### Latest emulator evidence (2026-07-28)
 
@@ -346,13 +373,12 @@ client migration.
 5. Run `alembic upgrade head` exactly once as a release job. On Google Cloud,
    use a Cloud Run Job with Cloud SQL access; do not migrate from each API
    replica. Docker Compose provides the equivalent one-shot `migrate` service.
-6. Confirm Alembic reaches revision `0002_live_telemetry_foundation`.
+6. Confirm Alembic reaches revision `0003_realtime_processing`.
 7. Verify `/health`, authentication, GPS upload, trip calculation, and retention
    cleanup against PostgreSQL.
-8. Confirm the real production API hostname. Release builds currently use
-   `https://trickee-gps-first.onrender.com` from
-   `mobile/src/config/index.ts`; do not ship until this domain is deployed and
-   tested.
+8. Set `TRICKEE_API_ORIGIN` in the private release Gradle properties to the
+   verified company Cloud Run/custom-domain API origin. An unconfigured release
+   intentionally resolves to a non-routable `.invalid` host.
 9. Provide a private release keystore through user-level Gradle properties.
    Never commit release keys or passwords.
 10. Build `bundleRelease`, install the signed build, and run the complete trip
@@ -360,29 +386,28 @@ client migration.
 
 ## 12. Known limitations and next work
 
-### P0 — required before claiming production-ready
+### P0 — external evidence required before claiming production-ready
 
-- Complete at least one real Android/vehicle drive with precise foreground GPS.
-- Deploy and verify the production API/PostgreSQL environment.
-- Confirm or replace the hard-coded Render production hostname.
+- Complete two concurrent real Android/vehicle trips with precise foreground GPS and IMU, including network loss, process restart, and device reboot evidence.
+- Apply and verify the company Google Cloud topology, OAuth configuration, private networking, alerts, backups, and PITR.
+- Install Terraform in the approved deployment environment, then run
+  `terraform fmt -check`, provider-schema validation, reviewed plan and apply.
+- Resolve the inherited mobile dependency audit (currently 9 moderate, 6 high,
+  and 1 critical advisory) through a tested React Native/voice dependency upgrade.
 - Resolve the GitHub Actions billing lock and re-enable automatic CI triggers.
 - Test a signed release build, not only the debug APK.
-- Run authentication, trip, GPS retention, and owner-isolation security checks
-  against PostgreSQL.
+- Run the 150-identity/60-minute capacity test, 300-window/s burst, 30-device
+  backlog replay, Cloud SQL restore, and archive restore-and-compare.
+- Complete three consecutive qualifying operating days for each 10/25/50/100/150 cohort.
 
-### P1 — reliability and scale
+### P1 — repository follow-up and device certification
 
-- Implement the approved native Kotlin foreground service, Room WAL outbox,
-  50 Hz IMU summarizer, reboot-safe sequence state, and Android recovery worker.
-- Implement Redis Streams projection, fleet WebSockets, slow-client backpressure,
-  and outbox dispatch; the current server outbox is durable but undispatched.
-- Run 2-vehicle full-trip soak tests first, then staged 25/75/150-vehicle load
-  tests with disconnect, token rotation, process death, and database failover.
+- Run the Room instrumentation suite on each supported physical Android/API level.
+- Add WebSocket slow-client disconnect/rate-limit policy after measuring the company dashboard client.
+- Capture Android battery/thermal traces and OEM-specific background restrictions for the supported handset matrix.
 
-- Add a true idempotent retry response for `/mobile/trips/end`. The request
-  accepts an idempotency key, but completed-trip replay is not fully implemented.
-- Decide whether production requires background GPS. The current policy is
-  foreground-only and tracking may pause when the OS suspends the app.
+- Migrate any remaining legacy `/mobile/trips/end` callers to the idempotent v2 final-sequence completion route.
+- Keep collection in an Android location foreground service; the React Native process is not the telemetry owner.
 - Add automated mobile tests for GPS queue concurrency, offline recovery, modal
   behavior, and result rendering.
 - Test long trips that exceed several 200-point batches and temporary network
@@ -391,8 +416,7 @@ client migration.
   token expiry, and low-memory process termination.
 - Test multiple active vehicles and explicit driver-to-vehicle assignment. The
   current demo selects the first active vehicle in the driver's fleet.
-- Add observability: structured logs, error reporting, metrics, request IDs, and
-  deployment alerts.
+- Add company error reporting and trace correlation after the approved observability vendor/project is selected; Prometheus operational metrics and GCP alert resources are present.
 
 ### P2 — real vehicle integration
 
@@ -410,8 +434,9 @@ client migration.
 
 - [x] Backend tests pass.
 - [x] TypeScript and ESLint pass.
-- [ ] Android debug and signed release builds pass.
-- [ ] Database migrations pass on a clean PostgreSQL database.
+- [x] Android debug build passes; signed release/device install remains company-keystore evidence.
+- [x] Database migrations pass locally on a clean database; clean company Cloud SQL evidence remains pending.
+- [ ] Mobile production dependency audit is clean.
 - [ ] Health check and login work on the deployed API.
 - [x] Starting SOC is persisted with the trip.
 - [x] GPS tracking begins only for an active trip.
@@ -424,7 +449,7 @@ client migration.
 - [x] Fleet manager sees only the correct fleet's data.
 - [x] Range is hidden when recent SOC is unavailable.
 - [x] No GPS-derived value is labeled as direct BMS telemetry.
-- [ ] Offline, permission-denied, token-expired, and retry paths are tested.
+- [x] Deterministic offline, token rotation, retry, gap, duplicate, and Redis-outage paths are covered in repository tests.
 - [ ] Real-device road test passes.
 - [ ] Production secrets, CORS, retention, backups, and monitoring are configured.
 
