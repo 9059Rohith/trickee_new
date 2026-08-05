@@ -18,6 +18,7 @@ from app.routers import auth, devices, experience, fleet_owner, gps_intelligence
 from app.services.auth import get_current_user
 from app.models.entities import User
 from app.services.gps_retention import cleanup_expired_raw_samples
+from app.telemetry import batch_routes
 
 settings = get_settings()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -71,6 +72,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix=settings.api_prefix)
 app.include_router(auth.v2_router)
 app.include_router(devices.router)
+app.include_router(batch_routes.router)
 app.include_router(mobile.router, prefix=settings.api_prefix)
 app.include_router(gps_intelligence.router, prefix=settings.api_prefix)
 app.include_router(soc.router, prefix=settings.api_prefix)

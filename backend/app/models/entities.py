@@ -13,7 +13,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -189,6 +189,88 @@ class MobileTripSession(Base):
     context: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Durable live GPS/IMU ingestion
+# ---------------------------------------------------------------------------
+
+class TelemetryReceipt(Base):
+    __tablename__ = "telemetry_receipts"
+    __table_args__ = (
+        UniqueConstraint(
+            "device_id", "trip_id", "sequence_no",
+            name="uq_telemetry_receipt_device_trip_sequence",
+        ),
+    )
+    sample_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    device_id: Mapped[str] = mapped_column(String(36), ForeignKey("devices.id"), nullable=False, index=True)
+    trip_id: Mapped[str] = mapped_column(String(36), ForeignKey("mobile_trip_sessions.id"), nullable=False, index=True)
+    sequence_no: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    batch_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    first_received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class TelemetryWindow(Base):
+    __tablename__ = "telemetry_windows"
+    sample_id: Mapped[str] = mapped_column(String(64), ForeignKey("telemetry_receipts.sample_id"), primary_key=True)
+    device_id: Mapped[str] = mapped_column(String(36), ForeignKey("devices.id"), nullable=False, index=True)
+    trip_id: Mapped[str] = mapped_column(String(36), ForeignKey("mobile_trip_sessions.id"), nullable=False, index=True)
+    vehicle_id: Mapped[str] = mapped_column(String(36), ForeignKey("vehicles.id"), nullable=False, index=True)
+    sequence_no: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    boot_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_time: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    monotonic_time_ns: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    window_duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    gps_available: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gps_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    imu_payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    health_payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    raw_payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class DeviceTripUploadCursor(Base):
+    __tablename__ = "device_trip_upload_cursors"
+    __table_args__ = (
+        UniqueConstraint("device_id", "trip_id", name="uq_device_trip_upload_cursor"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    device_id: Mapped[str] = mapped_column(String(36), ForeignKey("devices.id"), nullable=False, index=True)
+    trip_id: Mapped[str] = mapped_column(String(36), ForeignKey("mobile_trip_sessions.id"), nullable=False, index=True)
+    highest_contiguous_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    highest_received_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class TelemetryRejection(Base):
+    __tablename__ = "telemetry_rejections"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    device_id: Mapped[str] = mapped_column(String(36), ForeignKey("devices.id"), nullable=False, index=True)
+    trip_id: Mapped[str] = mapped_column(String(36), ForeignKey("mobile_trip_sessions.id"), nullable=False, index=True)
+    sample_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    sequence_no: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    batch_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(80), nullable=False)
+    message: Mapped[str] = mapped_column(String(255), nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class ServerOutbox(Base):
+    __tablename__ = "server_outbox"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    aggregate_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    aggregate_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    state: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 # ---------------------------------------------------------------------------
