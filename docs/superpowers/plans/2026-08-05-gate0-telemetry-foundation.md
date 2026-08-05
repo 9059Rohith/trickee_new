@@ -43,7 +43,7 @@
 - Produces: `rotate_user_session(db: Session, refresh_token: str) -> SessionTokenPair`.
 - Produces: `POST /api/v2/auth/google` and `POST /api/v2/auth/refresh`.
 
-- [ ] **Step 1: Write failing Google-authentication tests**
+- [x] **Step 1: Write failing Google-authentication tests**
 
 ```python
 def test_google_login_links_preprovisioned_verified_user(client, seeded_user, verifier):
@@ -67,13 +67,13 @@ def test_refresh_token_is_rotated_once(client, google_session):
     assert replay.status_code == 401
 ```
 
-- [ ] **Step 2: Run tests and verify missing route/model failures**
+- [x] **Step 2: Run tests and verify missing route/model failures**
 
 Run: `cd backend && py -3.11 -m pytest tests/test_google_auth.py -q`
 
 Expected: FAIL because Google identity/session interfaces and routes do not exist.
 
-- [ ] **Step 3: Implement Google verification and user-session persistence**
+- [x] **Step 3: Implement Google verification and user-session persistence**
 
 ```python
 @dataclass(frozen=True)
@@ -100,7 +100,7 @@ def create_user_session(db: Session, user: User) -> SessionTokenPair:
 
 The Google route must reject unverified email, unknown/pre-unprovisioned users, duplicate `sub` links, invalid Workspace domain for non-driver roles, inactive users, and verifier failures. Production verification uses `google.oauth2.id_token.verify_oauth2_token`; tests override the verifier dependency.
 
-- [ ] **Step 4: Run targeted and complete backend tests**
+- [x] **Step 4: Run targeted and complete backend tests**
 
 Run: `cd backend && py -3.11 -m pytest tests/test_google_auth.py -q`
 
@@ -110,7 +110,7 @@ Run: `cd backend && py -3.11 -m pytest tests -q`
 
 Expected: all existing and new tests PASS.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 ```bash
 git add backend/requirements.txt backend/app/config.py backend/app/models/entities.py backend/app/routers/auth.py backend/app/services/auth.py backend/app/services/google_identity.py backend/alembic/versions/0002_live_telemetry_foundation.py backend/tests/test_google_auth.py
@@ -134,7 +134,7 @@ git commit -m "feat: add Google identity sessions"
 - Produces: `get_current_device(...) -> Device` FastAPI dependency.
 - Produces: `POST /api/v2/devices/register`, `POST /api/v2/devices/token`, and `POST /api/v2/devices/{device_id}/revoke`.
 
-- [ ] **Step 1: Write failing device-registration and token tests**
+- [x] **Step 1: Write failing device-registration and token tests**
 
 ```python
 def test_registered_device_receives_separate_session(client, user_headers, vehicle):
@@ -159,13 +159,13 @@ def test_revoked_device_cannot_refresh(client, device_session, user_headers):
     assert response.status_code == 401
 ```
 
-- [ ] **Step 2: Run tests and verify missing route/model failures**
+- [x] **Step 2: Run tests and verify missing route/model failures**
 
 Run: `cd backend && py -3.11 -m pytest tests/test_device_auth.py -q`
 
 Expected: FAIL because device session routes do not exist.
 
-- [ ] **Step 3: Implement device registration, rotation, and revocation**
+- [x] **Step 3: Implement device registration, rotation, and revocation**
 
 ```python
 def create_device_session(db: Session, device: Device) -> DeviceSessionPair:
@@ -183,7 +183,7 @@ def create_device_session(db: Session, device: Device) -> DeviceSessionPair:
 
 Registration must require Android, an active same-fleet vehicle, and a unique installation ID. Refresh rotates the opaque refresh token. Revocation marks both device and outstanding refresh credentials inactive. `get_current_user` must reject `typ=device`; `get_current_device` accepts only `typ=device`.
 
-- [ ] **Step 4: Run targeted and complete backend tests**
+- [x] **Step 4: Run targeted and complete backend tests**
 
 Run: `cd backend && py -3.11 -m pytest tests/test_device_auth.py -q`
 
@@ -193,7 +193,7 @@ Run: `cd backend && py -3.11 -m pytest tests -q`
 
 Expected: all tests PASS.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```bash
 git add backend/app/models/entities.py backend/app/main.py backend/app/routers/devices.py backend/app/services/device_auth.py backend/alembic/versions/0002_live_telemetry_foundation.py backend/tests/test_device_auth.py
@@ -212,7 +212,7 @@ git commit -m "feat: add registered device sessions"
 - Produces: `compress_sequence_ranges(sequences: Iterable[int]) -> list[tuple[int, int]]`.
 - Produces: `missing_sequence_ranges(highest_contiguous: int, received: Iterable[int]) -> list[tuple[int, int]]`.
 
-- [ ] **Step 1: Write failing contract tests**
+- [x] **Step 1: Write failing contract tests**
 
 ```python
 def test_missing_gps_window_is_valid():
@@ -230,13 +230,13 @@ def test_sequence_ranges_are_deterministic():
     assert compress_sequence_ranges([4, 2, 3, 7, 7]) == [(2, 4), (7, 7)]
 ```
 
-- [ ] **Step 2: Run tests and verify the missing module failure**
+- [x] **Step 2: Run tests and verify the missing module failure**
 
 Run: `cd backend && py -3.11 -m pytest tests/test_telemetry_contracts.py -q`
 
 Expected: FAIL because `app.telemetry.contracts` does not exist.
 
-- [ ] **Step 3: Implement strict Pydantic contracts and range helpers**
+- [x] **Step 3: Implement strict Pydantic contracts and range helpers**
 
 The models use `ConfigDict(extra="forbid")`, `schema_version: Literal[1]`, `sequence_no >= 1`, latitude/longitude bounds, non-negative monotonic timestamps, three-axis tuples, IMU completeness from 0 through 100, and a maximum of 100 windows per batch. `gps_available` and `gps` must agree.
 
@@ -252,7 +252,7 @@ def compress_sequence_ranges(sequences: Iterable[int]) -> list[tuple[int, int]]:
     return ranges
 ```
 
-- [ ] **Step 4: Run targeted and complete backend tests**
+- [x] **Step 4: Run targeted and complete backend tests**
 
 Run: `cd backend && py -3.11 -m pytest tests/test_telemetry_contracts.py -q`
 
@@ -262,7 +262,7 @@ Run: `cd backend && py -3.11 -m pytest tests -q`
 
 Expected: all tests PASS.
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 ```bash
 git add backend/app/telemetry/__init__.py backend/app/telemetry/contracts.py backend/tests/test_telemetry_contracts.py
@@ -285,7 +285,7 @@ git commit -m "feat: define telemetry v1 contracts"
 - Produces: `POST /api/v2/trips/{trip_id}/telemetry-batches`.
 - Produces: `TelemetryReceipt`, `TelemetryWindow`, `DeviceTripUploadCursor`, `TelemetryRejection`, and `ServerOutbox` rows.
 
-- [ ] **Step 1: Write failing ingestion behavior tests**
+- [x] **Step 1: Write failing ingestion behavior tests**
 
 ```python
 def test_batch_commit_returns_contiguous_ack(client, device_headers, trip):
@@ -313,13 +313,13 @@ def test_wrong_vehicle_device_is_not_authorized(client, other_device_headers, tr
     assert upload(client, other_device_headers, trip.id, sequences=[1]).status_code == 404
 ```
 
-- [ ] **Step 2: Run tests and verify missing route/model failures**
+- [x] **Step 2: Run tests and verify missing route/model failures**
 
 Run: `cd backend && py -3.11 -m pytest tests/test_telemetry_ingestion.py -q`
 
 Expected: FAIL because telemetry persistence and routes do not exist.
 
-- [ ] **Step 3: Implement the single-transaction persistence algorithm**
+- [x] **Step 3: Implement the single-transaction persistence algorithm**
 
 ```python
 with db.begin_nested():
@@ -334,7 +334,7 @@ db.commit()
 
 The route must authenticate a device token, require path/body trip identity, enforce the device's active vehicle/fleet assignment, cap batches at 100 windows/512 KiB uncompressed, and return only after commit. A duplicate is success. A conflicting reuse is quarantined in `telemetry_rejections`, never overwritten, and returned as a permanent rejection.
 
-- [ ] **Step 4: Verify rollback and complete backend behavior**
+- [x] **Step 4: Verify rollback and complete backend behavior**
 
 Add a forced SQLAlchemy failure test proving receipt/window/cursor/outbox rows all roll back together.
 
@@ -346,7 +346,7 @@ Run: `cd backend && py -3.11 -m pytest tests -q`
 
 Expected: all tests PASS.
 
-- [ ] **Step 5: Commit Task 4**
+- [x] **Step 5: Commit Task 4**
 
 ```bash
 git add backend/app/models/entities.py backend/app/main.py backend/app/telemetry/persistence.py backend/app/telemetry/batch_routes.py backend/alembic/versions/0002_live_telemetry_foundation.py backend/tests/test_telemetry_ingestion.py
@@ -368,7 +368,7 @@ git commit -m "feat: add idempotent telemetry ingestion"
 - Consumes: all Task 1-4 interfaces.
 - Produces: documented configuration, migration commands, compatibility behavior, and Gate 0 evidence.
 
-- [ ] **Step 1: Run clean SQLite migration verification**
+- [x] **Step 1: Run clean SQLite migration verification**
 
 Run from a temporary directory with `TRICKEE_DATABASE_URL=sqlite:///...`:
 
@@ -379,11 +379,11 @@ py -3.11 -m alembic -c backend/alembic.ini current
 
 Expected: current revision `0002_live_telemetry_foundation`.
 
-- [ ] **Step 2: Document exact configuration and compatibility paths**
+- [x] **Step 2: Document exact configuration and compatibility paths**
 
 Document `TRICKEE_GOOGLE_OAUTH_CLIENT_ID`, `TRICKEE_GOOGLE_WORKSPACE_DOMAIN`, access/refresh expiry settings, device enrollment, telemetry endpoint, legacy route transition, and the rule that production migrations run as one release job rather than every API replica.
 
-- [ ] **Step 3: Run the complete verification matrix**
+- [x] **Step 3: Run the complete verification matrix**
 
 Run:
 
@@ -395,7 +395,7 @@ py -3.11 -m alembic heads
 
 Expected: all tests PASS and one head named `0002_live_telemetry_foundation`.
 
-- [ ] **Step 4: Check repository hygiene**
+- [x] **Step 4: Check repository hygiene**
 
 Run:
 
@@ -406,7 +406,7 @@ git status --short
 
 Expected: only intended source, migration, test, and documentation changes; no `.env`, database, logs, virtual environments, dependencies, keys, or build output.
 
-- [ ] **Step 5: Commit Task 5**
+- [x] **Step 5: Commit Task 5**
 
 ```bash
 git add backend/.env.example README.md DEVELOPER_HANDOFF.md docs/superpowers/plans/2026-08-05-gate0-telemetry-foundation.md

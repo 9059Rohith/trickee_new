@@ -1,9 +1,35 @@
 # Trickee GPS-First EV Intelligence
 
+This `gpsdriver` repository is the isolated Android-oriented telemetry build;
+the source repository in `trickee_new` is not modified by this work.
+
+## Live GPS/IMU Gate 0
+
+The backend foundation for uninterrupted one-second trip telemetry is now in
+place for the initial two concurrent vehicles and is designed to scale to 150:
+
+- Google ID tokens link only pre-provisioned Trickee users; Trickee issues its
+  own rotating access and refresh sessions.
+- Android installations register against one active fleet vehicle and receive
+  separate, revocable device credentials.
+- `POST /api/v2/trips/{trip_id}/telemetry-batches` accepts strict schema-v1
+  GPS/IMU windows, plain JSON or gzip, up to 100 windows and 512 KiB
+  uncompressed.
+- Receipts, canonical windows, upload cursor, conflict quarantine, and server
+  outbox are committed atomically. Exact retries succeed without duplicate
+  telemetry; identity conflicts never overwrite the first committed window.
+- A missing GPS fix is represented as `gps_available=false` and `gps=null`; it
+  is never converted into a fabricated coordinate or BMS value.
+
+Gate 0 is the server contract. The Kotlin foreground service, Room outbox,
+50 Hz IMU summarizer, uploader, Redis live projector, and fleet WebSocket layer
+remain subsequent gates in the approved master design:
+`docs/superpowers/specs/2026-08-05-android-live-gps-imu-master-system-design.md`.
+
 ## Project Structure
 
 ```
-trickee_new/
+gpsdriver/
 ├── DECISIONS.md                          # Open founder decisions
 ├── backend/                              # FastAPI backend
 │   ├── requirements.txt
@@ -70,6 +96,7 @@ trickee_new/
 ```bash
 cd backend
 pip install -r requirements.txt
+python -m alembic upgrade head
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -113,9 +140,36 @@ copy backend/.env.example .env
 docker compose up --build -d
 ```
 
-The container runs Alembic migrations before starting two API workers and exposes
-`GET /health` for platform health checks. Raw GPS retention runs at startup and
-every 24 hours; the conservative default is 90 days.
+Run Alembic once as a release job before starting or shifting traffic to API
+replicas. The API container intentionally does not migrate on startup. Docker
+Compose models this with a one-shot `migrate` service. `GET /health` is the
+platform health check. Raw GPS retention runs at startup and every 24 hours;
+the conservative default is 90 days.
+
+### Google Cloud target
+
+Use Cloud Run for the API process, Cloud SQL for PostgreSQL, Memorystore for
+Redis in the live-projection gate, and Secret Manager for the database URL,
+JWT secret, and OAuth configuration. Execute `alembic upgrade head` from one
+Cloud Run Job per release, then deploy API revisions; never run migrations in
+every autoscaled API instance.
+
+Set `TRICKEE_GOOGLE_OAUTH_CLIENT_ID` to the server/web OAuth client ID whose
+audience the Android Google Sign-In flow requests. Set
+`TRICKEE_GOOGLE_WORKSPACE_DOMAIN` to the company Workspace domain. Drivers may
+use explicitly pre-provisioned external Google accounts; privileged staff must
+match the configured hosted domain.
+
+Relevant v2 endpoints are:
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/api/v2/auth/google` | Verify Google identity and issue Trickee user session |
+| `POST` | `/api/v2/auth/refresh` | Rotate a user refresh token |
+| `POST` | `/api/v2/devices/register` | Bind an Android installation to a vehicle |
+| `POST` | `/api/v2/devices/token` | Rotate device credentials |
+| `POST` | `/api/v2/devices/{device_id}/revoke` | Revoke an installation and token family |
+| `POST` | `/api/v2/trips/{trip_id}/telemetry-batches` | Commit versioned GPS/IMU windows |
 
 Android debug builds use the emulator-local API. Release builds use
 `https://trickee-gps-first.onrender.com` and disable cleartext traffic. To produce

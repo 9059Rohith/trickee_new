@@ -1,8 +1,8 @@
 # Trickee Developer Handoff
 
-Last updated: 2026-07-28  
-Repository: <https://github.com/9059Rohith/trickee_new>  
-Primary branch: `main`
+Last updated: 2026-08-05
+Working repository: `gpsdriver` (isolated copy; `trickee_new` is unchanged)
+Implementation branch: `feature/gpsdriver-gate0`
 
 ## 1. Project purpose
 
@@ -17,6 +17,28 @@ are manually entered from the vehicle dashboard. This distinction must remain
 visible in the UI, API fields, and documentation.
 
 ## 2. Current status
+
+### Android live telemetry Gate 0 (implemented 2026-08-05)
+
+- Google OAuth identity verification is linked to pre-provisioned users, with
+  rotating Trickee user refresh-token families and replay revocation.
+- Android installations are registered to one active fleet vehicle and use
+  separate rotating, revocable device tokens.
+- The strict schema-v1 contract records one logical GPS/IMU health window per
+  second, including honest missing-GPS windows and actual IMU completeness.
+- The v2 ingestion endpoint supports JSON/gzip, 100-window batches, and a
+  512 KiB uncompressed limit.
+- Receipt, canonical window, contiguous upload cursor, permanent conflict
+  rejection, and server outbox changes share one database commit.
+- Database uniqueness enforces `sample_id` and
+  `(device_id, trip_id, sequence_no)` idempotency. Exact retries are success;
+  conflicting reuse is quarantined and never overwrites telemetry.
+- Gate 0 is verified by `61` backend tests plus a clean SQLite Alembic upgrade
+  to `0002_live_telemetry_foundation`.
+
+This does not yet mean the full live system is finished. The native Kotlin
+foreground collector, Room outbox, 50 Hz IMU windowing, Redis projector,
+WebSocket delivery, and 2-to-150-vehicle load/soak tests are the next gates.
 
 The repository is ready for a local manager demonstration:
 
@@ -41,9 +63,9 @@ The repository is ready for a local manager demonstration:
   segments are excluded from every trip aggregate, and estimated range is
   bounded by the SOC-adjusted certified vehicle range.
 
-Last verified locally:
+Legacy application baseline previously verified locally:
 
-- `33` backend tests passed.
+- `61` backend tests now pass, including Gate 0 telemetry behavior.
 - TypeScript compilation passed.
 - ESLint passed with no errors.
 - Docker Compose configuration validation passed.
@@ -84,6 +106,10 @@ Important code locations:
 | Physics calculation | `backend/app/services/physics_energy.py` |
 | Database models | `backend/app/models/entities.py` |
 | Initial migration | `backend/alembic/versions/0001_gps_first.py` |
+| Live telemetry migration | `backend/alembic/versions/0002_live_telemetry_foundation.py` |
+| Telemetry contract | `backend/app/telemetry/contracts.py` |
+| Atomic ingestion | `backend/app/telemetry/persistence.py` |
+| Telemetry v2 route | `backend/app/telemetry/batch_routes.py` |
 | Demo seed | `backend/scripts/seed_demo.py` |
 
 ## 4. End-trip calculation flow
@@ -260,7 +286,7 @@ $env:TRICKEE_SECRET_KEY = "replace-with-a-long-local-test-secret"
 docker compose config --quiet
 ```
 
-Expected backend result at handoff: `33 passed`.
+Expected backend result at Gate 0 handoff: `61 passed`.
 
 ### Latest emulator evidence (2026-07-28)
 
@@ -282,6 +308,11 @@ Expected backend result at handoff: `33 passed`.
 
 All application endpoints use the `/api/v1` prefix.
 
+Gate 0 identity/device/telemetry endpoints use an explicit `/api/v2` prefix;
+the legacy `/api/v1/mobile/v2/trips/{trip_id}/gps-batch` and compatibility
+`/api/v2/trips/{trip_id}/gps-batch` paths remain available during Android
+client migration.
+
 | Method | Endpoint | Purpose |
 |---|---|---|
 | `POST` | `/auth/login` | Authenticate and obtain JWT |
@@ -297,14 +328,25 @@ All application endpoints use the `/api/v1` prefix.
 | `GET` | `/drivers/{driver_id}/trips` | Driver trip history |
 | `GET` | `/health` | Deployment health check; no API prefix |
 
+| Method | v2 endpoint | Purpose |
+|---|---|---|
+| `POST` | `/api/v2/auth/google` | Google identity to rotating Trickee user session |
+| `POST` | `/api/v2/auth/refresh` | Rotate user refresh token |
+| `POST` | `/api/v2/devices/register` | Register an Android installation to a fleet vehicle |
+| `POST` | `/api/v2/devices/token` | Rotate device token pair |
+| `POST` | `/api/v2/devices/{device_id}/revoke` | Revoke a device and active token family |
+| `POST` | `/api/v2/trips/{trip_id}/telemetry-batches` | Atomic versioned GPS/IMU batch ingestion |
+
 ## 11. Production deployment
 
 1. Copy `backend/.env.example` to a private deployment environment.
 2. Set a strong `TRICKEE_SECRET_KEY`; never use the development default.
 3. Configure the PostgreSQL `TRICKEE_DATABASE_URL`.
 4. Restrict `TRICKEE_ALLOWED_ORIGINS` to approved domains.
-5. Run `docker compose up --build -d` or deploy the backend Dockerfile.
-6. Confirm Alembic reaches revision `0001_gps_first`.
+5. Run `alembic upgrade head` exactly once as a release job. On Google Cloud,
+   use a Cloud Run Job with Cloud SQL access; do not migrate from each API
+   replica. Docker Compose provides the equivalent one-shot `migrate` service.
+6. Confirm Alembic reaches revision `0002_live_telemetry_foundation`.
 7. Verify `/health`, authentication, GPS upload, trip calculation, and retention
    cleanup against PostgreSQL.
 8. Confirm the real production API hostname. Release builds currently use
@@ -329,6 +371,13 @@ All application endpoints use the `/api/v1` prefix.
   against PostgreSQL.
 
 ### P1 — reliability and scale
+
+- Implement the approved native Kotlin foreground service, Room WAL outbox,
+  50 Hz IMU summarizer, reboot-safe sequence state, and Android recovery worker.
+- Implement Redis Streams projection, fleet WebSockets, slow-client backpressure,
+  and outbox dispatch; the current server outbox is durable but undispatched.
+- Run 2-vehicle full-trip soak tests first, then staged 25/75/150-vehicle load
+  tests with disconnect, token rotation, process death, and database failover.
 
 - Add a true idempotent retry response for `/mobile/trips/end`. The request
   accepts an idempotency key, but completed-trip replay is not fully implemented.

@@ -14,20 +14,37 @@ services:
       timeout: 5s
       retries: 5
 
+  migrate:
+    build: ./backend
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      TRICKEE_DATABASE_URL: postgresql+psycopg2://trickee:${POSTGRES_PASSWORD}@db:5432/trickee
+      TRICKEE_SECRET_KEY: ${TRICKEE_SECRET_KEY:?Set TRICKEE_SECRET_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+
   api:
     build: ./backend
     restart: unless-stopped
     environment:
       TRICKEE_DATABASE_URL: postgresql+psycopg2://trickee:${POSTGRES_PASSWORD}@db:5432/trickee
       TRICKEE_SECRET_KEY: ${TRICKEE_SECRET_KEY:?Set TRICKEE_SECRET_KEY}
+      TRICKEE_GOOGLE_OAUTH_CLIENT_ID: ${TRICKEE_GOOGLE_OAUTH_CLIENT_ID:-}
+      TRICKEE_GOOGLE_WORKSPACE_DOMAIN: ${TRICKEE_GOOGLE_WORKSPACE_DOMAIN:-}
+      TRICKEE_ACCESS_TOKEN_EXPIRE_MINUTES: ${TRICKEE_ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      TRICKEE_USER_REFRESH_TOKEN_EXPIRE_DAYS: ${TRICKEE_USER_REFRESH_TOKEN_EXPIRE_DAYS:-30}
+      TRICKEE_DEVICE_ACCESS_TOKEN_EXPIRE_MINUTES: ${TRICKEE_DEVICE_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      TRICKEE_DEVICE_REFRESH_TOKEN_EXPIRE_DAYS: ${TRICKEE_DEVICE_REFRESH_TOKEN_EXPIRE_DAYS:-90}
       TRICKEE_ALLOWED_ORIGINS: ${TRICKEE_ALLOWED_ORIGINS:-https://app.trickee.in}
       TRICKEE_GPS_RAW_RETENTION_DAYS: ${TRICKEE_GPS_RAW_RETENTION_DAYS:-90}
       TRICKEE_DEBUG: "false"
     ports:
       - "8000:8000"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:
