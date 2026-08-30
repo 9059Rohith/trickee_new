@@ -1,7 +1,7 @@
 # GPS Driver Live Pilot Release Hardening Design
 
 **Date:** 2026-08-30
-**Status:** Approved direction; implementation pending
+**Status:** Approved; implementation pending
 **Release target:** Android `1.0.3` (`versionCode 4`) for Google Play internal testing
 
 ## 1. Objective
@@ -175,9 +175,10 @@ A new `trip_energy_labels` table separates measurements from predictions:
 | `actual_wh_per_km` | Primary supervised-learning target |
 | `label_source` | `manual_dashboard`, `oem_api`, `bluetooth_bms`, or `fleet_export` |
 | `label_confidence` | Numeric confidence in `[0,1]` |
-| `training_eligible` | Explicit admission to training datasets |
+| `is_training_eligible` | Explicit admission to training datasets |
 | `eligibility_reason` | Reason for inclusion or exclusion |
-| `created_at`, `updated_at` | Audit timestamps |
+| `captured_at` | Time the ending SOC or energy evidence was captured |
+| `created_at`, `updated_at` | Database audit timestamps |
 
 `actual_wh_per_km` is the primary target because total trip energy scales with
 distance. `route_energy_wh`, `wh_per_km`, and `soc_consumed_pct` in
@@ -194,8 +195,8 @@ training-eligible only when all conditions hold:
 - calculated values fall within configured physical bounds.
 
 Otherwise the label is retained for analysis with
-`training_eligible=false`. OEM, Bluetooth BMS, or fleet-export labels can use a
-higher confidence policy after their provenance is verified.
+`is_training_eligible=false`. OEM, Bluetooth BMS, or fleet-export labels can
+use a higher confidence policy after their provenance is verified.
 
 ### 5.3 Derived features and predictions
 
