@@ -1,4 +1,4 @@
-package com.trickeeandroid.telemetry.storage
+package com.trickee.gpsdriver.telemetry.storage
 
 class TelemetryRepository(private val dao: TelemetryDao) {
     suspend fun createTrip(tripId: String, deviceId: String, vehicleId: String, startedAtUtcMs: Long) {
@@ -35,44 +35,67 @@ class TelemetryRepository(private val dao: TelemetryDao) {
         highestContiguousSequence: Long,
         permanentRejections: Map<Long, String>,
         serverCommittedAtUtcMs: Long,
-    ) {
-        permanentRejections.forEach { (sequence, code) ->
-            dao.permanentlyReject(tripId, sequence, code)
-        }
-        dao.acknowledgeThrough(tripId, highestContiguousSequence, serverCommittedAtUtcMs)
-    }
+    ) = dao.applyLegacyAcknowledgement(
+        tripId,
+        highestContiguousSequence,
+        permanentRejections,
+        serverCommittedAtUtcMs,
+    )
+
+    suspend fun applyAcknowledgement(
+        tripId: String,
+        leasedRows: List<TelemetryOutboxEntity>,
+        highestContiguousSequence: Long,
+        acceptedSequences: Set<Long>,
+        duplicateSequences: Set<Long>,
+        permanentRejections: Map<Long, String>,
+        serverCommittedAtUtcMs: Long,
+    ) = dao.applyAcknowledgement(
+        tripId,
+        leasedRows,
+        highestContiguousSequence,
+        acceptedSequences,
+        duplicateSequences,
+        permanentRejections,
+        serverCommittedAtUtcMs,
+    )
+
+    suspend fun beginEnding(tripId: String) = dao.beginEnding(tripId)
+    suspend fun sealTrip(tripId: String, endedAtUtcMs: Long): Long = dao.sealTrip(tripId, endedAtUtcMs)
 
     suspend fun recordEnd(tripId: String, finalSequenceNo: Long, endedAtUtcMs: Long) {
-        check(dao.recordEnd(tripId, TripState.SYNC_PENDING, finalSequenceNo, endedAtUtcMs) == 1) {
-            "Trip not found"
-        }
+        beginEnding(tripId)
+        check(sealTrip(tripId, endedAtUtcMs) == finalSequenceNo) { "Final sequence changed while sealing" }
     }
 
     suspend fun recoverExpiredLeases(nowUtcMs: Long): Int = dao.recoverExpiredLeases(nowUtcMs)
     suspend fun releaseForRetry(sampleIds: List<String>, nextAttemptAtUtcMs: Long): Int =
         if (sampleIds.isEmpty()) 0 else dao.releaseForRetry(sampleIds, nextAttemptAtUtcMs)
     suspend fun rejectBatch(tripId: String, rows: List<TelemetryOutboxEntity>, code: String) {
-        rows.forEach { dao.permanentlyReject(tripId, it.sequenceNo, code) }
+        dao.applyLegacyAcknowledgement(
+            tripId = tripId,
+            highestContiguousSequence = 0,
+            permanentRejections = rows.associate { it.sequenceNo to code },
+            serverCommittedAtUtcMs = System.currentTimeMillis(),
+        )
     }
-    suspend fun purgeAckedBefore(cutoffUtcMs: Long): Int = dao.purgeAckedBefore(cutoffUtcMs)
+    suspend fun purgeAcknowledged(nowUtcMs: Long): Int =
+        dao.purgeAckedBefore(nowUtcMs - ACK_RETENTION_MS)
     suspend fun activeTrip(): LocalTripEntity? = dao.activeTrip()
+    suspend fun endingTrip(): LocalTripEntity? = dao.endingTrip()
     suspend fun tripWithPendingOutbox(): LocalTripEntity? = dao.tripWithPendingOutbox()
     suspend fun latestEndedTrip(): LocalTripEntity? = dao.latestEndedTrip()
     suspend fun trip(tripId: String): LocalTripEntity? = dao.trip(tripId)
     suspend fun pendingCount(tripId: String): Int = dao.pendingCount(tripId)
+    suspend fun pendingTripIds(): List<String> = dao.pendingTripIds()
     suspend fun setTripState(tripId: String, state: TripState) {
         check(dao.setTripState(tripId, state) == 1) { "Trip not found" }
     }
 
-    fun storagePressure(usedBytes: Long, maxBytes: Long = 2L * 1024 * 1024 * 1024): StoragePressure {
-        require(usedBytes >= 0 && maxBytes > 0)
-        val pct = (usedBytes.toDouble() * 100.0 / maxBytes).coerceAtMost(100.0)
-        val level = when {
-            pct >= 95 -> StoragePressureLevel.CRITICAL
-            pct >= 85 -> StoragePressureLevel.OPTIONAL_CAPTURE_BLOCKED
-            pct >= 75 -> StoragePressureLevel.WARNING
-            else -> StoragePressureLevel.NORMAL
-        }
-        return StoragePressure(level, pct)
+    fun storagePressure(databaseBytes: Long, availableBytes: Long): StoragePressure =
+        TelemetryStoragePolicy.evaluate(databaseBytes, availableBytes)
+
+    private companion object {
+        const val ACK_RETENTION_MS = 24L * 60L * 60L * 1_000L
     }
 }

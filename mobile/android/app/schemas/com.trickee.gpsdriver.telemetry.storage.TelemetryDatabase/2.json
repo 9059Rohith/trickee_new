@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 1,
-    "identityHash": "e4158d21cff803f82521beb669cc2164",
+    "version": 2,
+    "identityHash": "eb6cd2f6d930517ab8fad9ff6c2b322f",
     "entities": [
       {
         "tableName": "local_trips",
@@ -41,8 +41,7 @@
           {
             "fieldPath": "finalSequenceNo",
             "columnName": "final_sequence_no",
-            "affinity": "INTEGER",
-            "notNull": false
+            "affinity": "INTEGER"
           },
           {
             "fieldPath": "startedAtUtcMs",
@@ -53,8 +52,7 @@
           {
             "fieldPath": "endedAtUtcMs",
             "columnName": "ended_at_utc_ms",
-            "affinity": "INTEGER",
-            "notNull": false
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -62,13 +60,11 @@
           "columnNames": [
             "trip_id"
           ]
-        },
-        "indices": [],
-        "foreignKeys": []
+        }
       },
       {
         "tableName": "telemetry_outbox",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sample_id` TEXT NOT NULL, `trip_id` TEXT NOT NULL, `sequence_no` INTEGER NOT NULL, `event_time_utc_ms` INTEGER NOT NULL, `monotonic_time_ns` INTEGER NOT NULL, `payload_json` TEXT NOT NULL, `state` TEXT NOT NULL, `attempt_count` INTEGER NOT NULL, `next_attempt_at_utc_ms` INTEGER NOT NULL, `lease_until_utc_ms` INTEGER, `server_committed_at_utc_ms` INTEGER, `created_at_utc_ms` INTEGER NOT NULL, `rejection_code` TEXT, PRIMARY KEY(`sample_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sample_id` TEXT NOT NULL, `trip_id` TEXT NOT NULL, `sequence_no` INTEGER NOT NULL, `event_time_utc_ms` INTEGER NOT NULL, `monotonic_time_ns` INTEGER NOT NULL, `payload_json` TEXT NOT NULL, `state` TEXT NOT NULL, `attempt_count` INTEGER NOT NULL, `next_attempt_at_utc_ms` INTEGER NOT NULL, `lease_until_utc_ms` INTEGER, `server_committed_at_utc_ms` INTEGER, `created_at_utc_ms` INTEGER NOT NULL, `rejection_code` TEXT, `last_http_status` INTEGER, `last_error_code` TEXT, `last_error_detail` TEXT, `last_failure_at_utc_ms` INTEGER, `permanently_rejected_at_utc_ms` INTEGER, PRIMARY KEY(`sample_id`))",
         "fields": [
           {
             "fieldPath": "sampleId",
@@ -127,14 +123,12 @@
           {
             "fieldPath": "leaseUntilUtcMs",
             "columnName": "lease_until_utc_ms",
-            "affinity": "INTEGER",
-            "notNull": false
+            "affinity": "INTEGER"
           },
           {
             "fieldPath": "serverCommittedAtUtcMs",
             "columnName": "server_committed_at_utc_ms",
-            "affinity": "INTEGER",
-            "notNull": false
+            "affinity": "INTEGER"
           },
           {
             "fieldPath": "createdAtUtcMs",
@@ -145,8 +139,32 @@
           {
             "fieldPath": "rejectionCode",
             "columnName": "rejection_code",
-            "affinity": "TEXT",
-            "notNull": false
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastHttpStatus",
+            "columnName": "last_http_status",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "last_error_code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastErrorDetail",
+            "columnName": "last_error_detail",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastFailureAtUtcMs",
+            "columnName": "last_failure_at_utc_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "permanentlyRejectedAtUtcMs",
+            "columnName": "permanently_rejected_at_utc_ms",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -187,14 +205,12 @@
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_telemetry_outbox_state_lease_until_utc_ms` ON `${TABLE_NAME}` (`state`, `lease_until_utc_ms`)"
           }
-        ],
-        "foreignKeys": []
+        ]
       }
     ],
-    "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e4158d21cff803f82521beb669cc2164')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'eb6cd2f6d930517ab8fad9ff6c2b322f')"
     ]
   }
 }

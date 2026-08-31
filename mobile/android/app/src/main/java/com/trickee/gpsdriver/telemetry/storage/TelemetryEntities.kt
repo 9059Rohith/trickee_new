@@ -50,6 +50,11 @@ data class TelemetryOutboxEntity(
     @ColumnInfo(name = "server_committed_at_utc_ms") val serverCommittedAtUtcMs: Long?,
     @ColumnInfo(name = "created_at_utc_ms") val createdAtUtcMs: Long,
     @ColumnInfo(name = "rejection_code") val rejectionCode: String?,
+    @ColumnInfo(name = "last_http_status") val lastHttpStatus: Int?,
+    @ColumnInfo(name = "last_error_code") val lastErrorCode: String?,
+    @ColumnInfo(name = "last_error_detail") val lastErrorDetail: String?,
+    @ColumnInfo(name = "last_failure_at_utc_ms") val lastFailureAtUtcMs: Long?,
+    @ColumnInfo(name = "permanently_rejected_at_utc_ms") val permanentlyRejectedAtUtcMs: Long?,
 )
 
 enum class StoragePressureLevel { NORMAL, WARNING, OPTIONAL_CAPTURE_BLOCKED, CRITICAL }
