@@ -1,4 +1,4 @@
-package com.trickeeandroid.telemetry.storage
+package com.trickee.gpsdriver.telemetry.storage
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
@@ -54,7 +54,11 @@ data class TelemetryOutboxEntity(
 
 enum class StoragePressureLevel { NORMAL, WARNING, OPTIONAL_CAPTURE_BLOCKED, CRITICAL }
 
-data class StoragePressure(val level: StoragePressureLevel, val usedPct: Double)
+data class StoragePressure(
+    val level: StoragePressureLevel,
+    val databaseBytes: Long,
+    val availableBytes: Long,
+)
 
 data class AckDecision(
     val acknowledged: Set<Long>,
@@ -66,12 +70,18 @@ object OutboxAckPolicy {
     fun classify(
         sequences: Collection<Long>,
         highestContiguousSequence: Long,
+        acceptedSequences: Set<Long>,
+        duplicateSequences: Set<Long>,
         permanentRejections: Set<Long>,
     ): AckDecision {
         require(highestContiguousSequence >= 0)
         val rejected = sequences.filterTo(mutableSetOf()) { it in permanentRejections }
         val acknowledged = sequences.filterTo(mutableSetOf()) {
-            it <= highestContiguousSequence && it !in rejected
+            it !in rejected && (
+                it <= highestContiguousSequence ||
+                    it in acceptedSequences ||
+                    it in duplicateSequences
+            )
         }
         return AckDecision(
             acknowledged = acknowledged,
