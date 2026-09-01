@@ -150,6 +150,22 @@ Remaining pilot evidence:
    variables pinned; unrelated SQL/Redis/OAuth drift was intentionally not
    applied.
 
+### Reproducibility and reconciliation fix round — 2026-09-01
+
+- Commit `ff99be5` includes the runtime Android namespace move, backend model,
+  migrations, finalizer dependencies, and verification tests needed for a clean
+  source checkout to import the backend and exercise the lossless pipeline.
+- Clean detached-checkout evidence: `import app.main` passed; deterministic
+  lossless pipeline and isolated Alembic roundtrip passed (`2 passed`).
+- The reconciler now caps work at 100 expired trips, bounds sealed sequences
+  and missing ranges, reports two-decimal transport/GPS measures, and keeps
+  single-row `413` telemetry queued with an actionable diagnostic.
+- Scheduler source is corrected to `*/15 * * * *`; Cloud application remains
+  pending fresh gcloud reauthentication. No deployment was performed here.
+- Frontend evidence belongs to deployed commit `90bcfda`: Node contract, TypeScript,
+  lint, and production build of 32 routes are green. Play internal publication
+  of version `6 (1.0.5)` remains complete. Physical-device acceptance is pending.
+
 ### Immediate frontend cleanup — 2026-09-01
 
 - Hid the floating Live SOC card from the shared dashboard layout for every

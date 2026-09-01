@@ -116,6 +116,18 @@
 - Physical-device loss/recovery evidence remains an external pilot gate. Play
   internal-track publication was completed later on 2026-09-01.
 
+## 2026-09-01 - Lossless Telemetry Reproducibility Fix Round
+
+- Committed `ff99be5` to include Android namespace/runtime inputs, backend
+  label migration/finalizer dependencies, bounded reconciliation, and tests.
+- Detached clean checkout: backend import passed and lossless pipeline plus
+  Alembic roundtrip passed (`2 passed`). Android focused uploader tests passed.
+- Scheduler source changed to `*/15 * * * *`; apply is pending gcloud reauth.
+  No cloud or Play mutation occurred in this fix round.
+- Frontend commit `90bcfda` remains the verified GPS Pilot UI deployment with
+  fresh Node contract, TypeScript, lint, and 32-route build evidence. Play
+  version 6 publication is complete; physical-device acceptance is pending.
+
 ## 2026-09-01 - Immediate Dashboard And Map Fix
 
 - Removed the global floating Live SOC card and its unused right-side spacing.

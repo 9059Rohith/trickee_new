@@ -643,6 +643,15 @@ git commit -m "fix(admin): show actual GPS trip completeness"
 
 ### Task 7: Cross-Layer Verification, Versioning, Build, and Closeout
 
+> 2026-09-01 evidence update: the reproducibility repair is committed as
+> `ff99be5`; a detached clean checkout imports `app.main` and passes the
+> deterministic pipeline plus Alembic roundtrip tests. Frontend commit
+> `90bcfda` has fresh Node contract, TypeScript, lint, and 32-route build
+> evidence. Play version 6 publication is complete. The scheduler source now
+> specifies `*/15 * * * *`, but no Cloud apply was attempted because current
+> gcloud reauthentication is unavailable. Physical-device acceptance remains
+> pending.
+
 **Files:**
 - Create: `scripts/test-lossless-telemetry-pipeline.ps1`
 - Create: `backend/tests/test_lossless_pipeline.py`
