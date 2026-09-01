@@ -138,8 +138,8 @@ Status: implemented, tested, and deployed for the pilot backend and admin UI.
 
 Remaining pilot evidence:
 
-1. Upload release `1.0.5 (6)` to the Play internal track; this implementation
-   produced the AAB but did not publish it.
+1. Completed on 2026-09-01: release `1.0.5 (6)` was published to the Play
+   internal track and is available to the configured internal testers.
 2. Run a physical-device trip covering offline/reconnect, process restart, and
    delayed gap repair, then confirm `Stored = Final sequence` or an honestly
    reported incomplete result.
@@ -162,3 +162,17 @@ Remaining pilot evidence:
 - Commit `c72d21b` deployed successfully through both Vercel production projects.
   Live `trickee.co.in` assets contain `xyz` and the OpenStreetMap tile URL, with
   no old brand, Live SOC label, or CARTO URL.
+
+### Play internal release 1.0.5 (6) — 2026-09-01
+
+- Uploaded the bundletool-validated signed AAB for
+  `com.trickee.gpsdriverapp` to the existing GPS Driver internal-testing track.
+- Google Play accepted version `6 (1.0.5)` for API level 24+, target SDK 36,
+  and published it at 11:04 IST.
+- Play Console reports the track as active and the release as `Available to
+  internal testers`.
+- The selected `GPS Driver Testers` email list contains two users.
+- Tester opt-in URL:
+  `https://play.google.com/apps/internaltest/4701400293644513393`
+- Physical-device offline/reconnect and missing-range recovery evidence remains
+  the final pilot validation gate; Play publication itself is complete.

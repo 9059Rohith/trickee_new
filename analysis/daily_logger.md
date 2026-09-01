@@ -113,8 +113,8 @@
 - Removed six temporary Terraform plan/log files because they could contain
   sensitive rendered configuration; committed Terraform source and remote state
   were retained.
-- Physical-device loss/recovery evidence and Play internal-track publication
-  remain the two external pilot gates.
+- Physical-device loss/recovery evidence remains an external pilot gate. Play
+  internal-track publication was completed later on 2026-09-01.
 
 ## 2026-09-01 - Immediate Dashboard And Map Fix
 
@@ -127,3 +127,15 @@
 - Pushed `c72d21b` to Ajey95 `main`; both Vercel production deployments completed.
 - Live asset inspection confirmed `xyz`, no Live SOC component, no CARTO URL,
   and the OpenStreetMap tile endpoint; a direct sample tile returned `200` PNG.
+
+## 2026-09-01 - Play Internal Release 1.0.5
+
+- Uploaded and published signed AAB version `6 (1.0.5)` for package
+  `com.trickee.gpsdriverapp` to the existing internal-testing track.
+- Play Console reports the track as active and the new release as available to
+  internal testers; publication time is 11:04 IST.
+- Confirmed the selected `GPS Driver Testers` list contains two users.
+- Verified tester opt-in URL:
+  `https://play.google.com/apps/internaltest/4701400293644513393`.
+- Next gate is a physical-device trip proving offline/reconnect, process restart,
+  missing-range repair, and honest finalization behavior.
