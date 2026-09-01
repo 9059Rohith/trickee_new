@@ -1,6 +1,6 @@
 package com.trickee.gpsdriver.telemetry.storage
 
-class TelemetryRepository(private val dao: TelemetryDao) {
+class TelemetryRepository(private val dao: TelemetryDao) : TelemetryUploadQueue {
     suspend fun createTrip(tripId: String, deviceId: String, vehicleId: String, startedAtUtcMs: Long) {
         dao.insertTrip(
             LocalTripEntity(
@@ -27,7 +27,7 @@ class TelemetryRepository(private val dao: TelemetryDao) {
         tripId, sampleId, eventTimeUtcMs, monotonicTimeNs, payloadJson, createdAtUtcMs
     )
 
-    suspend fun leasePending(tripId: String, nowUtcMs: Long, limit: Int, leaseMs: Long) =
+    override suspend fun leasePending(tripId: String, nowUtcMs: Long, limit: Int, leaseMs: Long) =
         dao.leasePending(tripId, nowUtcMs, limit, leaseMs)
 
     suspend fun applyAcknowledgement(
@@ -42,7 +42,7 @@ class TelemetryRepository(private val dao: TelemetryDao) {
         serverCommittedAtUtcMs,
     )
 
-    suspend fun applyAcknowledgement(
+    override suspend fun applyAcknowledgement(
         tripId: String,
         leasedRows: List<TelemetryOutboxEntity>,
         highestContiguousSequence: Long,
@@ -59,6 +59,41 @@ class TelemetryRepository(private val dao: TelemetryDao) {
         permanentRejections,
         serverCommittedAtUtcMs,
     )
+
+    override suspend fun recordRetry(
+        rows: List<TelemetryOutboxEntity>,
+        nextAttemptAtUtcMs: Long,
+        httpStatus: Int?,
+        errorCode: String,
+        errorDetail: String,
+        failedAtUtcMs: Long,
+    ) {
+        if (rows.isEmpty()) return
+        dao.recordRetry(
+            sampleIds = rows.map { it.sampleId },
+            nextAttemptAtUtcMs = nextAttemptAtUtcMs,
+            httpStatus = httpStatus,
+            errorCode = errorCode,
+            errorDetail = errorDetail.take(MAX_ERROR_DETAIL_LENGTH),
+            failedAtUtcMs = failedAtUtcMs,
+        )
+    }
+
+    override suspend fun deadLetter(
+        row: TelemetryOutboxEntity,
+        httpStatus: Int?,
+        errorCode: String,
+        errorDetail: String,
+        failedAtUtcMs: Long,
+    ) {
+        dao.deadLetter(
+            sampleId = row.sampleId,
+            httpStatus = httpStatus,
+            errorCode = errorCode,
+            errorDetail = errorDetail.take(MAX_ERROR_DETAIL_LENGTH),
+            failedAtUtcMs = failedAtUtcMs,
+        )
+    }
 
     suspend fun beginEnding(tripId: String) = dao.beginEnding(tripId)
     suspend fun sealTrip(tripId: String, endedAtUtcMs: Long): Long = dao.sealTrip(tripId, endedAtUtcMs)
@@ -97,5 +132,6 @@ class TelemetryRepository(private val dao: TelemetryDao) {
 
     private companion object {
         const val ACK_RETENTION_MS = 24L * 60L * 60L * 1_000L
+        const val MAX_ERROR_DETAIL_LENGTH = 255
     }
 }

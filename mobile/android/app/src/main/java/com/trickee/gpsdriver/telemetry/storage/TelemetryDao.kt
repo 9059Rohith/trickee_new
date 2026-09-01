@@ -135,6 +135,25 @@ abstract class TelemetryDao {
     @Query("UPDATE telemetry_outbox SET state = 'PENDING', lease_until_utc_ms = NULL, next_attempt_at_utc_ms = :nextAttemptAtUtcMs WHERE sample_id IN (:sampleIds) AND state = 'IN_FLIGHT'")
     abstract suspend fun releaseForRetry(sampleIds: List<String>, nextAttemptAtUtcMs: Long): Int
 
+    @Query("UPDATE telemetry_outbox SET state = 'PENDING', lease_until_utc_ms = NULL, next_attempt_at_utc_ms = :nextAttemptAtUtcMs, last_http_status = :httpStatus, last_error_code = :errorCode, last_error_detail = :errorDetail, last_failure_at_utc_ms = :failedAtUtcMs WHERE sample_id IN (:sampleIds) AND state = 'IN_FLIGHT'")
+    abstract suspend fun recordRetry(
+        sampleIds: List<String>,
+        nextAttemptAtUtcMs: Long,
+        httpStatus: Int?,
+        errorCode: String,
+        errorDetail: String,
+        failedAtUtcMs: Long,
+    ): Int
+
+    @Query("UPDATE telemetry_outbox SET state = 'PERMANENTLY_REJECTED', lease_until_utc_ms = NULL, rejection_code = :errorCode, last_http_status = :httpStatus, last_error_code = :errorCode, last_error_detail = :errorDetail, last_failure_at_utc_ms = :failedAtUtcMs, permanently_rejected_at_utc_ms = :failedAtUtcMs WHERE sample_id = :sampleId AND state = 'IN_FLIGHT'")
+    abstract suspend fun deadLetter(
+        sampleId: String,
+        httpStatus: Int?,
+        errorCode: String,
+        errorDetail: String,
+        failedAtUtcMs: Long,
+    ): Int
+
     @Query("UPDATE telemetry_outbox SET state = 'ACKED', lease_until_utc_ms = NULL, server_committed_at_utc_ms = :serverCommittedAtUtcMs, last_http_status = NULL, last_error_code = NULL, last_error_detail = NULL, last_failure_at_utc_ms = NULL WHERE trip_id = :tripId AND sequence_no <= :highestContiguousSequence AND state != 'PERMANENTLY_REJECTED'")
     abstract suspend fun acknowledgeThrough(tripId: String, highestContiguousSequence: Long, serverCommittedAtUtcMs: Long): Int
 

@@ -86,6 +86,48 @@ class TelemetryRepositoryTest {
     }
 
     @Test
+    fun retryDiagnosticsArePersistedWithoutDiscardingThePayload() = runBlocking {
+        createTripWithWindow("trip", "sample-1")
+        val leased = repository.leasePending("trip", 3_000L, 20, 10_000L)
+
+        repository.recordRetry(
+            rows = leased,
+            nextAttemptAtUtcMs = 8_000L,
+            httpStatus = 403,
+            errorCode = "HTTP_403",
+            errorDetail = "HTTP 403 (HTTP_403)",
+            failedAtUtcMs = 4_000L,
+        )
+
+        val row = database.telemetryDao().outboxBySampleId("sample-1")!!
+        assertEquals(OutboxState.PENDING, row.state)
+        assertEquals("{}", row.payloadJson)
+        assertEquals(403, row.lastHttpStatus)
+        assertEquals("HTTP_403", row.lastErrorCode)
+        assertEquals(8_000L, row.nextAttemptAtUtcMs)
+    }
+
+    @Test
+    fun onlyAnIsolatedInvalidRowCanEnterTheDeadLetterState() = runBlocking {
+        createTripWithWindow("trip", "sample-1")
+        val leased = repository.leasePending("trip", 3_000L, 20, 10_000L).single()
+
+        repository.deadLetter(
+            row = leased,
+            httpStatus = 422,
+            errorCode = "HTTP_422",
+            errorDetail = "HTTP 422 (HTTP_422)",
+            failedAtUtcMs = 4_000L,
+        )
+
+        val row = database.telemetryDao().outboxBySampleId("sample-1")!!
+        assertEquals(OutboxState.PERMANENTLY_REJECTED, row.state)
+        assertEquals("{}", row.payloadJson)
+        assertEquals("HTTP_422", row.rejectionCode)
+        assertEquals(4_000L, row.permanentlyRejectedAtUtcMs)
+    }
+
+    @Test
     fun endedTripIsBackfillEligibleButNeverCaptureRecoverable() = runBlocking {
         repository.createTrip("trip", "device", "vehicle", 1_000L)
         repository.setTripState("trip", TripState.ACTIVE)
