@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.entities import MobileTripSession, TelemetryWindow, TripEnergyLabel, TripFinalization, Vehicle
 from app.services.physics_energy import estimate_remaining_range, estimate_soc_consumed, estimate_trip_energy
 from app.services.physics_gps import calculate_acceleration_mps2, calculate_grade_pct, calculate_speed_mps, haversine_distance
+from app.services.reconciliation import MAX_FINAL_SEQUENCE_NO, bounded_missing_ranges
 from app.services.trip_energy_labels import build_trip_energy_label
 
 
@@ -16,6 +17,7 @@ CALCULATION_VERSION = "telemetry-physics-v1"
 MAX_ACCURACY_M = 50.0
 MAX_SPEED_MPS = 45.0
 MAX_ACCELERATION_MPS2 = 8.0
+MAX_MISSING_SEQUENCE_PREVIEW = 100
 
 
 def _valid_gps(window: TelemetryWindow) -> bool:
@@ -113,6 +115,17 @@ def _imu_summary(windows: list[TelemetryWindow]) -> dict:
     }
 
 
+def _missing_sequence_preview(missing_ranges: list[list[int]]) -> list[int]:
+    """Keep finalizer diagnostics useful without expanding an unbounded gap."""
+    preview: list[int] = []
+    for start, end in missing_ranges:
+        remaining = MAX_MISSING_SEQUENCE_PREVIEW - len(preview)
+        if remaining <= 0:
+            break
+        preview.extend(range(start, min(end, start + remaining - 1) + 1))
+    return preview
+
+
 def finalize_trip(db: Session, event: dict) -> None:
     if event.get("event_type") != "trip.finalization_eligible":
         return
@@ -121,21 +134,25 @@ def finalize_trip(db: Session, event: dict) -> None:
     record = db.query(TripFinalization).filter_by(trip_id=trip_id).with_for_update().one()
     if record.state == "completed":
         return
+    if not 0 <= record.final_sequence_no <= MAX_FINAL_SEQUENCE_NO:
+        raise ValueError("final sequence is outside the supported bound")
 
     rows = db.query(TelemetryWindow).filter(
         TelemetryWindow.trip_id == trip_id,
+        TelemetryWindow.sequence_no >= 1,
         TelemetryWindow.sequence_no <= record.final_sequence_no,
     ).order_by(TelemetryWindow.sequence_no).all()
     by_sequence = {window.sequence_no: window for window in rows}
-    expected = set(range(1, record.final_sequence_no + 1))
-    missing = sorted(expected.difference(by_sequence))
-    if missing:
+    missing_ranges = bounded_missing_ranges(by_sequence, record.final_sequence_no)
+    if missing_ranges:
         record.state = "waiting_for_telemetry"
         record.summary = {
             "calculation_version": CALCULATION_VERSION,
             "window_count": len(by_sequence),
             "final_sequence_no": record.final_sequence_no,
-            "missing_sequences": missing,
+            "actual_missing_sequences": record.final_sequence_no - len(by_sequence),
+            "missing_ranges": missing_ranges,
+            "missing_sequences": _missing_sequence_preview(missing_ranges),
             "calculation_status": "waiting_for_telemetry",
         }
         return

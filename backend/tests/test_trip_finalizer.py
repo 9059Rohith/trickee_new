@@ -15,6 +15,7 @@ from app.models.entities import (
     Vehicle,
 )
 from app.processors.trip_finalizer import finalize_trip
+from app.services.reconciliation import MAX_FINAL_SEQUENCE_NO
 
 
 def _session(tmp_path):
@@ -177,6 +178,21 @@ def test_finalizer_waits_for_an_actual_sequence_gap(tmp_path):
 
     assert record.state == "waiting_for_telemetry"
     assert record.summary["missing_sequences"] == [2]
+
+
+def test_finalizer_bounds_missing_diagnostics_for_the_largest_supported_trip(tmp_path):
+    db = _session(tmp_path)
+    trip, vehicle, record = _seed_trip(db, final_sequence_no=MAX_FINAL_SEQUENCE_NO)
+    db.add(_window(trip, vehicle, 1))
+    db.commit()
+
+    finalize_trip(db, _event(trip))
+    db.flush()
+
+    assert record.state == "waiting_for_telemetry"
+    assert record.summary["actual_missing_sequences"] == MAX_FINAL_SEQUENCE_NO - 1
+    assert record.summary["missing_ranges"] == [[2, MAX_FINAL_SEQUENCE_NO]]
+    assert record.summary["missing_sequences"] == list(range(2, 102))
 
 
 def test_finalizer_reports_gps_loss_instead_of_zero_distance_success(tmp_path):
