@@ -11,6 +11,20 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Get-Sha256Hex {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([System.BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '')
+    }
+    finally {
+        $algorithm.Dispose()
+        $stream.Dispose()
+    }
+}
+
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $git = (Get-Command git.exe -ErrorAction Stop).Source
 $sourceSha = (& $git -C $repositoryRoot rev-parse HEAD).Trim()
@@ -214,8 +228,8 @@ $releaseAab = Join-Path $releaseDirectory "Trickee-GPS-Driver-public-$versionNam
 $releaseApk = Join-Path $releaseDirectory "Trickee-GPS-Driver-public-$versionName-$versionCode.apk"
 Copy-Item -LiteralPath $generatedAab -Destination $releaseAab -Force
 Copy-Item -LiteralPath $generatedApk -Destination $releaseApk -Force
-$aabSha256 = (Get-FileHash -LiteralPath $releaseAab -Algorithm SHA256).Hash
-$apkSha256 = (Get-FileHash -LiteralPath $releaseApk -Algorithm SHA256).Hash
+$aabSha256 = Get-Sha256Hex -Path $releaseAab
+$apkSha256 = Get-Sha256Hex -Path $releaseApk
 
 $releaseMetadata = [ordered]@{
     ApplicationId = $actualApplicationId
