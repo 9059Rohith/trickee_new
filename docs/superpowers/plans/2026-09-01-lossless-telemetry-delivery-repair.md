@@ -666,7 +666,7 @@ git commit -m "fix(admin): show actual GPS trip completeness"
 - Consumes: Tasks 1-6.
 - Produces: repeatable verification evidence, versioned signed AAB, deployment-ready artifacts, and honest remaining-work status.
 
-- [ ] **Step 1: Write the failing cross-layer verification script contract**
+- [x] **Step 1: Write the failing cross-layer verification script contract**
 
 The PowerShell script must stop on first failure and run:
 
@@ -685,19 +685,19 @@ It then runs the frontend Node contract, TypeScript, lint, and build checks from
 the clean deployment clone. It prints one JSON-like summary with pass/fail per
 layer and no secrets.
 
-- [ ] **Step 2: Run the script and verify RED or expose remaining failures**
+- [x] **Step 2: Run the script and verify RED or expose remaining failures**
 
 Expected: any unimplemented integration or existing conflicting failure is
 reported with its exact command; the script never masks a failure.
 
-- [ ] **Step 3: Add deterministic synthetic reconciliation coverage**
+- [x] **Step 3: Add deterministic synthetic reconciliation coverage**
 
 Create `backend/tests/test_lossless_pipeline.py` with the 1-20
 gap/recovery/replay/finalization scenario from the spec. The test must prove 20
 distinct server rows, zero actual missing, contiguous 20, one finalization, and
 idempotent duplicate replay.
 
-- [ ] **Step 4: Bump Android release identity**
+- [x] **Step 4: Bump Android release identity**
 
 Change only:
 
@@ -715,7 +715,7 @@ Run the cross-layer script, backend Alembic upgrade/downgrade test in an isolate
 database, Room migration instrumentation test when a device/emulator is
 available, Terraform fmt/validate, and public endpoint configuration checks.
 
-- [ ] **Step 6: Build and verify the signed AAB**
+- [x] **Step 6: Build and verify the signed AAB**
 
 Use the external signing properties already authorized for the Play upload key:
 
@@ -735,14 +735,14 @@ reviewed zero-destroy targeted Terraform plan for the reconciler job. Deploy the
 frontend from its clean repository and verify the authenticated `/gps-pilot`
 page. Upload AAB only to Play internal testing after all artifact checks pass.
 
-- [ ] **Step 8: Record physical-device acceptance as pending or verified**
+- [x] **Step 8: Record physical-device acceptance as pending or verified**
 
 The tester must install from Play and execute screen-off capture, network loss,
 reconnect, process restart, token refresh, stop, and backlog drain. Record phone
 model, Android version, final sequence, stored count, actual missing, duplicate
 count, finalizer result, battery impact, and GPS quality separately.
 
-- [ ] **Step 9: Update all four Trickee closeout files**
+- [x] **Step 9: Update all four Trickee closeout files**
 
 Separate verified automated work, live deployment evidence, and physical-device
 pending work. State explicitly that software cannot guarantee a satellite fix

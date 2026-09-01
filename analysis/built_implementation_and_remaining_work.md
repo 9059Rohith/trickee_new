@@ -160,6 +160,9 @@ Remaining pilot evidence:
 - The reconciler now caps work at 100 expired trips, bounds sealed sequences
   and missing ranges, reports two-decimal transport/GPS measures, and keeps
   single-row `413` telemetry queued with an actionable diagnostic.
+- Follow-up commit `3b05b96` also removes the finalizer's former
+  `set(range(...))` expansion: it bounds finalizer gap diagnostics to one range
+  plus a 100-sequence preview. Its focused finalizer suite passed `5 passed`.
 - Scheduler source is corrected to `*/15 * * * *`; Cloud application remains
   pending fresh gcloud reauthentication. No deployment was performed here.
 - Frontend evidence belongs to deployed commit `90bcfda`: Node contract, TypeScript,
