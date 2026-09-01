@@ -9,17 +9,31 @@ def validate(root: Path) -> list[str]:
         "private archive bucket": 'public_access_prevention = "enforced"',
         "uniform bucket access": "uniform_bucket_level_access = true",
         "HA Cloud SQL": 'availability_type = "REGIONAL"',
+        "explicit Cloud SQL edition": 'edition = "ENTERPRISE"',
         "PITR": "point_in_time_recovery_enabled = true",
         "HA Redis": 'tier = "STANDARD_HA"',
         "bounded API scale": "api_max_instances",
         "bounded database pool": "TRICKEE_DB_MAX_OVERFLOW",
         "separate service accounts": 'for_each = local.roles',
-        "dedicated migration job": 'toset(["migrate", "archive", "retention"])',
+        "dedicated migration job": 'toset(["migrate", "archive", "retention", "finalization-reconciler"])',
+        "scheduled incomplete reconciliation": 'resource "google_cloud_scheduler_job" "finalization_reconciler"',
         "private SQL": "ipv4_enabled = false",
+        "connector /28 subnet": 'ip_cidr_range = "10.20.0.0/28"',
         "immutable image guidance": "@sha256:",
         "alert notification channel": "monitoring_notification_channels",
+        "extractable outbox log metric": 'resource "google_logging_metric" "outbox_pending"',
+        "distribution outbox metric": 'value_type = "DISTRIBUTION"',
+        "outbox metric alert dependency": "depends_on = [google_logging_metric.outbox_pending]",
+        "runtime database secret ordering": "depends_on = [google_secret_manager_secret_version.database_url]",
+        "Cloud Run default drift guard": "ignore_changes = [scaling]",
+        "explicit secret access map": "secret_access = {",
     }
-    return [name for name, marker in required.items() if " ".join(marker.split()) not in normalized]
+    missing = [name for name, marker in required.items() if " ".join(marker.split()) not in normalized]
+    forbidden = {
+        "all-role/all-secret grants": "setproduct(local.roles",
+    }
+    unsafe = [name for name, marker in forbidden.items() if marker in normalized]
+    return missing + unsafe
 
 
 if __name__ == "__main__":
