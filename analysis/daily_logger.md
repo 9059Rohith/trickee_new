@@ -115,3 +115,15 @@
   were retained.
 - Physical-device loss/recovery evidence and Play internal-track publication
   remain the two external pilot gates.
+
+## 2026-09-01 - Immediate Dashboard And Map Fix
+
+- Removed the global floating Live SOC card and its unused right-side spacing.
+- Replaced visible `Evify` branding with `xyz` throughout frontend page source.
+- Switched the Live Map and route map picker from CARTO to keyless OpenStreetMap
+  tiles and tightened CSP to the remaining tile host.
+- Added red/green contract coverage; final frontend results were `8/8` tests,
+  zero lint warnings/errors, and a successful 32-route production build.
+- Pushed `c72d21b` to Ajey95 `main`; both Vercel production deployments completed.
+- Live asset inspection confirmed `xyz`, no Live SOC component, no CARTO URL,
+  and the OpenStreetMap tile endpoint; a direct sample tile returned `200` PNG.

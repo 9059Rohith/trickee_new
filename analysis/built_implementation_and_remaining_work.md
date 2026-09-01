@@ -149,3 +149,16 @@ Remaining pilot evidence:
 4. A future full Terraform plan must keep `environment=pilot` and live capacity
    variables pinned; unrelated SQL/Redis/OAuth drift was intentionally not
    applied.
+
+### Immediate frontend cleanup — 2026-09-01
+
+- Hid the floating Live SOC card from the shared dashboard layout for every
+  role and route, and removed its reserved desktop gutter.
+- Replaced the user-facing `Evify` brand with `xyz` across frontend page source.
+- Replaced both key-dependent CARTO map sources with keyless OpenStreetMap tiles;
+  the live map and route picker no longer render the `API KEY REQUIRED` overlay.
+- Frontend tests passed `8/8`, lint passed with zero warnings/errors, and the
+  production build generated all 32 pages.
+- Commit `c72d21b` deployed successfully through both Vercel production projects.
+  Live `trickee.co.in` assets contain `xyz` and the OpenStreetMap tile URL, with
+  no old brand, Live SOC label, or CARTO URL.
