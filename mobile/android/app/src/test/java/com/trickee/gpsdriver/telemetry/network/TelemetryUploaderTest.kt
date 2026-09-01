@@ -140,6 +140,22 @@ class TelemetryUploaderTest {
     }
 
     @Test
+    fun httpDateRetryAfterIsSupportedOnTheMinimumAndroidApi() = runBlocking {
+        queue.rows += row(1)
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(503)
+                .addHeader("Retry-After", "Thu, 01 Jan 1970 00:00:20 GMT")
+        )
+
+        assertEquals(false, uploader().runOnce("trip-1"))
+
+        assertEquals(OutboxState.PENDING, queue.row(1).state)
+        assertEquals("HTTP_503", queue.row(1).lastErrorCode)
+        assertEquals(20_000L, queue.row(1).nextAttemptAtUtcMs)
+    }
+
+    @Test
     fun collectorDispatcherDeliversTheExactAckToTheLeasedOutboxRow() = runBlocking {
         queue.rows += row(7)
         server.enqueue(successAck("batch-0", acceptedRanges = "[[7,7]]"))

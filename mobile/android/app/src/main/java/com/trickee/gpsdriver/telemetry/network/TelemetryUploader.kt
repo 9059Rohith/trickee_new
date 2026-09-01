@@ -15,11 +15,11 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.ByteArrayOutputStream
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPOutputStream
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 
 private data class RefreshedDevice(
     val device: Map<String, Any>,
@@ -243,7 +243,9 @@ class TelemetryUploader(
         val seconds = header?.trim()?.toLongOrNull()
         if (seconds != null) return seconds.coerceAtLeast(0)
         val retryAt = runCatching {
-            ZonedDateTime.parse(header, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli()
+            SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US).apply {
+                isLenient = false
+            }.parse(header.orEmpty())?.time
         }.getOrNull() ?: return null
         return ((retryAt - clock()).coerceAtLeast(0) / 1_000L)
     }
