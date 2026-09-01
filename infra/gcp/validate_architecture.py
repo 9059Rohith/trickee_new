@@ -24,7 +24,8 @@ def validate(root: Path) -> list[str]:
         "extractable outbox log metric": 'resource "google_logging_metric" "outbox_pending"',
         "distribution outbox metric": 'value_type = "DISTRIBUTION"',
         "outbox metric alert dependency": "depends_on = [google_logging_metric.outbox_pending]",
-        "runtime database secret ordering": "depends_on = [google_secret_manager_secret_version.database_url]",
+        "runtime database secret ordering": "google_secret_manager_secret_version.database_url,",
+        "runtime secret IAM ordering": "google_secret_manager_secret_iam_member.access,",
         "Cloud Run default drift guard": "ignore_changes = [scaling]",
         "explicit secret access map": "secret_access = {",
     }

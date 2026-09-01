@@ -375,7 +375,11 @@ resource "google_cloud_run_v2_job" "job" {
       }
     }
   }
-  depends_on = [google_secret_manager_secret_version.database_url]
+  depends_on = [
+    google_project_iam_member.sql,
+    google_secret_manager_secret_iam_member.access,
+    google_secret_manager_secret_version.database_url,
+  ]
 }
 
 resource "google_cloud_run_v2_job_iam_member" "finalization_reconciler_invoker" {
