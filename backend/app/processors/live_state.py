@@ -8,6 +8,18 @@ from app.models.entities import TelemetryWindow, VehicleLiveStateSnapshot
 from app.streams.redis_client import StreamClient
 
 
+def new_live_state(vehicle_id: str) -> VehicleLiveStateSnapshot:
+    """Create an in-memory projection with defaults available before flush."""
+    return VehicleLiveStateSnapshot(
+        vehicle_id=vehicle_id,
+        state_version=0,
+        sequence_no=0,
+        freshness="OFFLINE",
+        gps_available=False,
+        projection_status="SYNCING",
+    )
+
+
 def freshness_label(received_at: datetime | None, *, now: datetime | None = None,
                     gps_available: bool = True, syncing: bool = False, degraded: bool = False) -> str:
     if degraded:
@@ -40,7 +52,7 @@ def project_live_state(db: Session, event: dict, streams: StreamClient | None = 
         return
     state = db.query(VehicleLiveStateSnapshot).filter_by(vehicle_id=latest.vehicle_id).with_for_update().first()
     if state is None:
-        state = VehicleLiveStateSnapshot(vehicle_id=latest.vehicle_id)
+        state = new_live_state(latest.vehicle_id)
         db.add(state)
     if latest.sequence_no <= state.sequence_no:
         return
@@ -62,18 +74,18 @@ def snapshot_dict(state: VehicleLiveStateSnapshot, *, now: datetime | None = Non
     return {
         "vehicle_id": state.vehicle_id,
         "trip_id": state.trip_id,
-        "state_version": state.state_version,
-        "sequence_no": state.sequence_no,
+        "state_version": state.state_version or 0,
+        "sequence_no": state.sequence_no or 0,
         "event_time": state.event_time.isoformat() if state.event_time else None,
         "received_at": state.received_at.isoformat() if state.received_at else None,
         "freshness": freshness_label(
             state.received_at,
             now=now,
-            gps_available=state.gps_available,
+            gps_available=bool(state.gps_available),
             syncing=state.projection_status == "SYNCING",
             degraded=state.projection_status == "DEGRADED",
         ),
-        "gps_available": state.gps_available,
+        "gps_available": bool(state.gps_available),
         "location": {"lat": state.latitude, "lng": state.longitude} if state.gps_available else None,
         "health": state.health_payload,
         "projection_status": state.projection_status,

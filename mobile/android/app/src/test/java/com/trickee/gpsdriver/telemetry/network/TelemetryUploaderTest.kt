@@ -111,7 +111,19 @@ class TelemetryUploaderTest {
         assertEquals(false, uploader().runOnce("trip-1"))
 
         assertEquals(OutboxState.PENDING, queue.row(1).state)
-        assertEquals("INVALID_ACK", queue.row(1).lastErrorCode)
+        assertEquals("ACK_CONTRACT_INVALID", queue.row(1).lastErrorCode)
+    }
+
+    @Test
+    fun singleRow413IsRetainedInsteadOfDeadLettered() = runBlocking {
+        queue.rows += row(1)
+        server.enqueue(MockResponse().setResponseCode(413))
+
+        assertEquals(false, uploader().runOnce("trip-1"))
+
+        assertEquals(OutboxState.PENDING, queue.row(1).state)
+        assertEquals("PAYLOAD_TOO_LARGE_SINGLE", queue.row(1).lastErrorCode)
+        assertNull(queue.row(1).permanentlyRejectedAtUtcMs)
     }
 
     private fun uploader() = TelemetryUploader(

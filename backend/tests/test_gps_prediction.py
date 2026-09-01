@@ -83,6 +83,8 @@ def seed_data():
         spec_incomplete=False,
     )
     db.add(vehicle)
+    db.flush()
+    driver.assigned_vehicle_id = vehicle.id
     db.commit()
 
     token = create_access_token({"sub": user.id})
@@ -222,6 +224,34 @@ class TestMobileFlow:
             assert pred["estimated"] is True
             assert pred["wh_per_km"] is not None
 
+    def test_trip_start_defaults_to_assigned_vehicle(self, seed_data):
+        response = client.post(
+            "/api/v1/mobile/trips/start",
+            headers={"Authorization": f"Bearer {seed_data['token']}"},
+            json={"starting_soc": 90.0, "idempotency_key": "assigned-default"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["data"]["vehicle_id"] == seed_data["vehicle"].id
+
+    def test_driver_cannot_start_trip_with_another_vehicle(self, seed_data):
+        other = Vehicle(
+            fleet_id=seed_data["fleet"].id,
+            vehicle_code="EV-OTHER-01",
+            make="Test",
+            model="Other",
+        )
+        seed_data["db"].add(other)
+        seed_data["db"].commit()
+
+        response = client.post(
+            "/api/v1/mobile/trips/start",
+            headers={"Authorization": f"Bearer {seed_data['token']}"},
+            json={"vehicle_id": other.id, "starting_soc": 90.0},
+        )
+
+        assert response.status_code == 403
+
     def test_moving_coordinates_override_stale_zero_speed(self, seed_data):
         headers = {"Authorization": f"Bearer {seed_data['token']}"}
         vehicle = seed_data["vehicle"]
@@ -343,8 +373,8 @@ class TestVehicleSpecs:
         # Update specs to complete
         r2 = client.patch(f"/api/v1/vehicles/{v['id']}/specs", headers=headers, json={
             "category": "2W_passenger", "usable_kwh": 3.0,
-            "battery_chemistry": "NMC", "nominal_voltage": 48.0,
-            "motor_kw": 4.0, "kerb_weight": 120.0, "top_speed": 63.0,
+            "battery_chemistry": "NMC", "kerb_weight": 120.0,
+            "regen_available": True, "certified_range": 105.0,
         })
         assert r2.status_code == 200
         assert r2.json()["data"]["spec_incomplete"] is False

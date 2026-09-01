@@ -13,20 +13,12 @@ from app.models.entities import (
     TripFinalization,
     Vehicle,
 )
-
-
-def _missing_ranges(received: set[int], final_sequence_no: int) -> list[list[int]]:
-    ranges: list[list[int]] = []
-    start: int | None = None
-    for sequence in range(1, final_sequence_no + 1):
-        if sequence not in received and start is None:
-            start = sequence
-        elif sequence in received and start is not None:
-            ranges.append([start, sequence - 1])
-            start = None
-    if start is not None:
-        ranges.append([start, final_sequence_no])
-    return ranges
+from app.services.reconciliation import (
+    MAX_MISSING_RANGES,
+    MAX_RECONCILIATION_CANDIDATES,
+    bounded_missing_ranges,
+    percentage,
+)
 
 
 def _write_incomplete_label(
@@ -88,18 +80,21 @@ def reconcile_incomplete_finalizations(
             TripFinalization.state == "waiting_for_telemetry",
         )
         .with_for_update()
+        .order_by(MobileTripSession.completion_requested_at.asc())
+        .limit(MAX_RECONCILIATION_CANDIDATES)
         .all()
     )
     reconciled: list[str] = []
     for trip, record in candidates:
         received = {
-            int(sequence)
-            for (sequence,) in db.query(TelemetryWindow.sequence_no).filter(
+            int(sequence): bool(gps_available)
+            for sequence, gps_available in db.query(TelemetryWindow.sequence_no, TelemetryWindow.gps_available).filter(
                 TelemetryWindow.trip_id == trip.id,
+                TelemetryWindow.sequence_no >= 1,
                 TelemetryWindow.sequence_no <= record.final_sequence_no,
             ).all()
         }
-        missing_ranges = _missing_ranges(received, record.final_sequence_no)
+        missing_ranges = bounded_missing_ranges(received, record.final_sequence_no, limit=MAX_MISSING_RANGES)
         missing_count = max(0, record.final_sequence_no - len(received))
         if missing_count == 0:
             continue
@@ -111,9 +106,15 @@ def reconcile_incomplete_finalizations(
             "stored_windows": len(received),
             "actual_missing_sequences": missing_count,
             "missing_ranges": missing_ranges,
+            "upload_completeness_pct": percentage(len(received), record.final_sequence_no),
+            "gps_windows": sum(received.values()),
+            "gps_availability_pct": percentage(sum(received.values()), len(received)),
+            "end_to_end_gps_pct": percentage(sum(received.values()), record.final_sequence_no),
+            "timeout_hours": timeout_hours,
+            "timed_out_at": observed_at.isoformat(),
             "training_eligible": False,
         }
-        trip.status = "completed_incomplete"
+        trip.status = "incomplete"
         trip.finalization_state = "incomplete"
         _write_incomplete_label(db, trip=trip, captured_at=observed_at)
         reconciled.append(trip.id)

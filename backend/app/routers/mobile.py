@@ -96,6 +96,25 @@ def _require_driver(db: Session, user: User) -> Driver:
     return driver
 
 
+def _assigned_vehicle(
+    db: Session,
+    driver: Driver,
+    requested_vehicle_id: str | None = None,
+) -> Vehicle:
+    if not driver.assigned_vehicle_id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "No vehicle is assigned to this driver")
+    if requested_vehicle_id and requested_vehicle_id != driver.assigned_vehicle_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Vehicle is not assigned to this driver")
+    vehicle = db.query(Vehicle).filter(
+        Vehicle.id == driver.assigned_vehicle_id,
+        Vehicle.fleet_id == driver.fleet_id,
+        Vehicle.is_active.is_(True),
+    ).first()
+    if vehicle is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Assigned vehicle is unavailable")
+    return vehicle
+
+
 def _trip_dict(t: MobileTripSession) -> dict:
     return {
         "id": t.id, "user_id": t.user_id, "driver_id": t.driver_id,
@@ -138,7 +157,11 @@ def mobile_me(
     current_user: User = Depends(get_current_user),
 ):
     driver = _require_driver(db, current_user)
-    vehicle = db.query(Vehicle).filter(Vehicle.fleet_id == driver.fleet_id, Vehicle.is_active == True).first()
+    vehicle = db.query(Vehicle).filter(
+        Vehicle.id == driver.assigned_vehicle_id,
+        Vehicle.fleet_id == driver.fleet_id,
+        Vehicle.is_active.is_(True),
+    ).first() if driver.assigned_vehicle_id else None
 
     active_trip = (
         db.query(MobileTripSession)
@@ -192,7 +215,11 @@ def ack_alert(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    driver = _require_driver(db, current_user)
+    alert = db.query(Alert).filter(
+        Alert.id == alert_id,
+        Alert.driver_id == driver.id,
+    ).first()
     if not alert:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Alert not found")
     alert.is_resolved = True
@@ -208,6 +235,7 @@ def start_trip(
     current_user: User = Depends(get_current_user),
 ):
     driver = _require_driver(db, current_user)
+    vehicle = _assigned_vehicle(db, driver, body.vehicle_id)
 
     # Check idempotency
     if body.idempotency_key:
@@ -215,12 +243,14 @@ def start_trip(
             MobileTripSession.idempotency_key == body.idempotency_key
         ).first()
         if existing:
+            if existing.driver_id != driver.id:
+                raise HTTPException(status.HTTP_409_CONFLICT, "Idempotency key belongs to another driver")
             return ok(_trip_dict(existing), "Trip already started")
 
     trip = MobileTripSession(
         user_id=current_user.id,
         driver_id=driver.id,
-        vehicle_id=body.vehicle_id,
+        vehicle_id=vehicle.id,
         started_at=datetime.utcnow(),
         origin_lat=body.origin.lat if body.origin else None,
         origin_lng=body.origin.lng if body.origin else None,
@@ -234,9 +264,9 @@ def start_trip(
     db.add(trip)
 
     # Record starting SOC if provided (manual entry)
-    if body.starting_soc is not None and body.vehicle_id:
+    if body.starting_soc is not None:
         soc = SOCReading(
-            vehicle_id=body.vehicle_id,
+            vehicle_id=vehicle.id,
             driver_id=driver.id,
             value=body.starting_soc,
             source="manual",

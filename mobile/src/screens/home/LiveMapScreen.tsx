@@ -393,7 +393,7 @@ const LiveMapScreen: React.FC = () => {
             <ActivityIndicator
               size="small"
               color={Colors.trickeeYellow}
-              style={{ marginLeft: 8 }}
+              style={styles.chargerSpinner}
             />
           )}
         </View>
@@ -405,7 +405,7 @@ const LiveMapScreen: React.FC = () => {
         {visibleChargers.length === 0 && !chargersLoading ? (
           <GlassCard cornerRadius={16}>
             <EmptyState
-              icon="ev-station-off"
+              icon="power-plug-off"
               title={
                 chargersError ? "Charger data unavailable" : "No chargers match"
               }
@@ -564,6 +564,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginTop: 6,
   },
+  chargerSpinner: { marginLeft: 8 },
   sectionLabel: {
     fontSize: 11,
     fontWeight: "700",

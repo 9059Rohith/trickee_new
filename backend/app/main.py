@@ -13,8 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.database import SessionLocal, create_tables, get_db
-from app.routers import auth, devices, experience, fleet_owner, gps_intelligence, mobile, soc, vehicles
+from app.database import SessionLocal, get_db
+from app.routers import auth, devices, experience, fleet_owner, gps_intelligence, mobile, pilot_monitoring, soc, vehicles
 from app.services.auth import get_current_user
 from app.models.entities import User
 from app.services.gps_retention import cleanup_expired_raw_samples
@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    create_tables()
     db = SessionLocal()
     try:
         deleted = cleanup_expired_raw_samples(db)
@@ -83,6 +82,7 @@ app.include_router(soc.router, prefix=settings.api_prefix)
 app.include_router(vehicles.router, prefix=settings.api_prefix)
 app.include_router(experience.router, prefix=settings.api_prefix)
 app.include_router(fleet_owner.router, prefix=settings.api_prefix)
+app.include_router(pilot_monitoring.router)
 # Contract-compatible v2 ingestion route; the legacy mobile-prefixed route is
 # retained for existing app builds.
 app.add_api_route(

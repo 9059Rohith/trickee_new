@@ -104,7 +104,7 @@ const RouteIntelScreen: React.FC = () => {
               </View>
               <View style={styles.rangeDivider} />
               <View style={styles.rangeStat}>
-                <Text style={[styles.rangeValue, { color: Colors.neonGreen }]}>
+                <Text style={[styles.rangeValue, styles.healthyRangeValue]}>
                   {fmt(range)} km
                 </Text>
                 <Text style={styles.rangeLabel}>ESTIMATED RANGE</Text>
@@ -113,11 +113,7 @@ const RouteIntelScreen: React.FC = () => {
             <View
               style={[
                 styles.banner,
-                {
-                  backgroundColor: lowBattery
-                    ? "rgba(255,68,68,0.1)"
-                    : "rgba(57,255,20,0.08)",
-                },
+                lowBattery ? styles.lowBatteryBanner : styles.healthyBanner,
               ]}
             >
               <Icon
@@ -158,7 +154,7 @@ const RouteIntelScreen: React.FC = () => {
                       color={Colors.neonGreen}
                     />
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={styles.recBody}>
                     <Text style={styles.recName}>{best.name || "Charger"}</Text>
                     <Text style={styles.recMeta}>
                       {best.distance_km != null
@@ -183,7 +179,7 @@ const RouteIntelScreen: React.FC = () => {
           ) : (
             <GlassCard cornerRadius={16}>
               <EmptyState
-                icon="ev-station-off"
+                icon="power-plug-off"
                 title="No charger recommendation"
                 subtitle="No charger context is available for your current location."
               />
@@ -232,6 +228,7 @@ const styles = StyleSheet.create({
   rangeRow: { flexDirection: "row", padding: 18, alignItems: "center" },
   rangeStat: { flex: 1, alignItems: "center", gap: 4 },
   rangeValue: { fontSize: 30, fontWeight: "900", color: Colors.trickeeYellow },
+  healthyRangeValue: { color: Colors.neonGreen },
   rangeLabel: {
     fontSize: 9,
     fontWeight: "700",
@@ -252,6 +249,8 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
   },
+  lowBatteryBanner: { backgroundColor: "rgba(255,68,68,0.1)" },
+  healthyBanner: { backgroundColor: "rgba(57,255,20,0.08)" },
   bannerText: {
     flex: 1,
     fontSize: 12,
@@ -272,6 +271,7 @@ const styles = StyleSheet.create({
   },
   recContent: { padding: 16, gap: 12 },
   recTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+  recBody: { flex: 1 },
   recIcon: {
     width: 44,
     height: 44,

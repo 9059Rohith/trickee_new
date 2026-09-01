@@ -16,11 +16,44 @@ def seed() -> None:
             db.add(fleet)
             db.flush()
 
-        demo_accounts = (
-            ("driver1@evify.in", "DRV-001", "Ravi Kumar", "Moderate"),
-            ("driver2@evify.in", "DRV-002", "Priya Sharma", "Efficient"),
+        vehicle_specs = (
+            ("EV-001", "Ather", "450X"),
+            ("EV-002", "Ather", "450X"),
         )
-        for email, driver_code, full_name, style_label in demo_accounts:
+        vehicles: dict[str, Vehicle] = {}
+        for vehicle_code, make, model in vehicle_specs:
+            vehicle = db.query(Vehicle).filter(Vehicle.vehicle_code == vehicle_code).first()
+            if not vehicle:
+                vehicle = Vehicle(fleet_id=fleet.id, vehicle_code=vehicle_code)
+                db.add(vehicle)
+                db.flush()
+            vehicle.fleet_id = fleet.id
+            vehicle.make = make
+            vehicle.model = model
+            vehicle.category = "2W_passenger"
+            vehicle.variant = "Standard"
+            vehicle.usable_kwh = 2.9
+            vehicle.rated_ah = 56.0
+            vehicle.battery_chemistry = "NMC"
+            vehicle.nominal_voltage = 51.8
+            vehicle.motor_kw = 6.0
+            vehicle.kerb_weight = 108.0
+            vehicle.gvw = 250.0
+            vehicle.payload_capacity = 100.0
+            vehicle.top_speed = 80.0
+            vehicle.regen_available = True
+            vehicle.certified_range = 105.0
+            vehicle.max_range_km = 105.0
+            vehicle.battery_capacity_kwh = 2.9
+            vehicle.spec_incomplete = False
+            vehicle.is_active = True
+            vehicles[vehicle_code] = vehicle
+
+        demo_accounts = (
+            ("driver1@evify.in", "DRV-001", "Ravi Kumar", "Moderate", "EV-001"),
+            ("driver2@evify.in", "DRV-002", "Priya Sharma", "Efficient", "EV-002"),
+        )
+        for email, driver_code, full_name, style_label, vehicle_code in demo_accounts:
             driver = db.query(Driver).filter(Driver.driver_code == driver_code).first()
             if not driver:
                 driver = Driver(
@@ -31,6 +64,10 @@ def seed() -> None:
                 )
                 db.add(driver)
                 db.flush()
+            driver.fleet_id = fleet.id
+            driver.full_name = full_name
+            driver.style_label = style_label
+            driver.assigned_vehicle_id = vehicles[vehicle_code].id
 
             user = db.query(User).filter(User.email == email).first()
             if not user:
@@ -57,31 +94,6 @@ def seed() -> None:
         owner.password_hash = hash_password("Manager@2026")
         owner.is_active = True
 
-        vehicle = Vehicle(
-            fleet_id=fleet.id,
-            vehicle_code="EV-001",
-            make="Ather",
-            model="450X",
-            category="2W_passenger",
-            variant="Standard",
-            usable_kwh=2.9,
-            rated_ah=56.0,
-            battery_chemistry="NMC",
-            nominal_voltage=51.8,
-            motor_kw=6.0,
-            kerb_weight=108.0,
-            gvw=250.0,
-            payload_capacity=100.0,
-            top_speed=80.0,
-            regen_available=True,
-            certified_range=105.0,
-            max_range_km=105.0,
-            battery_capacity_kwh=2.9,
-            spec_incomplete=False,
-        )
-        existing_vehicle = db.query(Vehicle).filter(Vehicle.vehicle_code == "EV-001").first()
-        if not existing_vehicle:
-            db.add(vehicle)
         db.commit()
         print("Demo drivers: driver1@evify.in and driver2@evify.in / Driver@2026")
         print("Demo manager: owner@evify.in / Manager@2026")

@@ -20,7 +20,7 @@ abstract class TelemetryDao {
     @Query("SELECT * FROM local_trips WHERE state = 'ENDING' ORDER BY started_at_utc_ms DESC LIMIT 1")
     abstract suspend fun endingTrip(): LocalTripEntity?
 
-    @Query("SELECT t.* FROM local_trips t WHERE EXISTS (SELECT 1 FROM telemetry_outbox o WHERE o.trip_id = t.trip_id AND o.state IN ('PENDING', 'IN_FLIGHT')) ORDER BY t.started_at_utc_ms DESC LIMIT 1")
+    @Query("SELECT t.* FROM local_trips t WHERE EXISTS (SELECT 1 FROM telemetry_outbox o WHERE o.trip_id = t.trip_id AND o.state IN ('PENDING', 'IN_FLIGHT')) ORDER BY t.started_at_utc_ms ASC LIMIT 1")
     abstract suspend fun tripWithPendingOutbox(): LocalTripEntity?
 
     @Query("SELECT DISTINCT trip_id FROM telemetry_outbox WHERE state IN ('PENDING', 'IN_FLIGHT') ORDER BY trip_id")

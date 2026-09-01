@@ -2,6 +2,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -29,7 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUserState] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const restoringRef = useRef(false);
 
@@ -90,9 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [token]);
 
   const restore = useCallback(async () => {
-    if (restoringRef.current) {
-      return token != null;
-    }
+    if (restoringRef.current) return false;
     restoringRef.current = true;
     try {
       const saved = await nativeAuth.load();
@@ -124,7 +123,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       restoringRef.current = false;
     }
-  }, [token]);
+  }, []);
+
+  useEffect(() => {
+    restore().finally(() => setLoading(false));
+  }, [restore]);
 
   const setUser = useCallback((next: User) => setUserState(next), []);
   const value = useMemo(

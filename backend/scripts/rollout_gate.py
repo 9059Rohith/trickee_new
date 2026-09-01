@@ -8,9 +8,15 @@ from pathlib import Path
 
 COHORTS = [10, 25, 50, 100, 150]
 DEFAULT_THRESHOLDS = {
-    "completeness_pct": (">=", 99.0), "max_backlog_age_s": ("<=", 300.0),
-    "battery_drain_pct_per_hour": ("<=", 8.0), "rejection_pct": ("<=", 0.1),
-    "p95_live_latency_s": ("<=", 5.0), "sev1_incidents": ("<=", 0),
+    "completeness_pct": (">=", 99.5),
+    "max_backlog_age_s": ("<=", 300.0),
+    "battery_drain_pct_per_hour": ("<=", 5.0),
+    "rejection_pct": ("<=", 0.1),
+    "p95_live_latency_s": ("<=", 3.0),
+    "p99_live_latency_s": ("<=", 5.0),
+    "p95_finalization_latency_s": ("<", 10.0),
+    "backfill_60m_completion_s": ("<", 300.0),
+    "sev1_incidents": ("<=", 0),
 }
 
 
@@ -18,7 +24,12 @@ def day_passes(day: dict, thresholds: dict = DEFAULT_THRESHOLDS) -> tuple[bool, 
     failures = []
     for metric, (operator, target) in thresholds.items():
         value = float(day.get(metric, float("-inf") if operator == ">=" else float("inf")))
-        passed = value >= target if operator == ">=" else value <= target
+        if operator == ">=":
+            passed = value >= target
+        elif operator == "<":
+            passed = value < target
+        else:
+            passed = value <= target
         if not passed:
             failures.append(f"{metric} {value} violates {operator} {target}")
     capacity = float(day.get("proven_windows_per_second", 0))

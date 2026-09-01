@@ -399,12 +399,53 @@ def test_reconciliation_reports_actual_loss_when_the_contiguous_cursor_is_blocke
 
     assert recent_trip["stored_windows"] == 675
     assert recent_trip["actual_missing_sequences"] == 423
-    assert recent_trip["upload_completeness_pct"] == 61.5
+    assert recent_trip["upload_completeness_pct"] == 61.48
     assert recent_trip["highest_contiguous_sequence"] == 0
     assert recent_trip["highest_received_sequence"] == 894
     assert recent_trip["missing_ranges"] == [[start, end] for start, end in missing_ranges]
     assert recent_trip["stored_gps_pct"] == 100.0
-    assert recent_trip["end_to_end_gps_pct"] == 61.5
+    assert recent_trip["end_to_end_gps_pct"] == 61.48
     assert recent_trip["phone_backlog"] == 359
     assert recent_trip["missing_sequences"] == 423
+    db.close()
+
+
+def test_sealed_reconciliation_excludes_late_rows_and_uses_latest_health_observation(tmp_path):
+    db = _session(tmp_path)
+    now = datetime(2026, 8, 31, 10, 0, 0)
+    user, driver, vehicle, device = _seed_identity(db)
+    trip = MobileTripSession(
+        user_id=user.id,
+        driver_id=driver.id,
+        vehicle_id=vehicle.id,
+        started_at=now - timedelta(minutes=30),
+        ended_at=now - timedelta(minutes=10),
+        status="completed",
+        final_sequence_no=3,
+        finalization_state="completed",
+    )
+    db.add(trip)
+    db.flush()
+    _window(db, trip=trip, vehicle=vehicle, device=device, sequence_no=1, now=now, gps_available=True)
+    _window(db, trip=trip, vehicle=vehicle, device=device, sequence_no=2, now=now, gps_available=True)
+    _window(db, trip=trip, vehicle=vehicle, device=device, sequence_no=4, now=now, gps_available=True)
+    db.flush()
+    first = db.query(TelemetryWindow).filter_by(trip_id=trip.id, sequence_no=1).one()
+    second = db.query(TelemetryWindow).filter_by(trip_id=trip.id, sequence_no=2).one()
+    first.received_at = now - timedelta(minutes=1)
+    first.health_payload = {"local_outbox_pending": 99}
+    second.received_at = now
+    second.health_payload = {"local_outbox_pending": 2}
+    db.commit()
+
+    recent_trip = build_pilot_monitoring_snapshot(db, now=now)["recent_trips"][0]
+
+    assert recent_trip["stored_windows"] == 2
+    assert recent_trip["gps_windows"] == 2
+    assert recent_trip["actual_missing_sequences"] == 1
+    assert recent_trip["missing_ranges"] == [[3, 3]]
+    assert recent_trip["upload_completeness_pct"] == 66.67
+    assert recent_trip["gps_availability_pct"] == 100.0
+    assert recent_trip["end_to_end_gps_pct"] == 66.67
+    assert recent_trip["phone_backlog"] == 2
     db.close()

@@ -38,6 +38,7 @@ const BatteryVisualizer: React.FC<BatteryVisualizerProps> = ({ soc }) => {
   }, [pulseAnim]);
 
   const segments = [25, 50, 75, 100];
+  const filledOpacity = { opacity: pulseAnim };
 
   return (
     <View style={styles.container}>
@@ -52,14 +53,12 @@ const BatteryVisualizer: React.FC<BatteryVisualizerProps> = ({ soc }) => {
                 key={index}
                 style={[
                   styles.segment,
-                  {
-                    backgroundColor: isFilled
-                      ? "#39FF14"
-                      : isPartial
-                      ? "rgba(57, 255, 20, 0.4)"
-                      : "transparent",
-                    opacity: isFilled ? pulseAnim : isPartial ? 0.4 : 0.15,
-                  },
+                  isFilled
+                    ? styles.filledSegment
+                    : isPartial
+                    ? styles.partialSegment
+                    : styles.emptySegment,
+                  isFilled && filledOpacity,
                 ]}
               />
             );
@@ -94,6 +93,12 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 2,
   },
+  filledSegment: { backgroundColor: "#39FF14" },
+  partialSegment: {
+    backgroundColor: "rgba(57, 255, 20, 0.4)",
+    opacity: 0.4,
+  },
+  emptySegment: { backgroundColor: "transparent", opacity: 0.15 },
   batteryTip: {
     width: 3,
     height: 8,

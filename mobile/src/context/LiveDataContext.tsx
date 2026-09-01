@@ -17,7 +17,7 @@ import React, {
   useState,
 } from "react";
 import { AppState } from "react-native";
-import { LIVE_POLL_INTERVAL_MS } from "../config";
+import { Features, LIVE_POLL_INTERVAL_MS, WEBSOCKET_ORIGIN } from "../config";
 import { api, ApiError } from "../services/api";
 import type {
   Alert,
@@ -34,6 +34,10 @@ import {
   startTelemetryTrip,
   stopTelemetryTrip,
 } from "../services/telemetryNative";
+import {
+  connectLiveState,
+  type LiveStateSnapshot,
+} from "../services/liveSocket";
 
 type LiveDataValue = {
   me: MobileMe | null;
@@ -51,6 +55,7 @@ type LiveDataValue = {
   gpsSummary: GPSVehicleSummary | null;
   latestSoc: number | null;
   hasBmsSource: boolean;
+  liveState: LiveStateSnapshot | null;
 };
 
 const LiveDataContext = createContext<LiveDataValue | undefined>(undefined);
@@ -65,6 +70,7 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [liveState, setLiveState] = useState<LiveStateSnapshot | null>(null);
   const appActive = useRef(true);
   const inFlight = useRef<AbortController | null>(null);
   const meRef = useRef<MobileMe | null>(null);
@@ -164,6 +170,28 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, [me?.active_trip?.id, me?.vehicle, token]);
 
+  useEffect(() => {
+    const vehicleId = me?.vehicle?.id;
+    if (!Features.liveWebSocket || !token || !vehicleId) {
+      setLiveState(null);
+      return;
+    }
+    return connectLiveState({
+      origin: WEBSOCKET_ORIGIN,
+      token,
+      vehicleId,
+      sinceVersion:
+        liveState?.vehicle_id === vehicleId ? liveState.state_version : 0,
+      onSnapshot: (snapshot) => {
+        setLiveState(snapshot);
+        setLastUpdated(Date.now());
+        setError(null);
+      },
+    });
+    // The socket owns reconnect/version state until identity or vehicle changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, me?.vehicle?.id]);
+
   // Foreground/background handling
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
@@ -204,6 +232,22 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
     [token, load]
   );
 
+  const liveTelemetry = useMemo<Telemetry | null>(() => {
+    if (!liveState?.gps_available || !liveState.location) {
+      return me?.latest_telemetry ?? null;
+    }
+    return {
+      ...(me?.latest_telemetry ?? {}),
+      id: `live-${liveState.vehicle_id}-${liveState.state_version}`,
+      recorded_at:
+        liveState.event_time ||
+        liveState.received_at ||
+        new Date().toISOString(),
+      lat: liveState.location.lat,
+      lng: liveState.location.lng,
+    };
+  }, [liveState, me?.latest_telemetry]);
+
   const value = useMemo<LiveDataValue>(
     () => ({
       me,
@@ -214,15 +258,27 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
       lastUpdated,
       refresh,
       ackAlert,
-      telemetry: me?.latest_telemetry ?? null,
+      telemetry: liveTelemetry,
       vehicle: me?.vehicle ?? null,
       driver: me?.driver ?? null,
       // GPS-first
       gpsSummary: me?.gps_summary ?? null,
       latestSoc: me?.gps_summary?.soc?.value ?? null,
+      liveState,
       hasBmsSource: false, // GPS-first model — no BMS
     }),
-    [me, alerts, loading, refreshing, error, lastUpdated, refresh, ackAlert]
+    [
+      me,
+      alerts,
+      loading,
+      refreshing,
+      error,
+      lastUpdated,
+      refresh,
+      ackAlert,
+      liveTelemetry,
+      liveState,
+    ]
   );
 
   return (

@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Colors } from "../../constants/Colors";
 import { useAuth } from "../../context/AuthContext";
-import { DEMO_LOGINS, SHOW_DEMO_LOGINS } from "../../config";
+import { DEMO_LOGINS, Features, SHOW_DEMO_LOGINS } from "../../config";
 
 const LoginScreen: React.FC = () => {
   const { login, googleLogin, loading, error } = useAuth();
@@ -31,43 +31,45 @@ const LoginScreen: React.FC = () => {
         <Text style={styles.brand}>TRICKEE</Text>
         <Text style={styles.subtitle}>GPS-First EV Intelligence</Text>
 
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email"
-          placeholderTextColor={Colors.secondaryText}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-        <TextInput
-          style={styles.input}
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Password"
-          placeholderTextColor={Colors.secondaryText}
-          secureTextEntry
-        />
+        {Features.passwordLogin && (
+          <View>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Email"
+              placeholderTextColor={Colors.secondaryText}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Password"
+              placeholderTextColor={Colors.secondaryText}
+              secureTextEntry
+            />
+            <TouchableOpacity
+              style={styles.loginBtn}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={Colors.darkText} />
+              ) : (
+                <Text style={styles.loginText}>Sign In</Text>
+              )}
+            </TouchableOpacity>
+            <View style={styles.divider}>
+              <View style={styles.line} />
+              <Text style={styles.or}>or</Text>
+              <View style={styles.line} />
+            </View>
+          </View>
+        )}
 
         {error && <Text style={styles.error}>{error}</Text>}
-
-        <TouchableOpacity
-          style={styles.loginBtn}
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={Colors.darkText} />
-          ) : (
-            <Text style={styles.loginText}>Sign In</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.divider}>
-          <View style={styles.line} />
-          <Text style={styles.or}>or</Text>
-          <View style={styles.line} />
-        </View>
         <TouchableOpacity
           style={styles.googleBtn}
           onPress={() => googleLogin().catch(() => {})}

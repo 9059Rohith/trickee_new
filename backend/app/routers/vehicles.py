@@ -11,15 +11,9 @@ from app.database import get_db
 from app.models.entities import User, Vehicle
 from app.schemas.api import ok
 from app.services.auth import get_current_user
+from app.services.vehicle_specs import is_prediction_spec_complete
 
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
-
-# Minimum required fields for GPS predictions (§7)
-REQUIRED_SPEC_FIELDS = [
-    "category", "make", "model", "usable_kwh", "battery_chemistry",
-    "nominal_voltage", "motor_kw", "kerb_weight", "top_speed",
-]
-
 
 class VehicleSpecUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -65,12 +59,7 @@ class VehicleCreateRequest(BaseModel):
 
 
 def _check_spec_complete(v: Vehicle) -> bool:
-    """Check if all required spec fields are populated."""
-    for field_name in REQUIRED_SPEC_FIELDS:
-        val = getattr(v, field_name, None)
-        if val is None or (isinstance(val, str) and val.strip() == ""):
-            return False
-    return True
+    return is_prediction_spec_complete(v)
 
 
 def _vehicle_dict(v: Vehicle) -> dict:

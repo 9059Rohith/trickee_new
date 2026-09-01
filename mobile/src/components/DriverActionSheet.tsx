@@ -26,6 +26,7 @@ import {
   startTelemetryTrip,
   stopTelemetryTrip,
 } from "../services/telemetryNative";
+import { waitForTripFinalization } from "../services/tripFinalization";
 
 type Props = {
   visible: boolean;
@@ -96,13 +97,19 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
       if (!telemetry.tripId) {
         throw new Error("No active native telemetry trip was found.");
       }
-      const result = await api.completeTelemetryTrip(token, telemetry.tripId, {
+      await api.completeTelemetryTrip(token, telemetry.tripId, {
         ending_soc: endingSoc,
         final_sequence_no: telemetry.finalSequenceNo,
         location: telemetry.lastLocation,
         idempotency_key: `end-${Date.now()}`,
       });
-      setCalculationResult(result);
+      const finalized = await waitForTripFinalization(token, telemetry.tripId);
+      if (finalized.state === "completed") {
+        setCalculationResult(finalized.overlayResult);
+      } else {
+        setCalculationResult({ calculation_status: "processing" });
+        setCalculationError(finalized.message);
+      }
       await refresh();
       onClose();
     } catch (err: any) {

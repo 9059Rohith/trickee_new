@@ -143,8 +143,12 @@ const CalculationOverlay: React.FC<{
     const samples = valueOf(calculation?.gps_sample_count);
     const confidence =
       prediction?.confidence || prediction?.wh_per_km?.confidence || "low";
-    const source =
-      prediction?.source || prediction?.wh_per_km?.source || "physics_baseline";
+    const source = measuredWhKm != null
+      ? calculation?.measured_source || "manual_dashboard"
+      : prediction?.source || prediction?.wh_per_km?.source || "physics_baseline";
+    const displayedConfidence = measuredWhKm != null && typeof calculation?.measured_confidence === "number"
+      ? `${Math.round(calculation.measured_confidence * 100)}%`
+      : confidence;
     return {
       whKm,
       energy,
@@ -152,13 +156,14 @@ const CalculationOverlay: React.FC<{
       soc,
       distance,
       samples,
-      confidence,
+      confidence: displayedConfidence,
       source,
       measured: measuredWhKm != null,
     };
   }, [prediction, result]);
 
   const unavailable = result?.calculation_status === "insufficient_gps";
+  const processing = result?.calculation_status === "processing";
   const displayError =
     error ||
     (unavailable
@@ -207,7 +212,7 @@ const CalculationOverlay: React.FC<{
                 <Icon name="alert-outline" size={31} color="#FFFFFF" />
               </View>
               <Text style={styles.resultTitle}>
-                {unavailable ? "Trip saved" : "Calculation interrupted"}
+                {unavailable || processing ? "Trip saved" : "Calculation interrupted"}
               </Text>
               <Text style={styles.resultMeta}>{displayError}</Text>
               <TouchableOpacity style={styles.doneButton} onPress={onFinished}>

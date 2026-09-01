@@ -99,9 +99,16 @@ const AIAssistantScreen: React.FC = () => {
           style={styles.input}
           placeholder="Ask about your EV…"
           placeholderTextColor={Colors.secondaryText}
-          onSubmitEditing={() => void send()}
+          onSubmitEditing={() => {
+            send();
+          }}
         />
-        <TouchableOpacity style={styles.send} onPress={() => void send()}>
+        <TouchableOpacity
+          style={styles.send}
+          onPress={() => {
+            send();
+          }}
+        >
           <Icon name="send" size={20} color={Colors.buttonText} />
         </TouchableOpacity>
       </View>

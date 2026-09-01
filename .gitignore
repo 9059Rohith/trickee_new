@@ -1,6 +1,10 @@
 *.iml
 .gradle
 /local.properties
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
 /.idea/caches
 /.idea/libraries
 /.idea/modules.xml
@@ -36,6 +40,9 @@ backend/.venv/
 backend/.env
 backend/*.db
 /*.db
+*.db-journal
+*.db-shm
+*.db-wal
 backend/*.log
 
 # Secrets and signing material

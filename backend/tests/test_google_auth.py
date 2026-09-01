@@ -155,6 +155,23 @@ def test_google_login_rejects_unknown_unprovisioned_identity(google_claims):
     assert response.status_code == 403
 
 
+def test_password_login_and_signup_are_not_exposed_when_disabled(monkeypatch):
+    monkeypatch.setenv("TRICKEE_PASSWORD_AUTH_ENABLED", "false")
+    get_settings.cache_clear()
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "any@example.com", "password": "not-used"},
+    )
+    signup_response = client.post(
+        "/api/v1/auth/signup",
+        json={"email": "new@example.com", "password": "not-used", "full_name": "New User"},
+    )
+
+    assert login_response.status_code == 404
+    assert signup_response.status_code == 404
+
+
 def test_google_login_rejects_unverified_email(seeded_users, google_claims):
     google_claims["unverified-token"] = claims(
         sub="unverified-google-sub",

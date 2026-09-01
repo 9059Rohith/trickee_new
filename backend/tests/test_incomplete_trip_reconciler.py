@@ -20,6 +20,7 @@ from app.services.incomplete_trip_reconciler import (
     promote_finalization_if_complete,
     reconcile_incomplete_finalizations,
 )
+from app.processors.trip_finalizer import finalize_trip
 
 
 def _session(tmp_path):
@@ -122,7 +123,7 @@ def test_timeout_closes_incomplete_trip_without_creating_a_training_target(tmp_p
     db.flush()
 
     assert reconciled == [trip.id]
-    assert trip.status == "completed_incomplete"
+    assert trip.status == "incomplete"
     assert trip.finalization_state == "incomplete"
     assert record.state == "incomplete"
     assert record.completed_at == now
@@ -132,6 +133,12 @@ def test_timeout_closes_incomplete_trip_without_creating_a_training_target(tmp_p
         "stored_windows": 2,
         "actual_missing_sequences": 1,
         "missing_ranges": [[2, 2]],
+        "upload_completeness_pct": 66.67,
+        "gps_windows": 2,
+        "gps_availability_pct": 100.0,
+        "end_to_end_gps_pct": 66.67,
+        "timeout_hours": 24,
+        "timed_out_at": now.isoformat(),
         "training_eligible": False,
     }
     label = db.query(TripEnergyLabel).filter_by(trip_id=trip.id).one()
@@ -164,8 +171,9 @@ def test_waiting_trip_is_not_closed_before_the_timeout(tmp_path):
 def test_late_complete_telemetry_reopens_incomplete_trip_for_finalization(tmp_path):
     db = _session(tmp_path)
     now = datetime(2026, 9, 1, 12, 0, 0)
-    trip, _, record = _seed_waiting_trip(db, now)
+    trip, vehicle, record = _seed_waiting_trip(db, now)
     reconcile_incomplete_finalizations(db, now=now, timeout_hours=24)
+    db.add(_window(trip, vehicle, 2, now + timedelta(minutes=5)))
     cursor = DeviceTripUploadCursor(
         device_id="device-1",
         trip_id=trip.id,
@@ -190,4 +198,47 @@ def test_late_complete_telemetry_reopens_incomplete_trip_for_finalization(tmp_pa
     assert record.completed_at is None
     event = db.query(ServerOutbox).filter_by(event_type="trip.finalization_eligible").one()
     assert event.payload["late_reconciliation"] is True
+    finalize_trip(db, {"event_type": event.event_type, "payload": event.payload})
+    db.commit()
+    label = db.query(TripEnergyLabel).filter_by(trip_id=trip.id).one()
+    assert record.state == "completed"
+    assert trip.finalization_state == "completed"
+    assert label.actual_energy_consumed_wh is not None
+    assert label.eligibility_reason != "incomplete_telemetry"
+    db.close()
+
+
+def test_reconciler_processes_no_more_than_one_hundred_expired_candidates(tmp_path):
+    db = _session(tmp_path)
+    now = datetime(2026, 9, 1, 12, 0, 0)
+    fleet = Fleet(name="Bounded", city="Surat")
+    db.add(fleet)
+    db.flush()
+    vehicle = Vehicle(fleet_id=fleet.id, vehicle_code="BOUND-EV", make="OLA", model="S1", usable_kwh=2.98)
+    driver = Driver(fleet_id=fleet.id, driver_code="BOUND-DRIVER", full_name="Driver")
+    db.add_all([vehicle, driver])
+    db.flush()
+    user = User(email="bounded@example.com", full_name="Driver", role="driver", fleet_id=fleet.id, driver_id=driver.id)
+    db.add(user)
+    db.flush()
+    for index in range(101):
+        trip = MobileTripSession(
+            user_id=user.id,
+            driver_id=driver.id,
+            vehicle_id=vehicle.id,
+            started_at=now - timedelta(hours=26),
+            status="sync_pending",
+            final_sequence_no=1,
+            completion_requested_at=now - timedelta(hours=25, seconds=index),
+            finalization_state="waiting_for_telemetry",
+        )
+        db.add(trip)
+        db.flush()
+        db.add(TripFinalization(trip_id=trip.id, final_sequence_no=1, state="waiting_for_telemetry"))
+    db.commit()
+
+    reconciled = reconcile_incomplete_finalizations(db, now=now, timeout_hours=24)
+
+    assert len(reconciled) == 100
+    assert db.query(MobileTripSession).filter_by(finalization_state="waiting_for_telemetry").count() == 1
     db.close()

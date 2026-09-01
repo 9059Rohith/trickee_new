@@ -117,6 +117,7 @@ def test_gap_recovery_replay_and_finalization_are_lossless(tmp_path):
         finally:
             db.close()
 
+    previous_override = app.dependency_overrides.get(get_db)
     app.dependency_overrides[get_db] = override_db
     try:
         with session_factory() as db:
@@ -234,6 +235,9 @@ def test_gap_recovery_replay_and_finalization_are_lossless(tmp_path):
                 aggregate_id=identity["trip_id"], event_type="trip.finalization_eligible"
             ).count() == 1
     finally:
-        app.dependency_overrides.pop(get_db, None)
+        if previous_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_override
         Base.metadata.drop_all(engine)
         engine.dispose()

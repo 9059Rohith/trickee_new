@@ -72,8 +72,8 @@ export type VehicleSpecUpdate = {
 // --- Telemetry (legacy V4.1 — NOT fabricated for GPS model) ---
 export type Telemetry = {
   id: string;
-  soc: number;
-  speed: number;
+  soc?: number;
+  speed?: number;
   recorded_at: string;
   lat?: number;
   lng?: number;

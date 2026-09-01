@@ -10,7 +10,7 @@ from app.config import get_settings
 from app.database import SessionLocal, get_db
 from app.models.entities import User, Vehicle, VehicleLiveStateSnapshot
 from app.observability.metrics import WEBSOCKET_CONNECTIONS
-from app.processors.live_state import snapshot_dict
+from app.processors.live_state import new_live_state, snapshot_dict
 from app.schemas.api import ok
 from app.services.auth import get_current_user
 
@@ -23,7 +23,7 @@ def _authorized_state(db: Session, user: User, vehicle_id: str) -> VehicleLiveSt
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Vehicle not found")
     state = db.query(VehicleLiveStateSnapshot).filter_by(vehicle_id=vehicle_id).first()
     if state is None:
-        state = VehicleLiveStateSnapshot(vehicle_id=vehicle_id)
+        state = new_live_state(vehicle_id)
     return state
 
 
@@ -43,10 +43,29 @@ def _websocket_user(db: Session, token: str) -> User | None:
     return db.query(User).filter(User.id == payload.get("sub"), User.is_active.is_(True)).first()
 
 
+def _websocket_token(websocket: WebSocket) -> str | None:
+    protocols = {
+        value.strip()
+        for value in websocket.headers.get("sec-websocket-protocol", "").split(",")
+        if value.strip()
+    }
+    if "trickee-v2" not in protocols:
+        return None
+    for protocol in protocols:
+        if protocol.startswith("trickee-auth."):
+            return protocol.removeprefix("trickee-auth.") or None
+    return None
+
+
 @router.websocket("/ws/v2/vehicles/{vehicle_id}")
-async def vehicle_socket(websocket: WebSocket, vehicle_id: str, token: str = Query(...), since_version: int = 0):
+async def vehicle_socket(websocket: WebSocket, vehicle_id: str, since_version: int = Query(0, ge=0)):
     db = SessionLocal()
+    connected = False
     try:
+        token = _websocket_token(websocket)
+        if token is None:
+            await websocket.close(code=4401)
+            return
         user = _websocket_user(db, token)
         if user is None:
             await websocket.close(code=4401)
@@ -56,18 +75,20 @@ async def vehicle_socket(websocket: WebSocket, vehicle_id: str, token: str = Que
         except HTTPException:
             await websocket.close(code=4404)
             return
-        await websocket.accept()
+        await websocket.accept(subprotocol="trickee-v2")
         WEBSOCKET_CONNECTIONS.inc()
+        connected = True
         sent_version = since_version
         while True:
             db.expire_all()
             current = db.query(VehicleLiveStateSnapshot).filter_by(vehicle_id=vehicle_id).first() or state
-            if current.state_version != sent_version:
+            current_version = current.state_version or 0
+            if current_version != sent_version:
                 await websocket.send_json({
-                    "type": "snapshot" if current.state_version > sent_version + 1 else "update",
+                    "type": "snapshot" if current_version > sent_version + 1 else "update",
                     "data": snapshot_dict(current),
                 })
-                sent_version = current.state_version
+                sent_version = current_version
             try:
                 message = await asyncio.wait_for(websocket.receive_text(), timeout=1)
                 if message == "ping":
@@ -77,5 +98,6 @@ async def vehicle_socket(websocket: WebSocket, vehicle_id: str, token: str = Que
     except WebSocketDisconnect:
         pass
     finally:
-        WEBSOCKET_CONNECTIONS.dec()
+        if connected:
+            WEBSOCKET_CONNECTIONS.dec()
         db.close()

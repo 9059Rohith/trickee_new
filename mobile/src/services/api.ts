@@ -153,6 +153,9 @@ export const api = {
     }
   ) => request<any>("POST", `/api/v2/trips/${tripId}/complete`, token, data),
 
+  getTelemetryTripStatus: (token: string, tripId: string) =>
+    request<any>("GET", `/api/v2/trips/${tripId}`, token),
+
   ownerSummary: (token: string, signal?: AbortSignal) =>
     request<{
       totals: {

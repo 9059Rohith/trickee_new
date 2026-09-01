@@ -17,6 +17,7 @@ def validate(root: Path) -> list[str]:
         "separate service accounts": 'for_each = local.roles',
         "dedicated migration job": 'toset(["migrate", "archive", "retention", "finalization-reconciler"])',
         "scheduled incomplete reconciliation": 'resource "google_cloud_scheduler_job" "finalization_reconciler"',
+        "15 minute reconciliation schedule": 'schedule = "*/15 * * * *"',
         "private SQL": "ipv4_enabled = false",
         "connector /28 subnet": 'ip_cidr_range = "10.20.0.0/28"',
         "immutable image guidance": "@sha256:",

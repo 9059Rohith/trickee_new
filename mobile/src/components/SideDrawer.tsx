@@ -89,7 +89,7 @@ const SideDrawer: React.FC<{
             style={styles.logout}
             onPress={() => {
               onClose();
-              void logout();
+              logout();
             }}
           >
             <Icon name="logout" size={21} color={Colors.red} />

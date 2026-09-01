@@ -27,6 +27,10 @@ class UploadPolicyTest {
             UploadFailureDecision.ReduceBatch,
             UploadFailurePolicy.decide(413, rowCount = 20, retryAfterSeconds = null),
         )
+        assertEquals(
+            UploadFailureDecision.RetainOversizeSingle,
+            UploadFailurePolicy.decide(413, rowCount = 1, retryAfterSeconds = null),
+        )
     }
 
     @Test
@@ -64,5 +68,13 @@ class UploadPolicyTest {
         assertFalse(lease.tryAcquire())
         lease.release()
         assertTrue(lease.tryAcquire())
+    }
+
+    @Test
+    fun processWideLeaseRejectsForegroundAndWorkManagerInstances() {
+        ProcessWideUploaderLease.release()
+        assertTrue(ProcessWideUploaderLease.tryAcquire())
+        assertFalse(ProcessWideUploaderLease.tryAcquire())
+        ProcessWideUploaderLease.release()
     }
 }

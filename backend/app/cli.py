@@ -7,6 +7,11 @@ import os
 import subprocess
 
 
+def reconciler_output(reconciled_count: int) -> str:
+    """Keep scheduled-job output low-cardinality and safe for shared logs."""
+    return json.dumps({"reconciled_count": reconciled_count}, sort_keys=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("role", choices=["api", "websocket", "relay", "live-state", "imu-rules", "trip-finalizer", "finalization-reconciler", "migrate", "archive", "retention", "provision"])
@@ -56,7 +61,7 @@ def main() -> None:
                 db,
                 timeout_hours=get_settings().incomplete_finalization_timeout_hours,
             )
-        print(json.dumps({"reconciled_trip_ids": reconciled}, sort_keys=True))
+        print(reconciler_output(len(reconciled)))
     else:
         from app.worker import run
         run(args.role)

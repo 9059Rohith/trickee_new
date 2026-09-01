@@ -22,8 +22,20 @@ object UploadPolicy {
     }
 }
 
-class SingleUploaderLease {
+interface UploaderLease {
+    fun tryAcquire(): Boolean
+    fun release()
+}
+
+class SingleUploaderLease : UploaderLease {
     private val acquired = AtomicBoolean(false)
-    fun tryAcquire(): Boolean = acquired.compareAndSet(false, true)
-    fun release() = acquired.set(false)
+    override fun tryAcquire(): Boolean = acquired.compareAndSet(false, true)
+    override fun release() = acquired.set(false)
+}
+
+/** Shared by foreground capture and WorkManager in this Android process. */
+object ProcessWideUploaderLease : UploaderLease {
+    private val acquired = AtomicBoolean(false)
+    override fun tryAcquire(): Boolean = acquired.compareAndSet(false, true)
+    override fun release() = acquired.set(false)
 }

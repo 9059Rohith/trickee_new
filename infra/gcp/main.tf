@@ -393,7 +393,7 @@ resource "google_cloud_scheduler_job" "finalization_reconciler" {
   name        = "${local.name}-finalization-reconciler"
   description = "Close telemetry-incomplete trips after the configured grace period"
   region      = var.region
-  schedule    = "15 * * * *"
+  schedule    = "*/15 * * * *"
   time_zone   = "Etc/UTC"
 
   http_target {

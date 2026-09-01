@@ -33,7 +33,9 @@ def identity():
         driver = Driver(fleet_id=fleet.id, driver_code="LIFE-1", full_name="Driver"); db.add(driver); db.flush()
         user = User(email="life@example.com", full_name="Driver", role="driver", fleet_id=fleet.id, driver_id=driver.id)
         vehicle = Vehicle(fleet_id=fleet.id, vehicle_code="LIFE-EV", make="Test", model="EV")
-        db.add_all([user, vehicle]); db.commit()
+        db.add_all([user, vehicle]); db.flush()
+        driver.assigned_vehicle_id = vehicle.id
+        db.commit()
         return {"user": user.id, "vehicle": vehicle.id, "headers": {"Authorization": f"Bearer {create_access_token({'sub': user.id, 'typ': 'user'})}"}}
 
 
@@ -60,6 +62,13 @@ def test_completion_waits_for_gap_and_replay_is_idempotent(identity):
     with Session() as db: assert db.query(TripFinalization).count() == 1
 
 
+def test_completion_rejects_an_unbounded_final_sequence(identity):
+    trip_id = start(identity).json()["data"]["id"]
+    response = client.post(f"/api/v2/trips/{trip_id}/complete", headers=identity["headers"], json={
+        "ending_soc": 80, "final_sequence_no": 172_801, "idempotency_key": "too-large"})
+    assert response.status_code == 422
+
+
 def test_completion_is_eligible_at_declared_cursor(identity):
     trip_id = start(identity).json()["data"]["id"]
     with Session() as db:
@@ -70,9 +79,77 @@ def test_completion_is_eligible_at_declared_cursor(identity):
     assert response.json()["data"]["finalization_state"] == "eligible"
 
 
+def test_trip_status_returns_waiting_state_without_a_summary(identity):
+    trip_id = start(identity).json()["data"]["id"]
+    client.post(f"/api/v2/trips/{trip_id}/complete", headers=identity["headers"], json={
+        "ending_soc": 80, "final_sequence_no": 10, "idempotency_key": "end-status-waiting"})
+
+    response = client.get(f"/api/v2/trips/{trip_id}", headers=identity["headers"])
+
+    assert response.status_code == 200
+    assert response.json()["data"]["finalization_state"] == "waiting_for_telemetry"
+    assert response.json()["data"]["summary"] is None
+
+
+def test_trip_status_returns_completed_finalization_summary(identity):
+    trip_id = start(identity).json()["data"]["id"]
+    with Session() as db:
+        trip = db.query(MobileTripSession).filter_by(id=trip_id).one()
+        trip.status = "completed"
+        trip.finalization_state = "completed"
+        db.add(TripFinalization(
+            trip_id=trip_id,
+            final_sequence_no=0,
+            processed_sequence_no=0,
+            state="completed",
+            summary={"energy_label": {"label_source": "manual_dashboard"}},
+        ))
+        db.commit()
+
+    response = client.get(f"/api/v2/trips/{trip_id}", headers=identity["headers"])
+
+    assert response.status_code == 200
+    assert response.json()["data"]["finalization_state"] == "completed"
+    assert response.json()["data"]["summary"]["energy_label"]["label_source"] == "manual_dashboard"
+
+
+def test_trip_status_never_returns_another_users_trip(identity):
+    trip_id = start(identity).json()["data"]["id"]
+    with Session() as db:
+        foreign = User(email="foreign@example.com", full_name="Foreign", role="driver")
+        db.add(foreign)
+        db.commit()
+        foreign_id = foreign.id
+
+    response = client.get(
+        f"/api/v2/trips/{trip_id}",
+        headers={"Authorization": f"Bearer {create_access_token({'sub': foreign_id, 'typ': 'user'})}"},
+    )
+
+    assert response.status_code == 404
+
+
 def test_user_cannot_complete_another_users_trip(identity):
     trip_id = start(identity).json()["data"]["id"]
     foreign = create_access_token({"sub": "not-the-owner", "typ": "user"})
     response = client.post(f"/api/v2/trips/{trip_id}/complete", headers={"Authorization": f"Bearer {foreign}"}, json={
         "ending_soc": 80, "final_sequence_no": 0, "idempotency_key": "foreign"})
     assert response.status_code == 401
+
+
+def test_v2_start_rejects_vehicle_not_assigned_to_driver(identity):
+    with Session() as db:
+        vehicle = db.query(Vehicle).filter(Vehicle.id == identity["vehicle"]).one()
+        other = Vehicle(fleet_id=vehicle.fleet_id, vehicle_code="LIFE-EV-OTHER", make="Test", model="Other")
+        db.add(other)
+        db.commit()
+        other_id = other.id
+
+    response = client.post("/api/v2/trips/start", headers=identity["headers"], json={
+        "trip_id": "00000000-0000-4000-8000-000000000002",
+        "vehicle_id": other_id,
+        "starting_soc": 90,
+        "idempotency_key": "wrong-assignment",
+    })
+
+    assert response.status_code == 403

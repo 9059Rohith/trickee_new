@@ -1,25 +1,30 @@
 import { NativeModules, Platform } from "react-native";
-
-const USE_HOSTED_BACKEND = !__DEV__;
-
-const LOCAL_API_ORIGIN =
-  Platform.OS === "android" ? "http://10.0.2.2:8001" : "http://127.0.0.1:8001";
+import { resolveBackendConfig } from "./backendConfig";
 
 const NATIVE_API_ORIGIN = NativeModules.TrickeeTelemetry?.apiOrigin as
   | string
   | undefined;
+const NATIVE_WEBSOCKET_ORIGIN = NativeModules.TrickeeTelemetry
+  ?.websocketOrigin as string | undefined;
 
-export const API_ORIGIN = USE_HOSTED_BACKEND
-  ? NATIVE_API_ORIGIN || "https://api-not-configured.invalid"
-  : LOCAL_API_ORIGIN;
+const BACKEND = resolveBackendConfig(
+  __DEV__,
+  Platform.OS,
+  NATIVE_API_ORIGIN,
+  NATIVE_WEBSOCKET_ORIGIN
+);
+const USE_HOSTED_BACKEND = BACKEND.useHostedBackend;
+
+export const API_ORIGIN = BACKEND.apiOrigin;
 export const API_BASE_URL = `${API_ORIGIN}/api/v1`;
+export const WEBSOCKET_ORIGIN = BACKEND.websocketOrigin;
 export const REQUEST_TIMEOUT_MS = 60000;
 export const LIVE_POLL_INTERVAL_MS = 15000;
 export const DEFAULT_MAP_CENTER = { latitude: 21.1702, longitude: 72.8311 };
 
 export const Features = {
-  passwordLogin: true,
-  liveWebSocket: false,
+  passwordLogin: __DEV__,
+  liveWebSocket: true,
   driverActions: true,
   gpsFirstModel: true,
 };

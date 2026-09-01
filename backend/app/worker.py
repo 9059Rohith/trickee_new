@@ -1,6 +1,7 @@
 """Long-running relay and processor roles."""
 from __future__ import annotations
 
+import json
 import os
 import socket
 import time
@@ -8,12 +9,22 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from app.database import SessionLocal
+from app.models.entities import ServerOutbox
 from app.processors.imu_rules import process_imu_rules
 from app.processors.live_state import project_live_state
 from app.processors.trip_finalizer import finalize_trip
 from app.streams.consumer import consume_once
 from app.streams.outbox_relay import relay_once
 from app.streams.redis_client import RedisStreamClient
+
+
+def outbox_metric_record(pending: int) -> dict[str, str | int]:
+    """Build the low-cardinality structured log consumed by Cloud Monitoring."""
+    return {
+        "severity": "INFO",
+        "metric": "trickee_server_outbox_pending",
+        "outbox_pending": pending,
+    }
 
 
 def _start_health_server() -> None:
@@ -44,11 +55,17 @@ def run(role: str) -> None:
         "imu-rules": process_imu_rules,
         "trip-finalizer": finalize_trip,
     }
+    next_outbox_metric_at = 0.0
     while True:
         db = SessionLocal()
         try:
             if role == "relay":
                 work = relay_once(db, streams)
+                now = time.monotonic()
+                if now >= next_outbox_metric_at:
+                    pending = db.query(ServerOutbox).filter(ServerOutbox.state == "pending").count()
+                    print(json.dumps(outbox_metric_record(pending), separators=(",", ":")), flush=True)
+                    next_outbox_metric_at = now + 60.0
             else:
                 handler = handlers[role]
                 if role == "live-state":

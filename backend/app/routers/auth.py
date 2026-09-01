@@ -58,8 +58,14 @@ def _user_dict(u: User) -> dict:
     }
 
 
+def _require_password_auth() -> None:
+    if not get_settings().password_auth_enabled:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+
+
 @router.post("/login")
 def login(body: LoginRequest, db: Session = Depends(get_db)):
+    _require_password_auth()
     user = db.query(User).filter(User.email == body.email.strip().lower()).first()
     if not user or not user.password_hash or not verify_password(body.password, user.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
@@ -69,6 +75,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/signup")
 def signup(body: SignupRequest, db: Session = Depends(get_db)):
+    _require_password_auth()
     existing = db.query(User).filter(User.email == body.email.strip().lower()).first()
     if existing:
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")

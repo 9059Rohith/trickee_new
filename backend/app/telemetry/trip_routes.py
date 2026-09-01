@@ -21,6 +21,7 @@ from app.models.entities import (
 )
 from app.schemas.api import ok, utc_iso
 from app.services.auth import get_current_user
+from app.services.reconciliation import MAX_FINAL_SEQUENCE_NO
 
 router = APIRouter(prefix="/api/v2/trips", tags=["telemetry-trips"])
 
@@ -45,7 +46,7 @@ class StartTripBody(StrictBody):
 
 class CompleteTripBody(StrictBody):
     ending_soc: float = Field(ge=0, le=100)
-    final_sequence_no: int = Field(ge=0)
+    final_sequence_no: int = Field(ge=0, le=MAX_FINAL_SEQUENCE_NO)
     location: Coordinate | None = None
     idempotency_key: str = Field(min_length=1, max_length=80)
 
@@ -93,6 +94,10 @@ def start_trip(
     if vehicle is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Vehicle not found")
     driver = _driver(db, user)
+    if not driver.assigned_vehicle_id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "No vehicle is assigned to this driver")
+    if driver.assigned_vehicle_id != vehicle.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Vehicle is not assigned to this driver")
     started_at = body.started_at or datetime.utcnow()
     if started_at.tzinfo is not None:
         started_at = started_at.astimezone(timezone.utc).replace(tzinfo=None)
@@ -122,6 +127,28 @@ def start_trip(
         ))
     db.commit()
     return ok(_trip_data(trip), "Trip started")
+
+
+@router.get("/{trip_id}")
+def get_trip_status(
+    trip_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    trip = db.query(MobileTripSession).filter(
+        MobileTripSession.id == trip_id,
+        MobileTripSession.user_id == user.id,
+    ).first()
+    if trip is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Trip not found")
+
+    cursor = max((row[0] for row in db.query(DeviceTripUploadCursor.highest_contiguous_sequence).filter(
+        DeviceTripUploadCursor.trip_id == trip.id
+    ).all()), default=0)
+    finalization = db.query(TripFinalization).filter(TripFinalization.trip_id == trip.id).first()
+    data = _trip_data(trip, cursor)
+    data["summary"] = finalization.summary if finalization else None
+    return ok(data, "Trip status")
 
 
 @router.post("/{trip_id}/complete")

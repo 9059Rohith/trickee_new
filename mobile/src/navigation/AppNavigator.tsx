@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View } from "react-native";
+import React, { useCallback, useState } from "react";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import {
   createNavigationContainerRef,
   NavigationContainer,
@@ -36,6 +36,26 @@ function AuthNavigator() {
   );
 }
 
+function MainTabBar({ props, drawerOpen, setDrawerOpen, rootNavigation }: any) {
+  const navigateFromDrawer = (route: string) => {
+    if (["Home", "Live Map", "Monitoring"].includes(route)) {
+      props.navigation.navigate(route);
+    } else {
+      rootNavigation.navigate(route);
+    }
+  };
+  return (
+    <>
+      <LiquidGlassTabBar {...props} />
+      <SideDrawer
+        visible={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onNavigate={navigateFromDrawer}
+      />
+    </>
+  );
+}
+
 function MainTabs({ navigation }: any) {
   const { logout } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -50,29 +70,22 @@ function MainTabs({ navigation }: any) {
       navigation.navigate(routes[item]);
     }
   };
+  const renderTabBar = useCallback(
+    (props: any) => (
+      <MainTabBar
+        props={props}
+        drawerOpen={drawerOpen}
+        setDrawerOpen={setDrawerOpen}
+        rootNavigation={navigation}
+      />
+    ),
+    [drawerOpen, navigation]
+  );
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.appBackground }}>
+    <View style={styles.container}>
       <AppHeader onMenu={() => setDrawerOpen(true)} />
       <MainTab.Navigator
-        tabBar={(props) => {
-          const navigateFromDrawer = (route: string) => {
-            if (["Home", "Live Map", "Monitoring"].includes(route)) {
-              props.navigation.navigate(route);
-            } else {
-              navigation.navigate(route);
-            }
-          };
-          return (
-            <>
-              <LiquidGlassTabBar {...props} />
-              <SideDrawer
-                visible={drawerOpen}
-                onClose={() => setDrawerOpen(false)}
-                onNavigate={navigateFromDrawer}
-              />
-            </>
-          );
-        }}
+        tabBar={renderTabBar}
         screenOptions={{ headerShown: false }}
       >
         <MainTab.Screen name="Home" component={HomeScreen} />
@@ -82,7 +95,7 @@ function MainTabs({ navigation }: any) {
           {() => (
             <MoreMenuScreen
               onNavigate={navigateFromMore}
-              onLogout={() => void logout()}
+              onLogout={logout}
             />
           )}
         </MainTab.Screen>
@@ -92,7 +105,14 @@ function MainTabs({ navigation }: any) {
 }
 
 export default function AppNavigator() {
-  const { token, user } = useAuth();
+  const { token, user, loading } = useAuth();
+  if (loading) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color={Colors.accent} />
+      </View>
+    );
+  }
   const isOwner =
     user?.role === "owner" ||
     user?.role === "fleet_admin" ||
@@ -138,3 +158,13 @@ export default function AppNavigator() {
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.appBackground },
+  loading: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.appBackground,
+  },
+});

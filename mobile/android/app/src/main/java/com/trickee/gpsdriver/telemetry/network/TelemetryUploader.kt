@@ -18,6 +18,8 @@ import java.io.ByteArrayOutputStream
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPOutputStream
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 private data class RefreshedDevice(
     val device: Map<String, Any>,
@@ -36,12 +38,12 @@ class TelemetryUploader(
     private val batchIdFactory: () -> String = { UUID.randomUUID().toString() },
     private val clock: () -> Long = System::currentTimeMillis,
     private val randomFraction: () -> Double = Math::random,
+    private val uploaderLease: UploaderLease = ProcessWideUploaderLease,
 ) {
     private val gson = Gson()
-    private val lease = SingleUploaderLease()
 
     suspend fun runOnce(tripId: String, backfill: Boolean = false): Boolean = withContext(Dispatchers.IO) {
-        if (!lease.tryAcquire()) return@withContext false
+        if (!uploaderLease.tryAcquire()) return@withContext false
         try {
             val session = credentials.load() ?: return@withContext false
             val now = clock()
@@ -50,7 +52,7 @@ class TelemetryUploader(
             if (rows.isEmpty()) return@withContext false
             sendRows(session, tripId, rows, allowRefresh = true)
         } finally {
-            lease.release()
+            uploaderLease.release()
         }
     }
 
@@ -64,6 +66,10 @@ class TelemetryUploader(
         val batchId = retainedBatchId ?: batchIdFactory()
         val batch = encodeBatch(batchId, tripId, session, rows)
         if (batch.size > UploadPolicy.MAX_UNCOMPRESSED_BYTES) {
+            if (rows.size == 1) {
+                retainForRetry(rows, null, "PAYLOAD_TOO_LARGE_SINGLE", UploadPolicy.MAX_RETRY_DELAY_MS)
+                return false
+            }
             return splitOrDeadLetter(session, tripId, rows, null, "PAYLOAD_TOO_LARGE", allowRefresh)
         }
         val request = Request.Builder()
@@ -82,7 +88,7 @@ class TelemetryUploader(
                 when (val decision = UploadFailurePolicy.decide(
                     status = response.code,
                     rowCount = rows.size,
-                    retryAfterSeconds = response.header("Retry-After")?.toLongOrNull(),
+                    retryAfterSeconds = retryAfterSeconds(response.header("Retry-After")),
                 )) {
                     UploadFailureDecision.RefreshThenRetry -> {
                         val refreshed = if (allowRefresh) refreshSession(session) else null
@@ -97,6 +103,10 @@ class TelemetryUploader(
                     UploadFailureDecision.BisectBatch -> splitOrDeadLetter(
                         session, tripId, rows, response.code, "HTTP_${response.code}", allowRefresh
                     )
+                    UploadFailureDecision.RetainOversizeSingle -> {
+                        retainForRetry(rows, response.code, "PAYLOAD_TOO_LARGE_SINGLE", UploadPolicy.MAX_RETRY_DELAY_MS)
+                        false
+                    }
                     UploadFailureDecision.DeadLetterSingle -> {
                         deadLetter(rows.single(), response.code, "HTTP_${response.code}")
                         true
@@ -135,7 +145,7 @@ class TelemetryUploader(
         )
         true
     } catch (error: Exception) {
-        retainForRetry(rows, response.code, "INVALID_ACK", null, error.javaClass.simpleName)
+        retainForRetry(rows, response.code, "ACK_CONTRACT_INVALID", null, error.javaClass.simpleName)
         false
     }
 
@@ -220,10 +230,19 @@ class TelemetryUploader(
     private fun diagnosticDetail(httpStatus: Int?, errorCode: String): String =
         if (httpStatus == null) errorCode else "HTTP $httpStatus ($errorCode)"
 
+    private fun retryAfterSeconds(header: String?): Long? {
+        val seconds = header?.trim()?.toLongOrNull()
+        if (seconds != null) return seconds.coerceAtLeast(0)
+        val retryAt = runCatching {
+            ZonedDateTime.parse(header, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli()
+        }.getOrNull() ?: return null
+        return ((retryAt - clock()).coerceAtLeast(0) / 1_000L)
+    }
+
     private fun gzip(bytes: ByteArray): ByteArray = ByteArrayOutputStream().use { output ->
         GZIPOutputStream(output).use { it.write(bytes) }
         output.toByteArray()
     }
 
-    companion object { private const val LEASE_MS = 30_000L }
+    companion object { private const val LEASE_MS = 30L * 60L * 1_000L }
 }

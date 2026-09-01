@@ -4,6 +4,7 @@ sealed interface UploadFailureDecision {
     data class Retry(val minimumDelayMs: Long? = null) : UploadFailureDecision
     data object RefreshThenRetry : UploadFailureDecision
     data object ReduceBatch : UploadFailureDecision
+    data object RetainOversizeSingle : UploadFailureDecision
     data object BisectBatch : UploadFailureDecision
     data object DeadLetterSingle : UploadFailureDecision
 }
@@ -19,7 +20,11 @@ object UploadFailurePolicy {
         require(status in 100..599)
         require(rowCount >= 1)
         if (status == 401) return UploadFailureDecision.RefreshThenRetry
-        if (status == 413) return UploadFailureDecision.ReduceBatch
+        if (status == 413) return if (rowCount == 1) {
+            UploadFailureDecision.RetainOversizeSingle
+        } else {
+            UploadFailureDecision.ReduceBatch
+        }
         if (status in contractFailureStatuses) {
             return if (rowCount == 1) {
                 UploadFailureDecision.DeadLetterSingle

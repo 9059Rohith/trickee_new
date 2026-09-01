@@ -53,13 +53,13 @@ const OwnerDashboardScreen: React.FC = () => {
   );
 
   useEffect(() => {
-    void load();
+    load();
   }, [load]);
   if (loading && !summary) {
     return <LoadingState label="Calculating fleet results…" />;
   }
   if (error && !summary) {
-    return <ErrorState message={error} onRetry={() => void load()} />;
+    return <ErrorState message={error} onRetry={load} />;
   }
 
   return (
@@ -69,7 +69,7 @@ const OwnerDashboardScreen: React.FC = () => {
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={() => void load(true)}
+          onRefresh={() => load(true)}
         />
       }
     >

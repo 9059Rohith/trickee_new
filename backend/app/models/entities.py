@@ -75,6 +75,9 @@ class Driver(Base):
     __tablename__ = "drivers"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     fleet_id: Mapped[str] = mapped_column(String(36), ForeignKey("fleets.id"), nullable=False)
+    assigned_vehicle_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("vehicles.id"), nullable=True, index=True
+    )
     driver_code: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -327,6 +330,38 @@ class TripFinalization(Base):
     summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class TripEnergyLabel(Base):
+    """Observed trip-energy target with immutable source-capacity provenance."""
+
+    __tablename__ = "trip_energy_labels"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    trip_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("mobile_trip_sessions.id"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    starting_soc_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ending_soc_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    soc_delta_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_energy_consumed_wh: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_wh_per_km: Mapped[float | None] = mapped_column(Float, nullable=True)
+    usable_kwh_snapshot: Mapped[float | None] = mapped_column(Float, nullable=True)
+    label_source: Mapped[str] = mapped_column(String(50), nullable=False)
+    label_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    is_training_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    eligibility_reason: Mapped[str] = mapped_column(String(80), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
 
 
 class ArchiveManifest(Base):

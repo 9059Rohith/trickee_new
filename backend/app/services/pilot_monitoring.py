@@ -17,18 +17,14 @@ from app.models.entities import (
     VehicleLiveStateSnapshot,
 )
 from app.schemas.api import utc_iso
+from app.services.reconciliation import MAX_MISSING_RANGES, bounded_missing_ranges, percentage
 
 
 RECENT_LIMIT = 20
 RECENT_WINDOW = timedelta(hours=24)
 STUCK_AFTER = timedelta(minutes=5)
-MAX_MISSING_RANGES = 100
-
-
 def _percentage(numerator: int, denominator: int) -> float | None:
-    if denominator <= 0:
-        return None
-    return round((numerator / denominator) * 100.0, 1)
+    return percentage(numerator, denominator)
 
 
 def _age_seconds(now: datetime, value: datetime | None) -> int | None:
@@ -43,19 +39,7 @@ def _missing_ranges(
 ) -> list[list[int]] | None:
     if final_sequence_no is None:
         return None
-    ranges: list[list[int]] = []
-    start: int | None = None
-    for sequence in range(1, final_sequence_no + 1):
-        if sequence not in received_sequences and start is None:
-            start = sequence
-        if sequence in received_sequences and start is not None:
-            ranges.append([start, sequence - 1])
-            start = None
-            if len(ranges) >= MAX_MISSING_RANGES:
-                return ranges
-    if start is not None and len(ranges) < MAX_MISSING_RANGES:
-        ranges.append([start, final_sequence_no])
-    return ranges
+    return bounded_missing_ranges(received_sequences, final_sequence_no, limit=MAX_MISSING_RANGES)
 
 
 def build_pilot_monitoring_snapshot(
@@ -149,21 +133,6 @@ def build_pilot_monitoring_snapshot(
         row.id: row.vehicle_code
         for row in db.query(Vehicle).filter(Vehicle.id.in_(vehicle_ids)).all()
     } if vehicle_ids else {}
-    window_counts = {
-        trip_id: (int(total or 0), int(gps or 0))
-        for trip_id, total, gps in (
-            db.query(
-                TelemetryWindow.trip_id,
-                func.count(TelemetryWindow.sample_id),
-                func.sum(case((TelemetryWindow.gps_available.is_(True), 1), else_=0)),
-            )
-            .filter(TelemetryWindow.trip_id.in_(trip_ids))
-            .group_by(TelemetryWindow.trip_id)
-            .all()
-            if trip_ids
-            else []
-        )
-    }
     cursor_by_trip = {
         trip_id: (int(contiguous or 0), int(received or 0))
         for trip_id, contiguous, received in (
@@ -180,7 +149,7 @@ def build_pilot_monitoring_snapshot(
         )
     }
     received_sequences: dict[str, set[int]] = {trip_id: set() for trip_id in trip_ids}
-    latest_phone_health: dict[str, tuple[int, datetime, dict]] = {}
+    latest_phone_health: dict[str, tuple[datetime, dict]] = {}
     if trip_ids:
         for trip_id, sequence_no, received_at, health_payload in (
             db.query(
@@ -190,15 +159,12 @@ def build_pilot_monitoring_snapshot(
                 TelemetryWindow.health_payload,
             )
             .filter(TelemetryWindow.trip_id.in_(trip_ids))
-            .order_by(TelemetryWindow.trip_id, TelemetryWindow.sequence_no)
+            .order_by(TelemetryWindow.trip_id, TelemetryWindow.received_at.desc())
             .all()
         ):
             received_sequences.setdefault(trip_id, set()).add(int(sequence_no))
-            latest_phone_health[trip_id] = (
-                int(sequence_no),
-                received_at,
-                health_payload or {},
-            )
+            if trip_id not in latest_phone_health:
+                latest_phone_health[trip_id] = (received_at, health_payload or {})
     finalizations = {
         row.trip_id: row
         for row in (
@@ -218,25 +184,39 @@ def build_pilot_monitoring_snapshot(
 
     recent_trips = []
     for trip in trips:
-        stored, gps = window_counts.get(trip.id, (0, 0))
         contiguous, cursor_highest_received = cursor_by_trip.get(trip.id, (0, 0))
         sequences = received_sequences.get(trip.id, set())
         highest_received = max(sequences, default=cursor_highest_received)
         finalization = finalizations.get(trip.id)
         label = labels.get(trip.id)
-        stored_in_final_range = (
-            sum(1 for sequence in sequences if sequence <= trip.final_sequence_no)
+        sealed_sequences = (
+            {sequence for sequence in sequences if 1 <= sequence <= trip.final_sequence_no}
             if trip.final_sequence_no is not None
-            else None
+            else set(sequences)
         )
+        stored_in_final_range = len(sealed_sequences) if trip.final_sequence_no is not None else None
+        scoped_windows = db.query(TelemetryWindow.sequence_no, TelemetryWindow.gps_available).filter(
+            TelemetryWindow.trip_id == trip.id,
+        )
+        if trip.final_sequence_no is not None:
+            scoped_windows = scoped_windows.filter(
+                TelemetryWindow.sequence_no >= 1,
+                TelemetryWindow.sequence_no <= trip.final_sequence_no,
+            )
+        gps_by_sequence = {
+            int(sequence_no): bool(gps_available)
+            for sequence_no, gps_available in scoped_windows.all()
+        }
+        stored = stored_in_final_range if stored_in_final_range is not None else len(sequences)
+        gps = sum(gps_by_sequence.get(sequence, False) for sequence in sealed_sequences)
         missing = (
             max(0, trip.final_sequence_no - (stored_in_final_range or 0))
             if trip.final_sequence_no is not None
             else None
         )
         phone_health = latest_phone_health.get(trip.id)
-        phone_backlog = phone_health[2].get("local_outbox_pending") if phone_health else None
-        phone_backlog_observed_at = phone_health[1] if phone_health else None
+        phone_backlog = phone_health[1].get("local_outbox_pending") if phone_health else None
+        phone_backlog_observed_at = phone_health[0] if phone_health else None
         stored_gps_pct = _percentage(gps, stored)
         upload_completeness_pct = (
             _percentage(stored_in_final_range or 0, trip.final_sequence_no)
@@ -266,7 +246,7 @@ def build_pilot_monitoring_snapshot(
                 "highest_contiguous_sequence": contiguous,
                 "highest_received_sequence": highest_received,
                 "actual_missing_sequences": missing,
-                "missing_ranges": _missing_ranges(sequences, trip.final_sequence_no),
+                "missing_ranges": _missing_ranges(sealed_sequences, trip.final_sequence_no),
                 "phone_backlog": phone_backlog,
                 "phone_backlog_observed_at": utc_iso(phone_backlog_observed_at),
                 # Legacy keys remain during the dashboard rollout; their values now use honest semantics.
