@@ -119,6 +119,7 @@ class TelemetryRepository(private val dao: TelemetryDao) : TelemetryUploadQueue 
     suspend fun activeTrip(): LocalTripEntity? = dao.activeTrip()
     suspend fun endingTrip(): LocalTripEntity? = dao.endingTrip()
     suspend fun tripWithPendingOutbox(): LocalTripEntity? = dao.tripWithPendingOutbox()
+    suspend fun tripWithEligibleOutbox(nowUtcMs: Long): LocalTripEntity? = dao.tripWithEligibleOutbox(nowUtcMs)
     suspend fun latestEndedTrip(): LocalTripEntity? = dao.latestEndedTrip()
     suspend fun trip(tripId: String): LocalTripEntity? = dao.trip(tripId)
     suspend fun pendingCount(tripId: String): Int = dao.pendingCount(tripId)

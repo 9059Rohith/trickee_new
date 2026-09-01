@@ -1,5 +1,12 @@
 [CmdletBinding()]
-param()
+param(
+    [Parameter(Mandatory = $true)][string]$SigningPropertiesFile,
+    [Parameter(Mandatory = $true)][string]$ReleaseApkPath,
+    [Parameter(Mandatory = $true)][string]$ExpectedSignerSha1,
+    [string]$ApiOrigin = 'https://trickee-pilot-api-pylmkxap6a-el.a.run.app',
+    [string]$WebSocketOrigin = 'https://trickee-pilot-websocket-pylmkxap6a-el.a.run.app',
+    [string]$PublicSiteOrigin = 'https://www.trickee.co.in'
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -48,16 +55,33 @@ function Invoke-NativeGateCommand {
     }
 }
 
+function Assert-PublicGet {
+    param([Parameter(Mandatory = $true)][string]$Url, [string]$RequiredBody)
+    $response = Invoke-WebRequest -Uri $Url -MaximumRedirection 3 -TimeoutSec 30
+    if ($response.StatusCode -ne 200) { throw "Public endpoint failed: $Url ($($response.StatusCode))" }
+    if ($RequiredBody -and $response.Content -notmatch $RequiredBody) {
+        throw "Public endpoint response did not contain the required contract: $Url"
+    }
+}
+
 try {
     Push-Location $repositoryRoot
     Invoke-Gate 'backend' { Invoke-NativeGateCommand { python -m pytest backend/tests -q } }
     Invoke-Gate 'alembic' { Invoke-NativeGateCommand { python -m pytest backend/tests/test_alembic_roundtrip.py -q } }
-    Invoke-Gate 'android_identity' { Invoke-NativeGateCommand { powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-public-release-config.ps1 } }
+    Invoke-Gate 'android_identity' {
+        Invoke-NativeGateCommand { powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-public-release-config.ps1 }
+        Invoke-NativeGateCommand {
+            powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-android-identity.ps1 `
+                -ApkPath $ReleaseApkPath -ExpectedPackage 'com.trickee.gpsdriverapp' -ExpectedSha1 $ExpectedSignerSha1
+        }
+    }
 
     Invoke-Gate 'android' {
         Push-Location (Join-Path $repositoryRoot 'mobile\android')
         try {
-            Invoke-NativeGateCommand { .\gradlew.bat :app:testDebugUnitTest :app:lintRelease --console=plain }
+            Invoke-NativeGateCommand {
+                .\gradlew.bat :app:testDebugUnitTest :app:lintRelease "-PTRICKEE_RELEASE_PROPERTIES_FILE=$SigningPropertiesFile" --console=plain
+            }
         } finally {
             Pop-Location
         }
@@ -103,9 +127,10 @@ try {
     }
 
     Invoke-Gate 'public_config' {
-        $publicBuild = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'scripts\build-public-release.ps1')
-        if ($publicBuild -notmatch "ApiOrigin = 'https://" -or $publicBuild -notmatch "WebSocketOrigin = 'https://") {
-            throw 'Public Android API and WebSocket origins must be HTTPS defaults.'
+        Assert-PublicGet "$ApiOrigin/health" '"gps_model_active":true'
+        Assert-PublicGet "$WebSocketOrigin/health" '"role":"websocket"'
+        foreach ($path in '/gpsdriver/privacy', '/gpsdriver/terms', '/gpsdriver/support') {
+            Assert-PublicGet "$PublicSiteOrigin$path"
         }
     }
 

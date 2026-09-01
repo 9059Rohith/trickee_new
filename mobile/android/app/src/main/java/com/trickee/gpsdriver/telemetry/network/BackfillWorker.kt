@@ -21,7 +21,11 @@ class BackfillWorker(context: Context, params: WorkerParameters) : CoroutineWork
         repository.purgeAcknowledged(now)
         val uploader = TelemetryUploader(repository, DeviceCredentialStore(applicationContext))
         repeat(MAX_BATCHES_PER_RUN) {
-            val trip = repository.tripWithPendingOutbox() ?: return Result.success()
+            val trip = repository.tripWithEligibleOutbox(now) ?: return if (repository.pendingTripIds().isEmpty()) {
+                Result.success()
+            } else {
+                Result.retry()
+            }
             if (!uploader.runOnce(trip.tripId, backfill = true)) {
                 if (repository.pendingCount(trip.tripId) > 0) return Result.retry()
             }

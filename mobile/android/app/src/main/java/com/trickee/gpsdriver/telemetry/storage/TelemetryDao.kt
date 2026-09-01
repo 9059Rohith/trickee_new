@@ -23,6 +23,9 @@ abstract class TelemetryDao {
     @Query("SELECT t.* FROM local_trips t WHERE EXISTS (SELECT 1 FROM telemetry_outbox o WHERE o.trip_id = t.trip_id AND o.state IN ('PENDING', 'IN_FLIGHT')) ORDER BY t.started_at_utc_ms ASC LIMIT 1")
     abstract suspend fun tripWithPendingOutbox(): LocalTripEntity?
 
+    @Query("SELECT t.* FROM local_trips t JOIN telemetry_outbox o ON o.trip_id = t.trip_id WHERE o.next_attempt_at_utc_ms <= :nowUtcMs AND (o.state = 'PENDING' OR (o.state = 'IN_FLIGHT' AND o.lease_until_utc_ms < :nowUtcMs)) ORDER BY o.created_at_utc_ms ASC, o.sequence_no ASC LIMIT 1")
+    abstract suspend fun tripWithEligibleOutbox(nowUtcMs: Long): LocalTripEntity?
+
     @Query("SELECT DISTINCT trip_id FROM telemetry_outbox WHERE state IN ('PENDING', 'IN_FLIGHT') ORDER BY trip_id")
     abstract suspend fun pendingTripIds(): List<String>
 

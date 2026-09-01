@@ -144,6 +144,22 @@ class TelemetryRepositoryTest {
     }
 
     @Test
+    fun eligibleNewerTripIsSelectedWhenOlderTripIsStillInBackoff() = runBlocking {
+        createTripWithWindow("older", "older-sample")
+        createTripWithWindow("newer", "newer-sample")
+        repository.recordRetry(
+            rows = repository.leasePending("older", nowUtcMs = 3_000L, limit = 1, leaseMs = 10_000L),
+            nextAttemptAtUtcMs = 50_000L,
+            httpStatus = null,
+            errorCode = "NETWORK_IO",
+            errorDetail = "NETWORK_IO",
+            failedAtUtcMs = 3_000L,
+        )
+
+        assertEquals("newer", repository.tripWithEligibleOutbox(nowUtcMs = 4_000L)?.tripId)
+    }
+
+    @Test
     fun sealingReturnsThePersistedLastSequenceAndIsIdempotent() = runBlocking {
         repository.createTrip("trip", "device", "vehicle", 1_000L)
         repository.setTripState("trip", TripState.ACTIVE)

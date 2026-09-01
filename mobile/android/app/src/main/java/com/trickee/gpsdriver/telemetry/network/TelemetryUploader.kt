@@ -27,6 +27,10 @@ private data class RefreshedDevice(
     @SerializedName("refresh_token") val refreshToken: String,
 )
 
+interface TelemetryUploadRunner {
+    suspend fun runOnce(tripId: String, backfill: Boolean = false): Boolean
+}
+
 class TelemetryUploader(
     private val repository: TelemetryUploadQueue,
     private val credentials: DeviceSessionStore,
@@ -39,10 +43,10 @@ class TelemetryUploader(
     private val clock: () -> Long = System::currentTimeMillis,
     private val randomFraction: () -> Double = Math::random,
     private val uploaderLease: UploaderLease = ProcessWideUploaderLease,
-) {
+) : TelemetryUploadRunner {
     private val gson = Gson()
 
-    suspend fun runOnce(tripId: String, backfill: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun runOnce(tripId: String, backfill: Boolean): Boolean = withContext(Dispatchers.IO) {
         if (!uploaderLease.tryAcquire()) return@withContext false
         try {
             val session = credentials.load() ?: return@withContext false
@@ -118,7 +122,7 @@ class TelemetryUploader(
                 }
             }
         } catch (error: Exception) {
-            retainForRetry(rows, null, "NETWORK_FAILURE", null, error.javaClass.simpleName)
+            retainForRetry(rows, null, "NETWORK_IO", null, error.javaClass.simpleName)
             false
         }
     }
@@ -133,7 +137,12 @@ class TelemetryUploader(
         val data = JsonParser.parseString(body).asJsonObject.getAsJsonObject("data")
             ?: error("Missing telemetry ACK data")
         val ack = gson.fromJson(data, TelemetryBatchAck::class.java)
-        val validated = ack.validateFor(batchId, tripId, rows.mapTo(mutableSetOf()) { it.sequenceNo })
+        val validated = ack.validateFor(
+            expectedBatchId = batchId,
+            expectedTripId = tripId,
+            leasedSequences = rows.mapTo(mutableSetOf()) { it.sequenceNo },
+            leasedSampleIds = rows.associate { it.sequenceNo to it.sampleId },
+        )
         repository.applyAcknowledgement(
             tripId = tripId,
             leasedRows = rows,

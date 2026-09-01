@@ -52,11 +52,35 @@ class TelemetryBatchAckTest {
         }
     }
 
+    @Test
+    fun rejectsMissingRangesOutsideTheSupportedSequenceBound() {
+        val ack = ack(missingRanges = listOf(listOf(172_801L, 172_801L)))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            ack.validateFor("batch-1", "trip-1", setOf(8L, 9L))
+        }
+    }
+
+    @Test
+    fun rejectsRejectionWhoseSampleIdDoesNotMatchTheLeasedRow() {
+        val ack = ack(rejections = listOf(TelemetryAckRejection(7L, "PAYLOAD_CONFLICT", sampleId = "wrong-sample")))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            ack.validateFor(
+                expectedBatchId = "batch-1",
+                expectedTripId = "trip-1",
+                leasedSequences = setOf(7L),
+                leasedSampleIds = mapOf(7L to "sample-7"),
+            )
+        }
+    }
+
     private fun ack(
         committed: Boolean = true,
         accepted: List<List<Long>> = emptyList(),
         duplicates: List<Long> = emptyList(),
         rejections: List<TelemetryAckRejection> = emptyList(),
+        missingRanges: List<List<Long>> = emptyList(),
     ) = TelemetryBatchAck(
         batchId = "batch-1",
         tripId = "trip-1",
@@ -65,6 +89,6 @@ class TelemetryBatchAckTest {
         acceptedSequences = accepted,
         duplicateSequences = duplicates,
         rejections = rejections,
-        missingRanges = emptyList(),
+        missingRanges = missingRanges,
     )
 }

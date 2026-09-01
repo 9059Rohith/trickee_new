@@ -67,7 +67,7 @@ data class CollectorStatus(
 class TripCollectorService : Service(), SensorEventListener {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var repository: TelemetryRepository
-    private lateinit var uploader: TelemetryUploader
+    private lateinit var uploader: CollectorUploadDispatcher
     private lateinit var sensorManager: SensorManager
     private lateinit var locationClient: FusedLocationProviderClient
     private var activeTripId: String? = null
@@ -98,7 +98,7 @@ class TripCollectorService : Service(), SensorEventListener {
     override fun onCreate() {
         super.onCreate()
         repository = TelemetryRepository(TelemetryDatabase.open(this).telemetryDao())
-        uploader = TelemetryUploader(repository, DeviceCredentialStore(this))
+        uploader = CollectorUploadDispatcher(TelemetryUploader(repository, DeviceCredentialStore(this)))
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         locationClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
@@ -142,7 +142,7 @@ class TripCollectorService : Service(), SensorEventListener {
             repository.endingTrip()?.let { trip ->
                 startForeground(NOTIFICATION_ID, notification("Finishing telemetry sync"))
                 repository.sealTrip(trip.tripId, System.currentTimeMillis())
-                uploader.runOnce(trip.tripId, backfill = true)
+                uploader.flush(trip.tripId, backfill = true)
                 BackfillWorker.enqueue(this@TripCollectorService)
                 publishStatus("SYNC_PENDING")
                 ServiceCompat.stopForeground(this@TripCollectorService, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -188,7 +188,7 @@ class TripCollectorService : Service(), SensorEventListener {
         uploadJob = scope.launch {
             while (isActive) {
                 delay(2_000)
-                uploader.runOnce(tripId)
+                uploader.flush(tripId)
                 publishStatus("ACTIVE")
             }
         }
@@ -251,7 +251,7 @@ class TripCollectorService : Service(), SensorEventListener {
                     windowStartedNs = stoppedAtNs
                 }
                 repository.sealTrip(tripId, System.currentTimeMillis())
-                uploader.runOnce(tripId, backfill = true)
+                uploader.flush(tripId, backfill = true)
                 BackfillWorker.enqueue(this@TripCollectorService)
             }
             unregisterCapture()

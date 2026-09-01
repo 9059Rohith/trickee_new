@@ -2,11 +2,13 @@ package com.trickee.gpsdriver.telemetry.network
 
 import com.trickee.gpsdriver.telemetry.security.DeviceSession
 import com.trickee.gpsdriver.telemetry.security.DeviceSessionStore
+import com.trickee.gpsdriver.telemetry.collector.CollectorUploadDispatcher
 import com.trickee.gpsdriver.telemetry.storage.OutboxState
 import com.trickee.gpsdriver.telemetry.storage.TelemetryOutboxEntity
 import com.trickee.gpsdriver.telemetry.storage.TelemetryUploadQueue
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
+import java.io.IOException
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -126,10 +128,32 @@ class TelemetryUploaderTest {
         assertNull(queue.row(1).permanentlyRejectedAtUtcMs)
     }
 
-    private fun uploader() = TelemetryUploader(
+    @Test
+    fun networkIoUsesTheStableRetryDiagnostic() = runBlocking {
+        queue.rows += row(1)
+        val failingClient = OkHttpClient.Builder().addInterceptor { throw IOException("offline") }.build()
+
+        assertEquals(false, uploader(client = failingClient).runOnce("trip-1"))
+
+        assertEquals(OutboxState.PENDING, queue.row(1).state)
+        assertEquals("NETWORK_IO", queue.row(1).lastErrorCode)
+    }
+
+    @Test
+    fun collectorDispatcherDeliversTheExactAckToTheLeasedOutboxRow() = runBlocking {
+        queue.rows += row(7)
+        server.enqueue(successAck("batch-0", acceptedRanges = "[[7,7]]"))
+
+        assertTrue(CollectorUploadDispatcher(uploader()).flush("trip-1", backfill = false))
+
+        assertEquals(OutboxState.ACKED, queue.row(7).state)
+        assertEquals(0L, queue.lastContiguousSequence)
+    }
+
+    private fun uploader(client: OkHttpClient = OkHttpClient()) = TelemetryUploader(
         repository = queue,
         credentials = credentials,
-        client = OkHttpClient(),
+        client = client,
         batchIdFactory = { batchIds.removeFirst() },
         clock = { 10_000L },
         randomFraction = { 0.0 },
@@ -138,7 +162,7 @@ class TelemetryUploaderTest {
     private fun successAck(batchId: String, acceptedRanges: String) = MockResponse()
         .setResponseCode(200)
         .setBody(
-            """{"data":{"batch_id":"$batchId","trip_id":"trip-1","committed":true,"highest_contiguous_sequence":0,"accepted_sequences":$acceptedRanges,"duplicate_sequences":[],"rejections":[],"missing_ranges":[[1,6]]}}"""
+            """{"data":{"batch_id":"$batchId","trip_id":"trip-1","committed":true,"highest_contiguous_sequence":0,"accepted_sequences":$acceptedRanges,"duplicate_sequences":[],"rejections":[],"missing_ranges":[]}}"""
         )
 
     private fun row(sequence: Long) = TelemetryOutboxEntity(

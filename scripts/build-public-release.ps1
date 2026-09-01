@@ -12,6 +12,12 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
+$git = (Get-Command git.exe -ErrorAction Stop).Source
+$sourceSha = (& $git -C $repositoryRoot rev-parse HEAD).Trim()
+$trackedChanges = @(& $git -C $repositoryRoot status --porcelain --untracked-files=no)
+if ($trackedChanges.Count -ne 0) {
+    throw 'Public release build requires a clean tracked Git tree.'
+}
 $androidRoot = Join-Path $repositoryRoot 'mobile\android'
 $gradleWrapper = Join-Path $androidRoot 'gradlew.bat'
 $publicApplicationId = 'com.trickee.gpsdriverapp'
@@ -92,8 +98,8 @@ if ($actualApplicationId -ne $publicApplicationId) {
 if ($targetSdk -ne '36') {
     throw "Wrong target SDK in release manifest. Expected 36, found $targetSdk."
 }
-if ($versionCode -ne '6' -or $versionName -ne '1.0.5') {
-    throw "Wrong release version. Expected 1.0.5 (6), found $versionName ($versionCode)."
+if ($versionCode -ne '7' -or $versionName -ne '1.0.6') {
+    throw "Wrong release version. Expected 1.0.6 (7), found $versionName ($versionCode)."
 }
 $requiredPermissions = @(
     'android.permission.INTERNET',
@@ -211,15 +217,20 @@ Copy-Item -LiteralPath $generatedApk -Destination $releaseApk -Force
 $aabSha256 = (Get-FileHash -LiteralPath $releaseAab -Algorithm SHA256).Hash
 $apkSha256 = (Get-FileHash -LiteralPath $releaseApk -Algorithm SHA256).Hash
 
-[pscustomobject]@{
+$releaseMetadata = [ordered]@{
     ApplicationId = $actualApplicationId
     VersionName = $versionName
-    VersionCode = $versionCode
-    TargetSdk = $targetSdk
+    VersionCode = [int]$versionCode
+    TargetSdk = [int]$targetSdk
     UploadSha1 = $actualUploadSha1
+    SourceGitSha = $sourceSha
     Aab = $releaseAab
     AabSha256 = $aabSha256
     Apk = $releaseApk
     ApkSha256 = $apkSha256
     SignatureVerified = $true
-} | Format-List
+}
+$metadataPath = Join-Path $releaseDirectory "Trickee-GPS-Driver-public-$versionName-$versionCode.metadata.json"
+$releaseMetadata | ConvertTo-Json | Set-Content -LiteralPath $metadataPath -Encoding utf8
+$releaseMetadata['Metadata'] = $metadataPath
+[pscustomobject]$releaseMetadata | Format-List

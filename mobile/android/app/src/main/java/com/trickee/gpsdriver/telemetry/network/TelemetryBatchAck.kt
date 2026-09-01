@@ -23,6 +23,7 @@ internal data class TelemetryBatchAck(
         expectedBatchId: String,
         expectedTripId: String,
         leasedSequences: Set<Long>,
+        leasedSampleIds: Map<Long, String> = emptyMap(),
     ): ValidatedBatchAck {
         require(committed) { "Telemetry ACK is not committed" }
         require(batchId == expectedBatchId) { "Telemetry ACK batch mismatch" }
@@ -39,6 +40,11 @@ internal data class TelemetryBatchAck(
                 "Telemetry ACK rejects a sequence outside the lease"
             }
             require(rejection.code.isNotBlank()) { "Telemetry ACK rejection code is blank" }
+            rejection.sampleId?.let { sampleId ->
+                require(leasedSampleIds[rejection.sequenceNo] == sampleId) {
+                    "Telemetry ACK rejection sample ID does not match the lease"
+                }
+            }
             rejection.sequenceNo to rejection.code
         }
         require(rejected.size == rejections.size) { "Telemetry ACK repeats a rejected sequence" }
@@ -50,6 +56,7 @@ internal data class TelemetryBatchAck(
         require(acknowledged.intersect(rejected.keys).isEmpty()) {
             "Telemetry ACK acknowledges and rejects the same sequence"
         }
+        validateMissingRanges(missingRanges, acknowledged + rejected.keys)
 
         return ValidatedBatchAck(
             highestContiguousSequence = highestContiguousSequence,
@@ -57,6 +64,24 @@ internal data class TelemetryBatchAck(
             duplicateSequences = duplicates,
             permanentRejections = rejected,
         )
+    }
+
+    private fun validateMissingRanges(ranges: List<List<Long>>, acknowledged: Set<Long>) {
+        require(ranges.size <= MAX_MISSING_RANGES) { "Telemetry ACK has too many missing ranges" }
+        var previousEnd = 0L
+        ranges.forEach { range ->
+            require(range.size == 2) { "Telemetry ACK missing range must contain two bounds" }
+            val start = range[0]
+            val end = range[1]
+            require(start >= 1 && end >= start && end <= MAX_SEQUENCE_NO) {
+                "Telemetry ACK missing range is invalid"
+            }
+            require(start > previousEnd) { "Telemetry ACK missing ranges overlap" }
+            require((start..end).none { it in acknowledged }) {
+                "Telemetry ACK marks an acknowledged sequence as missing"
+            }
+            previousEnd = end
+        }
     }
 
     private fun expandRanges(
@@ -83,6 +108,9 @@ internal data class TelemetryBatchAck(
         return expanded
     }
 }
+
+private const val MAX_MISSING_RANGES = 100
+private const val MAX_SEQUENCE_NO = 172_800L
 
 internal data class ValidatedBatchAck(
     val highestContiguousSequence: Long,

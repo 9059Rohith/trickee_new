@@ -26,6 +26,7 @@ from app.models.entities import (
 from app.processors.trip_finalizer import finalize_trip
 from app.services.auth import create_access_token
 from app.services.device_auth import create_device_access_token
+from app.services.incomplete_trip_reconciler import reconcile_incomplete_finalizations
 
 
 def _window(identity: dict[str, str], sequence_no: int) -> dict:
@@ -234,6 +235,101 @@ def test_gap_recovery_replay_and_finalization_are_lossless(tmp_path):
             assert db.query(ServerOutbox).filter_by(
                 aggregate_id=identity["trip_id"], event_type="trip.finalization_eligible"
             ).count() == 1
+    finally:
+        if previous_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_override
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+
+
+def test_late_api_ingestion_replaces_one_incomplete_label_without_duplicate_finalization(tmp_path):
+    """The v2 ingestion path, not a direct helper call, recovers an expired trip."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'late-api-recovery.db'}", connect_args={"check_same_thread": False})
+    session_factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    Base.metadata.create_all(engine)
+
+    def override_db():
+        db = session_factory()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    previous_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = override_db
+    try:
+        with session_factory() as db:
+            fleet = Fleet(name="Late API Recovery", city="Surat")
+            db.add(fleet)
+            db.flush()
+            vehicle = Vehicle(fleet_id=fleet.id, vehicle_code="LATE-API", make="Test", model="EV", usable_kwh=2.98)
+            db.add(vehicle)
+            db.flush()
+            driver = Driver(fleet_id=fleet.id, driver_code="LATE-DRIVER", full_name="Driver", assigned_vehicle_id=vehicle.id)
+            db.add(driver)
+            db.flush()
+            user = User(email="late-api@example.test", full_name="Driver", role="driver", fleet_id=fleet.id, driver_id=driver.id)
+            db.add(user)
+            db.flush()
+            device = Device(
+                fleet_id=fleet.id, vehicle_id=vehicle.id, registered_by_user_id=user.id,
+                installation_id="late-api-device", platform="android", device_model="Synthetic Pixel", app_version="1.0.6",
+            )
+            db.add(device)
+            db.commit()
+            identity = {
+                "trip_id": "00000000-0000-4000-8000-000000000003",
+                "user_token": create_access_token({"sub": user.id, "typ": "user"}),
+                "device_token": create_device_access_token(device.id),
+                "device_id": device.id,
+                "vehicle_id": vehicle.id,
+            }
+
+        client = TestClient(app)
+        assert client.post(
+            "/api/v2/trips/start", headers={"Authorization": f"Bearer {identity['user_token']}"},
+            json={"trip_id": identity["trip_id"], "vehicle_id": identity["vehicle_id"], "starting_soc": 90,
+                  "idempotency_key": "late-start", "started_at": datetime(2026, 9, 1, 12).isoformat()},
+        ).status_code == 200
+        assert _upload(client, identity, range(1, 2), "late-first").status_code == 200
+        assert _upload(client, identity, range(3, 4), "late-third").status_code == 200
+        assert client.post(
+            f"/api/v2/trips/{identity['trip_id']}/complete", headers={"Authorization": f"Bearer {identity['user_token']}"},
+            json={"ending_soc": 80, "final_sequence_no": 3, "idempotency_key": "late-end"},
+        ).status_code == 200
+
+        with session_factory() as db:
+            trip = db.query(MobileTripSession).filter_by(id=identity["trip_id"]).one()
+            trip.completion_requested_at = datetime(2026, 8, 30, 12)
+            db.commit()
+            assert reconcile_incomplete_finalizations(db, now=datetime(2026, 9, 1, 12), timeout_hours=24) == [trip.id]
+            assert db.query(TripEnergyLabel).filter_by(trip_id=trip.id).one().eligibility_reason == "incomplete_telemetry"
+
+        recovered = _upload(client, identity, range(2, 3), "late-recovery")
+        assert recovered.status_code == 200
+        assert recovered.json()["data"]["highest_contiguous_sequence"] == 3
+        replay = _upload(client, identity, range(2, 3), "late-recovery-replay")
+        assert replay.status_code == 200
+        assert replay.json()["data"]["duplicate_sequences"] == [2]
+
+        with session_factory() as db:
+            trip = db.query(MobileTripSession).filter_by(id=identity["trip_id"]).one()
+            event = db.query(ServerOutbox).filter_by(
+                aggregate_id=trip.id, event_type="trip.finalization_eligible"
+            ).one()
+            assert db.query(ServerOutbox).filter_by(
+                aggregate_id=trip.id, event_type="trip.finalization_eligible"
+            ).count() == 1
+            finalize_trip(db, {"event_type": event.event_type, "payload": event.payload})
+            db.commit()
+            finalize_trip(db, {"event_type": event.event_type, "payload": event.payload})
+            db.commit()
+            label = db.query(TripEnergyLabel).filter_by(trip_id=trip.id).one()
+            assert trip.finalization_state == "completed"
+            assert label.eligibility_reason != "incomplete_telemetry"
+            assert db.query(TripEnergyLabel).filter_by(trip_id=trip.id).count() == 1
     finally:
         if previous_override is None:
             app.dependency_overrides.pop(get_db, None)
