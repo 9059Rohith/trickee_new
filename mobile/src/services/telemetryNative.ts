@@ -26,6 +26,25 @@ export type NativeStopResult = {
   lastLocation?: { lat: number; lng: number };
 };
 
+export type NativeTelemetryDiagnosticSummary = {
+  tripId: string;
+  fileName: string;
+  finalSequenceNo: number;
+  rowCount: number;
+  localMissingCount: number;
+  pendingCount: number;
+  inFlightCount: number;
+  ackedCount: number;
+  permanentlyRejectedCount: number;
+};
+
+export type NativeTelemetryRetryResult = {
+  tripId: string;
+  eligibleWindowCount: number;
+  pendingWindowCount: number;
+  permanentlyRejectedCount: number;
+};
+
 const nativeTelemetry = NativeModules.TrickeeTelemetry;
 
 function requireAndroidModule() {
@@ -110,4 +129,12 @@ export async function stopTelemetryTrip(): Promise<NativeStopResult> {
 
 export async function telemetryStatus(): Promise<NativeTelemetryStatus> {
   return requireAndroidModule().status();
+}
+
+export async function exportTelemetryDiagnostics(): Promise<NativeTelemetryDiagnosticSummary> {
+  return requireAndroidModule().exportTelemetryDiagnostics();
+}
+
+export async function retryPendingTelemetry(): Promise<NativeTelemetryRetryResult> {
+  return requireAndroidModule().retryPendingTelemetry();
 }

@@ -238,6 +238,42 @@ def test_out_of_order_batch_does_not_jump_gap(telemetry_identity):
     assert response.json()["data"]["missing_ranges"] == [[2, 2]]
 
 
+def test_late_first_sequence_recomputes_cursor_through_stored_tail(telemetry_identity):
+    assert upload(telemetry_identity, [2, 3]).json()["data"]["highest_contiguous_sequence"] == 0
+
+    repaired = upload(telemetry_identity, [1], batch_id="repair-batch")
+
+    assert repaired.status_code == 200
+    assert repaired.json()["data"]["highest_contiguous_sequence"] == 3
+    _, Window, Cursor, _, _ = telemetry_models()
+    db = TestSession()
+    assert db.query(Window).count() == 3
+    assert db.query(Cursor).one().highest_contiguous_sequence == 3
+    db.close()
+
+
+def test_contract_422_is_persisted_with_safe_field_level_detail(telemetry_identity):
+    invalid = window(telemetry_identity, 1)
+    invalid["imu"]["gyroscope_accuracy"] = -1
+
+    response = upload(telemetry_identity, [1], windows=[invalid], batch_id="invalid-accuracy")
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["code"] == "INVALID_TELEMETRY_CONTRACT"
+    assert detail["errors"][0]["sequence_no"] == 1
+    assert detail["errors"][0]["field"] == "imu.gyroscope_accuracy"
+    _, Window, _, Rejection, _ = telemetry_models()
+    db = TestSession()
+    assert db.query(Window).count() == 0
+    rejection = db.query(Rejection).one()
+    assert rejection.sequence_no == 1
+    assert rejection.code == "CONTRACT_VALIDATION"
+    assert "imu.gyroscope_accuracy" in rejection.message
+    assert "11.0168" not in rejection.message
+    db.close()
+
+
 def test_duplicate_retry_is_logically_exactly_once(telemetry_identity):
     first = upload(telemetry_identity, [1, 2])
     second = upload(telemetry_identity, [1, 2], batch_id="batch-2")

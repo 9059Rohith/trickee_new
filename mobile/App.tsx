@@ -2,7 +2,7 @@
  * Trickee GPS-First EV Intelligence — App Entry Point
  */
 import React from "react";
-import { StatusBar } from "react-native";
+import { StatusBar, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "./src/context/AuthContext";
@@ -11,7 +11,7 @@ import AppNavigator from "./src/navigation/AppNavigator";
 import AppErrorBoundary from "./src/components/AppErrorBoundary";
 
 const App: React.FC = () => (
-  <GestureHandlerRootView style={{ flex: 1 }}>
+  <GestureHandlerRootView style={styles.root}>
     <SafeAreaProvider>
       <AuthProvider>
         <AppErrorBoundary>
@@ -28,5 +28,11 @@ const App: React.FC = () => (
     </SafeAreaProvider>
   </GestureHandlerRootView>
 );
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+});
 
 export default App;

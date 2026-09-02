@@ -29,7 +29,7 @@ abstract class TelemetryDao {
     @Query("SELECT DISTINCT trip_id FROM telemetry_outbox WHERE state IN ('PENDING', 'IN_FLIGHT') ORDER BY trip_id")
     abstract suspend fun pendingTripIds(): List<String>
 
-    @Query("SELECT * FROM local_trips WHERE state IN ('SYNC_PENDING', 'FINALIZING') AND final_sequence_no IS NOT NULL ORDER BY ended_at_utc_ms DESC LIMIT 1")
+    @Query("SELECT * FROM local_trips WHERE final_sequence_no IS NOT NULL ORDER BY ended_at_utc_ms DESC LIMIT 1")
     abstract suspend fun latestEndedTrip(): LocalTripEntity?
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -40,6 +40,47 @@ abstract class TelemetryDao {
 
     @Query("SELECT * FROM telemetry_outbox WHERE trip_id = :tripId ORDER BY sequence_no")
     abstract suspend fun outboxForTrip(tripId: String): List<TelemetryOutboxEntity>
+
+    @Query("""
+        UPDATE telemetry_outbox
+        SET state = 'PENDING', lease_until_utc_ms = NULL, next_attempt_at_utc_ms = :nowUtcMs
+        WHERE trip_id = :tripId
+          AND (
+            state = 'PENDING'
+            OR (state = 'IN_FLIGHT' AND (lease_until_utc_ms IS NULL OR lease_until_utc_ms <= :nowUtcMs))
+          )
+    """)
+    abstract suspend fun prepareDiagnosticRetry(tripId: String, nowUtcMs: Long): Int
+
+    @Query("""
+        SELECT * FROM telemetry_outbox
+        WHERE state = 'PERMANENTLY_REJECTED'
+          AND (last_http_status = 422 OR rejection_code = 'HTTP_422')
+          AND (:tripId IS NULL OR trip_id = :tripId)
+        ORDER BY created_at_utc_ms ASC, sequence_no ASC
+    """)
+    abstract suspend fun repairableContractRejections(tripId: String?): List<TelemetryOutboxEntity>
+
+    @Query("""
+        UPDATE telemetry_outbox
+        SET payload_json = :payloadJson,
+            state = 'PENDING',
+            attempt_count = 0,
+            next_attempt_at_utc_ms = :nowUtcMs,
+            lease_until_utc_ms = NULL,
+            rejection_code = NULL,
+            last_http_status = NULL,
+            last_error_code = 'HTTP_422_REPAIRED',
+            last_error_detail = 'Known Android sensor accuracy mismatch repaired',
+            last_failure_at_utc_ms = NULL,
+            permanently_rejected_at_utc_ms = NULL
+        WHERE sample_id = :sampleId AND state = 'PERMANENTLY_REJECTED'
+    """)
+    abstract suspend fun requeueRepairedContractRow(
+        sampleId: String,
+        payloadJson: String,
+        nowUtcMs: Long,
+    ): Int
 
     @Query("UPDATE local_trips SET next_sequence_no = :next WHERE trip_id = :tripId AND next_sequence_no = :expected")
     protected abstract suspend fun advanceCursor(tripId: String, expected: Long, next: Long): Int

@@ -228,6 +228,37 @@ class TelemetryRepositoryTest {
         assertEquals(setOf("in-flight", "pending"), repository.pendingTripIds().toSet())
     }
 
+    @Test
+    fun diagnosticRetryMakesPendingRowsEligibleWithoutRevivingRejectedRows() = runBlocking {
+        createTripWithWindow("trip", "pending")
+        repository.commitWindowAndAdvanceCursor("trip", "rejected", 2_100, 3_100, "{}", 2_101)
+        val leased = repository.leasePending("trip", 3_000L, 20, 10_000L)
+        repository.recordRetry(
+            rows = listOf(leased.first()),
+            nextAttemptAtUtcMs = 50_000L,
+            httpStatus = null,
+            errorCode = "NETWORK_IO",
+            errorDetail = "NETWORK_IO",
+            failedAtUtcMs = 3_100L,
+        )
+        repository.deadLetter(
+            row = leased.last(),
+            httpStatus = 422,
+            errorCode = "HTTP_422",
+            errorDetail = "HTTP 422",
+            failedAtUtcMs = 3_100L,
+        )
+
+        repository.prepareDiagnosticRetry("trip", nowUtcMs = 4_000L)
+
+        val retryRows = repository.leasePending("trip", 4_000L, 20, 10_000L)
+        assertEquals(listOf(1L), retryRows.map { it.sequenceNo })
+        assertEquals(
+            OutboxState.PERMANENTLY_REJECTED,
+            database.telemetryDao().outboxBySampleId("rejected")?.state,
+        )
+    }
+
     private suspend fun createTripWithWindow(tripId: String, sampleId: String) {
         repository.createTrip(tripId, "device", "vehicle", 1_000L)
         repository.setTripState(tripId, TripState.ACTIVE)

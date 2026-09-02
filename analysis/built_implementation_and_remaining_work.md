@@ -195,3 +195,92 @@ Remaining pilot evidence:
   `https://play.google.com/apps/internaltest/4701400293644513393`
 - Physical-device offline/reconnect and missing-range recovery evidence remains
   the final pilot validation gate; Play publication itself is complete.
+
+### Production telemetry analysis playbook — 2026-09-02
+
+- Added `docs/runbooks/production-telemetry-analysis.md` as the reusable standard
+  for daily, account, and per-trip production audits.
+- The playbook defines fixed-cutoff read-only extraction, India-local day
+  boundaries, CSV/manifest reconciliation, correct missing/completeness metrics,
+  GPS/IMU and queue analysis, SOC/energy provenance, training usability, and
+  source-versus-deployed-version verification.
+- Cross-linked the playbook from `docs/runbooks/telemetry-operations.md` so
+  future incident analysis does not depend on chat history.
+- No production, database, frontend, Android, Play, or cloud configuration was
+  changed by this documentation update.
+
+### App 1.0.6 production telemetry validation — 2026-09-02
+
+- Applied the production telemetry analysis playbook to a fixed read-only
+  cutoff of 2026-09-02 05:32:34 UTC and generated a private interpretation at
+  `.codex-tmp/gpsdriver_today_interpretation_2026-09-02.md`.
+- Confirmed one Rhythm trip from app 1.0.6: 1,310 of 1,381 declared windows
+  reached production (94.86%), with 71 exact missing sequences.
+- Reconciled 1,310 unique rows, receipts, and batch-window totals; production
+  recorded zero telemetry rejections and zero pending server-outbox events.
+- Live evidence shows the explicit accepted/duplicate ACK repair works despite
+  a cursor blocked at zero: p95 latency was 4.243 seconds and maximum phone
+  backlog was 10. A separate final-minute drain/retry problem remains.
+- Stored GPS quality was 99.92%, but end-to-end valid-GPS coverage was 94.79%.
+  Accelerometer collection was complete; gyroscope samples remained absent.
+- The trip remains training-ineligible because telemetry is incomplete,
+  finalization is waiting, and no authoritative energy label was persisted.
+- The private temporary exporter and one-time token state were deleted and
+  verified absent. No production data, deployment, Play release, or frontend
+  configuration was modified during this analysis.
+
+### Phone-local queue diagnostics — 1.0.7 (8), 2026-09-02
+
+- Added a tester-facing **Telemetry Recovery** card to export a read-only JSON
+  snapshot of the latest ended trip before retrying delivery.
+- The snapshot exposes the phone-declared final sequence, retained rows by exact
+  outbox state, local missing ranges, retry attempts and sanitized HTTP/error
+  diagnostics. It never exports telemetry payload JSON, GPS coordinates, sample,
+  device or vehicle identifiers, or authentication tokens.
+- Added a distinct confirmed retry action that makes only `PENDING` and expired
+  `IN_FLIGHT` rows immediately eligible and schedules the existing backfill.
+  `ACKED`, unexpired leases and `PERMANENTLY_REJECTED` evidence are untouched.
+- The operational workflow is export before retry, then export after retry and
+  reconcile both snapshots with Cloud SQL using trip/sequence values. Export
+  within the 24-hour acknowledged-row retention window.
+- Verification passed: JavaScript 9/9, TypeScript, zero-warning ESLint, Android
+  unit tests, debug instrumentation APK compilation, release unit tests, Android
+  release lint, bundle/APK assembly, bundletool validation and signature checks.
+- Signed AAB `1.0.7 (8)` is at
+  `play-store-assets/Trickee-GPS-Driver-public-1.0.7-8.aab`, SHA-256
+  `99DF62E448C05BD579030D45E8720392514AA44BE9A7ED973DD32AD46DAAE535`.
+- Physical verification still requires the tester to update in place, export the
+  affected phone state, retry pending rows, and provide the after-state export.
+- Google Play internal publication is complete: the track is `Active`, release
+  `8 (1.0.7) - Telemetry Recovery` is `Available to internal testers`, and Play
+  records its release time as 2 September 2026 at 15:13 IST.
+- The existing selected `GPS Driver Testers` email list remains unchanged with
+  two users. Tester opt-in URL:
+  `https://play.google.com/apps/internaltest/4701400293644513393`.
+- Play reported only a non-blocking missing deobfuscation-file warning; native
+  debug symbols are attached and supported-device counts did not change.
+
+### Full-day production audit refresh — 2026-09-02 22:38 IST
+
+- Refreshed production PostgreSQL at a fixed 17:08:19 UTC cutoff and exported
+  all three Rhythm trips from the 2 September IST local day into separate
+  telemetry, batch and trip-summary CSVs.
+- Reconciled 3,516 telemetry rows = unique samples = unique trip/sequence pairs
+  = receipts = summed batch windows. The phones declared 3,648 windows, leaving
+  132 exact sequences absent and 96.38% weighted cloud completeness.
+- App 1.0.7 reached 1,700/1,713 windows (99.24%), versus 1,816/1,935 (93.85%)
+  for the two 1.0.6 trips. All three remain incomplete and training-ineligible.
+- Cloud Run request logs corrected an earlier evidence gap: 200 HTTP 422 batch
+  attempts and two recoverable 401 attempts occurred even though the database
+  rejection table is zero. Schema-level 422 failures occur before canonical
+  rejection persistence and must be monitored separately.
+- Tester diagnostics prove the 1.0.7 remainder is two HTTP-422 dead-letter rows
+  plus 11 pending tail rows after socket timeout. Manual retry produced no new
+  telemetry request, supporting the WorkManager `KEEP`/backoff dispatch bug.
+- Stored-row GPS quality was 99.94%; end-to-end valid-GPS coverage was 96.33%.
+  Accelerometer samples were present in every stored window and gyroscope
+  samples in none. No current-day trip has a persisted energy label.
+- Removed and verified absence of the private exporter service, its temporary
+  image tag and compressed downloads. Production data remained read-only.
+- Detailed report and private outputs are under
+  `.codex-tmp/gpsdriver-export-20260902-223819/`.

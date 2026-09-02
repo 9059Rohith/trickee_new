@@ -20,13 +20,13 @@ class ImuWindowAccumulator(
     @Synchronized
     fun addAccelerometer(x: Float, y: Float, z: Float, timestampNs: Long, accuracy: Int = 0) {
         accelerometer += Sample(x.toDouble(), y.toDouble(), z.toDouble(), timestampNs)
-        accelerometerAccuracy = accuracy
+        accelerometerAccuracy = serverCompatibleAccuracy(accuracy)
     }
 
     @Synchronized
     fun addGyroscope(x: Float, y: Float, z: Float, timestampNs: Long, accuracy: Int = 0) {
         gyroscope += Sample(x.toDouble(), y.toDouble(), z.toDouble(), timestampNs)
-        gyroscopeAccuracy = accuracy
+        gyroscopeAccuracy = serverCompatibleAccuracy(accuracy)
     }
 
     @Synchronized
@@ -149,4 +149,6 @@ class ImuWindowAccumulator(
         min(100.0, max(0.0, count.toDouble() * 100.0 / expected))
 
     private fun square(value: Double): Double = value * value
+
+    private fun serverCompatibleAccuracy(accuracy: Int): Int = accuracy.coerceIn(0, 3)
 }

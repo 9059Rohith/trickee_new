@@ -1,5 +1,7 @@
 # Live telemetry operations runbook
 
+For production CSV/trip interpretation, fixed-cutoff reconciliation, training-usability decisions, and deployed-version comparison, use [`production-telemetry-analysis.md`](production-telemetry-analysis.md).
+
 ## Non-negotiable invariants
 
 - PostgreSQL is canonical. A Redis outage must increase the PostgreSQL outbox backlog, never reject a committed telemetry batch.
@@ -58,6 +60,29 @@
 2. Inspect missing ranges in device ACK/status and the phone Room outbox; do not lower the declared final sequence.
 3. Trigger the unique WorkManager backfill and keep the device charging/on-network where possible.
 4. If a permanently rejected window caused the gap, retain it as evidence and use an operator-reviewed exception workflow; never manufacture a replacement fix.
+
+### Export the phone's local queue evidence
+
+For app version 1.0.7 or later, ask the tester to open **Fleet Controls >
+Telemetry Recovery** immediately after the affected trip:
+
+1. Tap **Export diagnostics** before tapping retry and share the generated JSON
+   only with the pilot support team.
+2. Preserve the JSON as the before-state. It contains the phone's declared final
+   sequence, retained sequence rows, queue states, attempt counts, local missing
+   ranges, HTTP status and sanitized error details.
+3. The export intentionally excludes GPS coordinates, payload JSON, sample,
+   device and vehicle identifiers, and authentication tokens.
+4. If support confirms retry is appropriate, tap **Retry pending telemetry**.
+   This makes `PENDING` and expired `IN_FLIGHT` rows eligible and schedules the
+   existing WorkManager backfill. It does not revive `ACKED` or
+   `PERMANENTLY_REJECTED` rows.
+5. Export again after the retry and compare the phone snapshot with the cloud
+   trip audit using `trip_id` and sequence numbers.
+
+Export within 24 hours. Acknowledged rows are retained locally for 24 hours and
+then purged, so older local gaps can mean either a never-created row or a
+previously acknowledged row that has already been cleaned up.
 
 ## Archive and restore drill
 

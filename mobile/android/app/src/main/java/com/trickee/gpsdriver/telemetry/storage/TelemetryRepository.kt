@@ -1,5 +1,7 @@
 package com.trickee.gpsdriver.telemetry.storage
 
+import com.trickee.gpsdriver.telemetry.network.TelemetryPayloadRepair
+
 class TelemetryRepository(private val dao: TelemetryDao) : TelemetryUploadQueue {
     suspend fun createTrip(tripId: String, deviceId: String, vehicleId: String, startedAtUtcMs: Long) {
         dao.insertTrip(
@@ -122,6 +124,15 @@ class TelemetryRepository(private val dao: TelemetryDao) : TelemetryUploadQueue 
     suspend fun tripWithEligibleOutbox(nowUtcMs: Long): LocalTripEntity? = dao.tripWithEligibleOutbox(nowUtcMs)
     suspend fun latestEndedTrip(): LocalTripEntity? = dao.latestEndedTrip()
     suspend fun trip(tripId: String): LocalTripEntity? = dao.trip(tripId)
+    suspend fun outboxForTrip(tripId: String): List<TelemetryOutboxEntity> = dao.outboxForTrip(tripId)
+    suspend fun prepareDiagnosticRetry(tripId: String, nowUtcMs: Long): Int =
+        dao.prepareDiagnosticRetry(tripId, nowUtcMs)
+    suspend fun repairKnownContractRejections(tripId: String?, nowUtcMs: Long): Int =
+        dao.repairableContractRejections(tripId).sumOf { row ->
+            val repaired = TelemetryPayloadRepair.repairKnownContractViolation(row.payloadJson)
+                ?: return@sumOf 0
+            dao.requeueRepairedContractRow(row.sampleId, repaired, nowUtcMs)
+        }
     suspend fun pendingCount(tripId: String): Int = dao.pendingCount(tripId)
     suspend fun pendingTripIds(): List<String> = dao.pendingTripIds()
     suspend fun setTripState(tripId: String, state: TripState) {

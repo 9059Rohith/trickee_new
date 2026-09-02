@@ -143,7 +143,7 @@ class TripCollectorService : Service(), SensorEventListener {
                 startForeground(NOTIFICATION_ID, notification("Finishing telemetry sync"))
                 repository.sealTrip(trip.tripId, System.currentTimeMillis())
                 uploader.flush(trip.tripId, backfill = true)
-                BackfillWorker.enqueue(this@TripCollectorService)
+                BackfillWorker.enqueueRecovery(this@TripCollectorService, trip.tripId)
                 publishStatus("SYNC_PENDING")
                 ServiceCompat.stopForeground(this@TripCollectorService, ServiceCompat.STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -252,7 +252,7 @@ class TripCollectorService : Service(), SensorEventListener {
                 }
                 repository.sealTrip(tripId, System.currentTimeMillis())
                 uploader.flush(tripId, backfill = true)
-                BackfillWorker.enqueue(this@TripCollectorService)
+                BackfillWorker.enqueueRecovery(this@TripCollectorService, tripId)
             }
             unregisterCapture()
             activeTripId = null

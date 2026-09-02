@@ -96,6 +96,22 @@ gpsdriver/
 
 ## Quick Start
 
+Windows local development is one command after the initial Python/npm install:
+
+```powershell
+.\scripts\start-local.ps1 -RestartServices
+```
+
+It migrates and idempotently seeds SQLite, starts FastAPI on `8001`, starts
+Metro on `8081`, installs the debug APK on the connected emulator/device, and
+prints log locations and demo accounts. Use `-SkipAndroid` when only the API and
+Metro are needed. The complete PostgreSQL/Redis worker topology is exercised
+with Docker Compose; the lightweight SQLite launcher intentionally does not
+pretend Redis processors are running when Docker Desktop is unavailable.
+Android compiler output is automatically placed under
+`%LOCALAPPDATA%\Trickee\android-build` for OneDrive checkouts to prevent Files
+On-Demand reparse points from corrupting Gradle outputs.
+
 ### Backend
 ```bash
 cd backend
@@ -183,8 +199,8 @@ Relevant v2 endpoints are:
 | `GET` | `/api/v2/vehicles/{vehicle_id}/live-state` | Fetch the recoverable current snapshot |
 | `WS` | `/ws/v2/vehicles/{vehicle_id}` | Receive versioned live snapshots/updates |
 
-Android debug builds use the emulator-local API. Release builds require an
-explicit `TRICKEE_API_ORIGIN`; an unconfigured release resolves to a deliberate
+Android debug builds use the emulator-local API. Use Node.js `20.19.4` or newer.
+Release builds require explicit REST and WebSocket origins; an unconfigured release resolves to a deliberate
 non-routable `.invalid` address and disables cleartext traffic. To produce a
 store-signed release, provide these Gradle properties in a private user-level
 `gradle.properties` file (never commit the keystore or secrets):
@@ -196,10 +212,32 @@ TRICKEE_RELEASE_KEY_ALIAS=...
 TRICKEE_RELEASE_KEY_PASSWORD=...
 TRICKEE_GOOGLE_WEB_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
 TRICKEE_API_ORIGIN=https://your-company-cloud-run-api.example.com
+TRICKEE_WEBSOCKET_ORIGIN=https://your-company-cloud-run-websocket.example.com
 ```
 
-Then run `mobile/android/gradlew.bat bundleRelease` and certify that exact signed
-artifact against the company Google Cloud API before store submission.
+Production users are provisioned without passwords before their first Google
+sign-in:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m scripts.provision_fleet .\private-company-fleet.json
+```
+
+Copy `backend/examples/fleet-provision.example.json` outside the repository,
+fill it with approved company identities/vehicle specifications, and keep the
+real file in the company secret-controlled deployment workspace.
+
+Then run the fail-closed public release builder from the repository root:
+
+```powershell
+.\scripts\build-public-release.ps1
+```
+
+It verifies package `com.trickee.gpsdriverapp`, version `1.0.4 (5)`, target SDK
+36, HTTPS endpoints, OAuth configuration, permissions, signature, and the
+registered upload-certificate SHA-1. It writes the verified AAB under
+`%LOCALAPPDATA%\Trickee\gpsdriver-public-android-build\release`. The build stops
+if the registered upload keystore or any required signing property is missing.
 
 ## Non-Negotiable Rules
 1. GPS + specs CAN estimate: route energy, Wh/km, demand score, SOC consumed

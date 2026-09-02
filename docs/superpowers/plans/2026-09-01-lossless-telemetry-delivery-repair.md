@@ -13,7 +13,8 @@
 ## Global Constraints
 
 - Preserve package `com.trickee.gpsdriverapp`, target SDK 36, and deployed `/api/v2` telemetry endpoint.
-- Release Android `1.0.5` with `versionCode 6`; never overwrite an existing Play artifact.
+- Release Android `1.0.6` with `versionCode 7`; preserve the published Play
+  artifact `1.0.5 (6)` rather than overwriting it.
 - Room migration is explicit from version 1 to 2; never use destructive migration fallback.
 - Delivery is at least once with idempotent server writes; only ACKED rows may be purged.
 - Preserve request payloads for pending, in-flight, and dead-letter rows.
@@ -651,6 +652,11 @@ git commit -m "fix(admin): show actual GPS trip completeness"
 > specifies `*/15 * * * *`, but no Cloud apply was attempted because current
 > gcloud reauthentication is unavailable. Physical-device acceptance remains
 > pending.
+>
+> Fix Round 2 is committed in `32e81bb` and `231dc26`: Android release identity
+> is now `1.0.6 (7)`, preserving published `1.0.5 (6)`. A new clean detached
+> release build and complete gate are in progress; no code 7 artifact has been
+> uploaded or published to Play.
 
 **Files:**
 - Create: `scripts/test-lossless-telemetry-pipeline.ps1`
@@ -702,8 +708,8 @@ idempotent duplicate replay.
 Change only:
 
 ```gradle
-versionCode 6
-versionName "1.0.5"
+versionCode 7
+versionName "1.0.6"
 ```
 
 Run `scripts/verify-android-identity.ps1` and confirm package, SDK, OAuth/API
@@ -717,10 +723,13 @@ available, Terraform fmt/validate, and public endpoint configuration checks.
 
 - [x] **Step 6: Build and verify the signed AAB**
 
-Use the external signing properties already authorized for the Play upload key:
+Use the external signing properties already authorized for the Play upload key
+through `scripts/build-public-release.ps1`. The wrapper requires a clean
+tracked tree, verifies the APK/AAB identity and upload signer, and writes the
+exact source Git SHA into release metadata:
 
 ```powershell
-.\gradlew.bat clean :app:bundleRelease -PTRICKEE_RELEASE_PROPERTIES_FILE=$env:TRICKEE_RELEASE_PROPERTIES_FILE
+.\scripts\build-public-release.ps1 -SigningPropertiesFile <external-properties>
 ```
 
 Do not copy signing material into the repository. Record artifact absolute path,
@@ -754,7 +763,7 @@ Run `git diff --check`, inspect staged file lists in both repositories, rerun
 the complete verification script, and commit only release/closeout files:
 
 ```powershell
-git commit -m "release: prepare GPS Driver 1.0.5 lossless pilot"
+git commit -m "release: prepare GPS Driver 1.0.6 provenance"
 ```
 
 Do not claim completion until the latest command outputs and artifact hashes are

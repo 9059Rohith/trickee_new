@@ -75,6 +75,18 @@ class ImuWindowAccumulatorTest {
     }
 
     @Test
+    fun androidNoContactAccuracyIsSerializedAsServerAcceptedUnreliable() {
+        val accumulator = ImuWindowAccumulator()
+        accumulator.addAccelerometer(1f, 2f, 3f, 1L, accuracy = -1)
+        accumulator.addGyroscope(0.1f, 0.2f, 0.3f, 1L, accuracy = -1)
+
+        val summary = accumulator.closeWindow(expectedSamples = 50)
+
+        assertEquals(0, summary.accelerometerAccuracy)
+        assertEquals(0, summary.gyroscopeAccuracy)
+    }
+
+    @Test
     fun missingGpsSerializesAsExplicitNullWithoutBmsFields() {
         val payload = TelemetryWindowPayload(
             sampleId = "sample-1",

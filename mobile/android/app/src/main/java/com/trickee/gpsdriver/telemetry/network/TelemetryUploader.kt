@@ -112,7 +112,13 @@ class TelemetryUploader(
                         false
                     }
                     UploadFailureDecision.DeadLetterSingle -> {
-                        deadLetter(rows.single(), response.code, "HTTP_${response.code}")
+                        val row = rows.single()
+                        deadLetter(
+                            row,
+                            response.code,
+                            "HTTP_${response.code}",
+                            contractFailureDetail(response, row.sequenceNo),
+                        )
                         true
                     }
                     is UploadFailureDecision.Retry -> {
@@ -192,10 +198,36 @@ class TelemetryUploader(
         repository.recordRetry(rows, now + delay, httpStatus, errorCode, detail, now)
     }
 
-    private suspend fun deadLetter(row: TelemetryOutboxEntity, httpStatus: Int?, errorCode: String) {
+    private suspend fun deadLetter(
+        row: TelemetryOutboxEntity,
+        httpStatus: Int?,
+        errorCode: String,
+        detail: String = diagnosticDetail(httpStatus, errorCode),
+    ) {
         val now = clock()
-        repository.deadLetter(row, httpStatus, errorCode, diagnosticDetail(httpStatus, errorCode), now)
+        repository.deadLetter(row, httpStatus, errorCode, detail, now)
     }
+
+    private fun contractFailureDetail(response: Response, sequenceNo: Long): String {
+        val fallback = diagnosticDetail(response.code, "HTTP_${response.code}")
+        return runCatching {
+            val root = JsonParser.parseString(response.body?.string().orEmpty()).asJsonObject
+            val errors = root.getAsJsonObject("detail")?.getAsJsonArray("errors") ?: return fallback
+            val error = errors
+                .mapNotNull { it.takeIf { item -> item.isJsonObject }?.asJsonObject }
+                .firstOrNull { it.get("sequence_no")?.asLong == sequenceNo }
+                ?: errors.firstOrNull()?.asJsonObject
+                ?: return fallback
+            val field = sanitizeDiagnosticText(error.get("field")?.asString.orEmpty())
+            val reason = sanitizeDiagnosticText(error.get("reason")?.asString.orEmpty())
+            listOf(field, reason).filter { it.isNotBlank() }.joinToString(": ").take(255).ifBlank { fallback }
+        }.getOrDefault(fallback)
+    }
+
+    private fun sanitizeDiagnosticText(value: String): String = value
+        .filter { it.isLetterOrDigit() || it.isWhitespace() || it in "._:-()" }
+        .replace(Regex("\\s+"), " ")
+        .trim()
 
     private fun encodeBatch(
         batchId: String,

@@ -112,8 +112,8 @@ if ($actualApplicationId -ne $publicApplicationId) {
 if ($targetSdk -ne '36') {
     throw "Wrong target SDK in release manifest. Expected 36, found $targetSdk."
 }
-if ($versionCode -ne '7' -or $versionName -ne '1.0.6') {
-    throw "Wrong release version. Expected 1.0.6 (7), found $versionName ($versionCode)."
+if ($versionCode -ne '9' -or $versionName -ne '1.0.8') {
+    throw "Wrong release version. Expected 1.0.8 (9), found $versionName ($versionCode)."
 }
 $requiredPermissions = @(
     'android.permission.INTERNET',

@@ -88,6 +88,23 @@ class TelemetryUploaderTest {
     }
 
     @Test
+    fun contractDeadLetterRetainsOnlySafeFieldLevelServerDetail() = runBlocking {
+        queue.rows += row(1)
+        server.enqueue(
+            MockResponse().setResponseCode(422).setBody(
+                """{"detail":{"code":"INVALID_TELEMETRY_CONTRACT","errors":[{"sequence_no":1,"field":"imu.gyroscope_accuracy","reason":"Input should be greater than or equal to 0"}]}}""",
+            ),
+        )
+
+        assertTrue(uploader().runOnce("trip-1"))
+
+        val rejected = queue.row(1)
+        assertEquals(OutboxState.PERMANENTLY_REJECTED, rejected.state)
+        assertTrue(rejected.lastErrorDetail.orEmpty().contains("imu.gyroscope_accuracy"))
+        assertTrue(rejected.lastErrorDetail.orEmpty().length <= 255)
+    }
+
+    @Test
     fun refreshesOnceAndRetriesTheSameLeaseAfterUnauthorized() = runBlocking {
         queue.rows += row(1)
         server.enqueue(MockResponse().setResponseCode(401))

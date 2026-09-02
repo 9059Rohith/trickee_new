@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -12,6 +14,11 @@ import GlassCard from "../../components/GlassCard";
 import BackgroundLogo from "../../components/BackgroundLogo";
 import { useAuth } from "../../context/AuthContext";
 import { useLiveData } from "../../context/LiveDataContext";
+import {
+  exportTelemetryDiagnostics,
+  NativeTelemetryDiagnosticSummary,
+  retryPendingTelemetry,
+} from "../../services/telemetryNative";
 
 interface MoreMenuScreenProps {
   onNavigate: (screen: string) => void;
@@ -24,6 +31,66 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
 }) => {
   const { user } = useAuth();
   const { driver, vehicle, telemetry, gpsSummary, latestSoc } = useLiveData();
+  const [diagnosticSummary, setDiagnosticSummary] =
+    useState<NativeTelemetryDiagnosticSummary | null>(null);
+  const [diagnosticMessage, setDiagnosticMessage] = useState<string | null>(
+    null
+  );
+  const [exportingDiagnostics, setExportingDiagnostics] = useState(false);
+  const [retryingTelemetry, setRetryingTelemetry] = useState(false);
+
+  const handleDiagnosticExport = async () => {
+    setExportingDiagnostics(true);
+    setDiagnosticMessage(null);
+    try {
+      const summary = await exportTelemetryDiagnostics();
+      setDiagnosticSummary(summary);
+      setDiagnosticMessage(
+        "Share sheet opened. Send the JSON file to the pilot support team."
+      );
+    } catch (error) {
+      Alert.alert(
+        "Export failed",
+        error instanceof Error
+          ? error.message
+          : "Telemetry diagnostics could not be exported."
+      );
+    } finally {
+      setExportingDiagnostics(false);
+    }
+  };
+
+  const retryTelemetry = async () => {
+    setRetryingTelemetry(true);
+    setDiagnosticMessage(null);
+    try {
+      const result = await retryPendingTelemetry();
+      setDiagnosticMessage(
+        `${result.eligibleWindowCount} pending window(s) are eligible for upload. ` +
+          `${result.permanentlyRejectedCount} unresolved rejected window(s) remain.`
+      );
+    } catch (error) {
+      Alert.alert(
+        "Retry failed",
+        error instanceof Error
+          ? error.message
+          : "Pending telemetry could not be retried."
+      );
+    } finally {
+      setRetryingTelemetry(false);
+    }
+  };
+
+  const confirmTelemetryRetry = () => {
+    Alert.alert(
+      "Retry pending telemetry?",
+      "This repairs the known Android sensor-status mismatch, then retries pending and expired in-flight windows for the latest ended trip. Acknowledged rows stay unchanged.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Retry", onPress: retryTelemetry },
+      ]
+    );
+  };
   const menuItems = [
     {
       id: "aiIntel",
@@ -125,7 +192,7 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
               <Icon name="briefcase" size={14} color={Colors.trickeeYellow} />
               <Text style={styles.profileDetailLabel}>Company</Text>
               <Text style={styles.profileDetailValue}>
-                {vehicle?.make || "EVIFY"}
+                {vehicle?.make || "xyz"}
               </Text>
             </View>
             <View style={styles.profileDetail}>
@@ -178,6 +245,92 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
             </View>
           </GlassCard>
         </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionLabel}>TELEMETRY RECOVERY</Text>
+        </View>
+
+        <GlassCard cornerRadius={20}>
+          <View style={styles.diagnosticContent}>
+            <View style={styles.diagnosticTitleRow}>
+              <Icon name="database-search" size={22} color={Colors.neonBlue} />
+              <View style={styles.diagnosticTitleText}>
+                <Text style={styles.diagnosticTitle}>
+                  Local delivery diagnostics
+                </Text>
+                <Text style={styles.diagnosticCopy}>
+                  Export first, then retry if support asks. The JSON contains
+                  queue states and error details, but no GPS coordinates,
+                  vehicle identifiers, device identifiers, or tokens.
+                </Text>
+              </View>
+            </View>
+
+            {diagnosticSummary ? (
+              <View style={styles.diagnosticGrid}>
+                <View style={styles.diagnosticMetric}>
+                  <Text style={styles.diagnosticMetricValue}>
+                    {diagnosticSummary.finalSequenceNo}
+                  </Text>
+                  <Text style={styles.diagnosticMetricLabel}>Phone final</Text>
+                </View>
+                <View style={styles.diagnosticMetric}>
+                  <Text style={styles.diagnosticMetricValue}>
+                    {diagnosticSummary.rowCount}
+                  </Text>
+                  <Text style={styles.diagnosticMetricLabel}>Local rows</Text>
+                </View>
+                <View style={styles.diagnosticMetric}>
+                  <Text style={styles.diagnosticMetricValue}>
+                    {diagnosticSummary.pendingCount +
+                      diagnosticSummary.inFlightCount}
+                  </Text>
+                  <Text style={styles.diagnosticMetricLabel}>Pending</Text>
+                </View>
+                <View style={styles.diagnosticMetric}>
+                  <Text style={styles.diagnosticMetricValue}>
+                    {diagnosticSummary.permanentlyRejectedCount}
+                  </Text>
+                  <Text style={styles.diagnosticMetricLabel}>Rejected</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {diagnosticMessage ? (
+              <Text style={styles.diagnosticMessage}>{diagnosticMessage}</Text>
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.diagnosticPrimaryButton}
+              onPress={handleDiagnosticExport}
+              disabled={exportingDiagnostics || retryingTelemetry}
+            >
+              {exportingDiagnostics ? (
+                <ActivityIndicator size="small" color={Colors.buttonText} />
+              ) : (
+                <Icon name="file-export" size={18} color={Colors.buttonText} />
+              )}
+              <Text style={styles.diagnosticPrimaryText}>
+                {exportingDiagnostics ? "Preparing export..." : "Export diagnostics"}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.diagnosticSecondaryButton}
+              onPress={confirmTelemetryRetry}
+              disabled={exportingDiagnostics || retryingTelemetry}
+            >
+              {retryingTelemetry ? (
+                <ActivityIndicator size="small" color={Colors.neonBlue} />
+              ) : (
+                <Icon name="cloud-sync" size={18} color={Colors.neonBlue} />
+              )}
+              <Text style={styles.diagnosticSecondaryText}>
+                {retryingTelemetry ? "Scheduling upload..." : "Retry pending telemetry"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </GlassCard>
 
         {/* Logout */}
         <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
@@ -335,6 +488,85 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "rgba(255,255,255,0.45)",
     textAlign: "center",
+  },
+
+  diagnosticContent: {
+    padding: 18,
+    gap: 14,
+  },
+  diagnosticTitleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  diagnosticTitleText: {
+    flex: 1,
+    gap: 5,
+  },
+  diagnosticTitle: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  diagnosticCopy: {
+    color: "rgba(255,255,255,0.58)",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  diagnosticGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  diagnosticMetric: {
+    width: "48%",
+    borderRadius: 10,
+    padding: 10,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  diagnosticMetricValue: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  diagnosticMetricLabel: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 10,
+    marginTop: 2,
+  },
+  diagnosticMessage: {
+    color: Colors.neonGreen,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  diagnosticPrimaryButton: {
+    minHeight: 46,
+    borderRadius: 12,
+    backgroundColor: Colors.trickeeYellow,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  diagnosticPrimaryText: {
+    color: Colors.buttonText,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  diagnosticSecondaryButton: {
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(0,194,255,0.45)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  diagnosticSecondaryText: {
+    color: Colors.neonBlue,
+    fontSize: 14,
+    fontWeight: "700",
   },
 
   logoutButton: {

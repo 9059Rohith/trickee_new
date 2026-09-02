@@ -1,12 +1,52 @@
 # Trickee Developer Handoff
 
-Last updated: 2026-08-05
+Last updated: 2026-08-31
 Working repository: `gpsdriver` (isolated copy; `trickee_new` is unchanged)
 Implementation branch: `feature/gpsdriver-gate0`
 
+## 0. Current internal-test release (2026-08-31)
+
+The signed Google Play bundle is published on the active internal-test track:
+
+- AAB: `C:\Users\AJEYA\AppData\Local\Trickee\gpsdriver-public-android-build\release\Trickee-GPS-Driver-public-1.0.3-4.aab`
+- SHA-256: `D32380448C0A042D2986E61927C2BBDB630470E4186F7AC82A89D984631440F5`
+- Identity: `com.trickee.gpsdriverapp`, version `1.0.3` (`4`), target SDK 36.
+- Release signing SHA-1:
+  `1F:B5:89:39:0D:03:53:49:80:A2:90:B1:80:CE:13:B0:8F:48:07:9A`.
+- Play status: `Available to internal testers`, released 2026-08-31 at 08:32 IST.
+- Tester opt-in: `https://play.google.com/apps/internaltest/4701400293644513393`.
+- The `GPS Driver Testers` list contains two saved addresses, including the
+  approved Trickee tester.
+
+Release `4 (1.0.3)` was built with a Web OAuth client from the wrong Google
+Cloud project and cannot complete Google sign-in. A corrected replacement is
+built and locally verified but is not yet published:
+
+- AAB: `C:\Users\AJEYA\AppData\Local\Trickee\gpsdriver-public-android-build\release\Trickee-GPS-Driver-public-1.0.4-5.aab`
+- SHA-256: `1092BB04C9A221557E6817FA35D9F2C3D937EE6F82275C0F652BB1B70E7E00E2`.
+- OAuth audience: `1044486768873-7sq9luvpsmkppgod40p5qdtbkbaq6m7q.apps.googleusercontent.com`.
+- Upload is pending. **Allow access to file URLs** is enabled for the ChatGPT
+  extension, but Chrome control still timed out before it could take over the
+  work-account Play tab; no version-5 upload or publication is confirmed.
+
+The full backend, mobile, Android unit/lint, release signature/configuration,
+emulator launch, migration, and public endpoint checks pass. See
+`docs/evidence/gates-1-to-4-status.md` for the exact evidence and hashes.
+
+Cloud Build `bcfbca68-a1ea-49a1-b2a9-cad52575a527` deployed image digest
+`sha256:e5209f9cd892f02eac62b68e78976d1a285a87b5bc368068f66866b69b76c666`
+to all six pilot Cloud Run services with 100% traffic. The production migration
+and approved driver/OLA S1 provisioning executions succeeded. The one-shot job
+was restored to migration-only configuration and its temporary secret and Cloud
+Shell payload were deleted. A physical-device Google sign-in and full road test
+remain required before any production-readiness claim. Until Play app setup and
+review complete, testers will see the temporary unreviewed package name.
+
 ## 1. Project purpose
 
-Trickee is a GPS-first EV trip intelligence application. The Android app records
+Trickee GPS Driver is a standalone GPS-first EV trip intelligence application.
+Its Android identity is `com.trickee.gpsdriverapp`; it does not replace or share
+private application data with the existing `com.trickeeandroid` app. The app records
 foreground GPS samples during a driver-initiated trip. The FastAPI backend
 validates those samples and combines them with vehicle specifications to
 estimate route energy, Wh/km, demand score, SOC consumption, and remaining
@@ -17,6 +57,29 @@ are manually entered from the vehicle dashboard. This distinction must remain
 visible in the UI, API fields, and documentation.
 
 ## 2. Current status
+
+### Standalone Android identity (2026-08-07)
+
+- Product/launcher name: `Trickee GPS Driver`.
+- Android application ID, namespace, and Kotlin root: `com.trickee.gpsdriverapp`.
+- React Native component: `TrickeeGPSDriver`.
+- Debug signer SHA-1:
+  `E0:D0:81:A8:B0:1A:88:50:20:00:BF:93:BD:18:B2:91:97:9A:61:1B`.
+- Play signing uses three accepted SHA-1 certificates for the public package:
+  legacy `DB:BE:71:FE:AD:45:9A:22:2F:E1:F3:E9:F0:3F:3C:34:9A:1B:AE:D3`,
+  classical `CC:0B:93:66:E3:94:29:8A:0C:E8:9F:19:57:DC:B5:24:79:26:69:3D`,
+  and PQC `94:A5:EA:3B:51:BB:3D:21:C4:79:4F:95:6C:6C:AE:79:ED:B0:2C:64`.
+  All three Android OAuth clients exist in `trickee-gps-driver-auth`. Credential
+  Manager and the backend must use the same Web OAuth audience shown above; no
+  OAuth client secret belongs in the APK.
+- The all-ABI unit-test, instrumentation-compilation, and debug-APK gate passes.
+  `scripts/verify-android-identity.ps1` independently verifies the packaged ID
+  and signing certificate.
+- OneDrive-safe builds place Gradle output and Reanimated CMake staging under
+  `%LOCALAPPDATA%\Trickee`; this avoids Ninja's 250-character object-path limit.
+
+This repository does not create, edit, install over, or migrate private data
+from `com.trickeeandroid`.
 
 ### Android live telemetry Gates 0–4 repository implementation (2026-08-05)
 
@@ -79,7 +142,8 @@ Final Gates 0–4 repository verification on 2026-08-05:
 
 - `76` backend tests pass, including identity, trip lifecycle, ingestion,
   stream recovery, realtime/archive and capacity-tool behavior.
-- A clean database migrates through `0003_realtime_processing (head)`.
+- A clean database migrated through the then-current `0003_realtime_processing`.
+  The current head is `0005_trip_energy_labels` and is verified separately.
 - TypeScript and changed/new-file ESLint pass with zero warnings.
 - Docker Compose configuration and GCP HCL/static topology checks pass.
 - Android unit tests, instrumentation-test compilation and `assembleDebug`
@@ -124,6 +188,8 @@ Important code locations:
 | Initial migration | `backend/alembic/versions/0001_gps_first.py` |
 | Live telemetry migration | `backend/alembic/versions/0002_live_telemetry_foundation.py` |
 | Realtime processing migration | `backend/alembic/versions/0003_realtime_processing.py` |
+| Driver assignment migration | `backend/alembic/versions/0004_driver_vehicle_assignment.py` |
+| Energy label migration | `backend/alembic/versions/0005_trip_energy_labels.py` |
 | Telemetry contract | `backend/app/telemetry/contracts.py` |
 | Atomic ingestion | `backend/app/telemetry/persistence.py` |
 | Telemetry v2 route | `backend/app/telemetry/batch_routes.py` |
@@ -227,7 +293,16 @@ cd mobile\android
 ```
 
 Output:
-`mobile/android/app/build/outputs/apk/debug/app-debug.apk`
+
+- OneDrive checkout: `%LOCALAPPDATA%\Trickee\android-build\app\outputs\apk\debug\app-debug.apk`
+- Other checkouts: `mobile/android/app/build/outputs/apk/debug/app-debug.apk`
+
+Verify the built package and signer from the repository root:
+
+```powershell
+$apk = Join-Path $env:LOCALAPPDATA "Trickee\android-build\app\outputs\apk\debug\app-debug.apk"
+.\scripts\verify-android-identity.ps1 -ApkPath $apk -ExpectedPackage com.trickee.gpsdriver -ExpectedSha1 E0:D0:81:A8:B0:1A:88:50:20:00:BF:93:BD:18:B2:91:97:9A:61:1B
+```
 
 ## 6. Demo accounts
 
@@ -300,9 +375,8 @@ cd android
 .\gradlew.bat app:testDebugUnitTest app:compileDebugAndroidTestKotlin app:assembleDebug --offline --no-daemon
 ```
 
-Repository-wide ESLint is not a valid gate until its inherited config excludes
-Android generated reports and the pre-existing CRLF baseline is fixed. If
-Gradle reports that a transformed dependency is "not a regular file", remove
+Repository-wide mobile ESLint is now a valid zero-warning gate. If Gradle
+reports that a transformed dependency is "not a regular file", remove
 only the exact generated transform-cache directory named in the stack trace and
 rerun; the verified build required this for one corrupted `fbjni` transform.
 
@@ -314,9 +388,12 @@ $env:TRICKEE_SECRET_KEY = "replace-with-a-long-local-test-secret"
 docker compose config --quiet
 ```
 
-Expected backend result at this handoff: `76 passed`.
+Expected backend result at this handoff: `109 passed`.
 
-### Latest emulator evidence (2026-07-28)
+### Historical existing-app emulator evidence (2026-07-28)
+
+This evidence predates the standalone rename and belongs to the existing app.
+It does not certify `com.trickee.gpsdriver` or side-by-side installation.
 
 - Emulator: Android API 36.1, package `com.trickeeandroid`.
 - Driver trip: starting SOC `80%`, ending SOC `78%`, 188 raw samples and 186
@@ -374,7 +451,7 @@ client migration.
 5. Run `alembic upgrade head` exactly once as a release job. On Google Cloud,
    use a Cloud Run Job with Cloud SQL access; do not migrate from each API
    replica. Docker Compose provides the equivalent one-shot `migrate` service.
-6. Confirm Alembic reaches revision `0003_realtime_processing`.
+6. Confirm Alembic reaches revision `0005_trip_energy_labels`.
 7. Verify `/health`, authentication, GPS upload, trip calculation, and retention
    cleanup against PostgreSQL.
 8. Set `TRICKEE_API_ORIGIN` in the private release Gradle properties to the
@@ -393,10 +470,13 @@ client migration.
 - Apply and verify the company Google Cloud topology, OAuth configuration, private networking, alerts, backups, and PITR.
 - Install Terraform in the approved deployment environment, then run
   `terraform fmt -check`, provider-schema validation, reviewed plan and apply.
-- Resolve the inherited mobile dependency audit (currently 9 moderate, 6 high,
-  and 1 critical advisory) through a tested React Native/voice dependency upgrade.
+- Resolve the remaining six high React Native/Metro toolchain advisories through
+  a separately tested React Native major-version upgrade. The 2026-08-31
+  production audit has zero critical advisories; do not apply the breaking
+  automatic upgrade directly to a release branch.
 - Resolve the GitHub Actions billing lock and re-enable automatic CI triggers.
-- Test a signed release build, not only the debug APK.
+- Complete the opt-in, real Google sign-in, and a full physical-device trip on
+  the published Play internal-test release.
 - Run the 150-identity/60-minute capacity test, 300-window/s burst, 30-device
   backlog replay, Cloud SQL restore, and archive restore-and-compare.
 - Complete three consecutive qualifying operating days for each 10/25/50/100/150 cohort.
@@ -435,10 +515,12 @@ client migration.
 
 - [x] Backend tests pass.
 - [x] TypeScript and ESLint pass.
-- [x] Android debug build passes; signed release/device install remains company-keystore evidence.
-- [x] Database migrations pass locally on a clean database; clean company Cloud SQL evidence remains pending.
+- [x] Signed release AAB/APK pass certificate, manifest, permission, install,
+  cold-launch, unit-test, and lint verification.
+- [x] Database migrations pass locally and the production Cloud Run migration job completed successfully.
 - [ ] Mobile production dependency audit is clean.
-- [ ] Health check and login work on the deployed API.
+- [x] API and WebSocket health checks work on the deployed services.
+- [ ] Real Google login works with the approved provisioned tester.
 - [x] Starting SOC is persisted with the trip.
 - [x] GPS tracking begins only for an active trip.
 - [x] Multiple GPS batches upload without duplicates or lost points.
