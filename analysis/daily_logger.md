@@ -236,3 +236,30 @@
   persisted current-day labels and zero pending server-outbox events.
 - Deleted the temporary private exporter service and image tag and verified
   their absence; no production rows or application deployments were changed.
+
+## 2026-09-03 - Lossless telemetry repair release 1.0.8
+
+- Committed the approved retained-telemetry repair as `6515569`.
+- Replaced the suppressible global manual retry with forced per-trip WorkManager
+  recovery, added final-tail drain/resume behavior, safe `-1` sensor-accuracy
+  normalization, selective retained-422 revival, and richer local diagnostics.
+- Added sanitized field-level backend 422 responses and durable pre-contract
+  rejection evidence. Verified cursor convergence when a repaired missing first
+  sequence joins an already stored tail.
+- Final gates passed: backend `132/132`, mobile JavaScript `9/9`, Android release
+  unit tests `48`, Android release lint, signed APK/AAB checks, Terraform checks,
+  and the existing admin frontend's tests, TypeScript, lint, and 32-route build.
+- Deployed Cloud Build image
+  `sha256:e65af8cc9559cf0695c256960310ad1208de8d6cc4c65767ecd8c9e1b388aaf7`
+  to all six GPS services and all four jobs. API/WebSocket health checks returned
+  `200`; no new revision error logs were present. No schema migration was needed.
+- Built `com.trickee.gpsdriverapp` version `1.0.8 (9)` with target SDK 36 and the
+  registered upload certificate. AAB SHA-256 is
+  `D3170BF1CFCF679F86D820468C5665814338A38229FCFB5F6EC6AAE480785B25`.
+- Published version `9 (1.0.8)` to the existing Play internal-testing track.
+  Play confirms it is `Available to internal testers` as of 00:15 IST.
+- Existing Vercel frontend remained unchanged and healthy at the canonical
+  `https://www.trickee.co.in/` endpoint.
+- Physical recovery proof remains pending an in-place tester update and after-
+  retry diagnostic export; uninstalling or clearing app data would destroy the
+  retained Room rows and must be avoided.

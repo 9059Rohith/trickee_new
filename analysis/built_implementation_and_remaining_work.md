@@ -284,3 +284,47 @@ Remaining pilot evidence:
   image tag and compressed downloads. Production data remained read-only.
 - Detailed report and private outputs are under
   `.codex-tmp/gpsdriver-export-20260902-223819/`.
+
+### Lossless retained-telemetry repair and internal release — 2026-09-03
+
+- Released source commit `651556954a50d4923860c0e50b9b24b45c25ea9a`.
+  Android now schedules a forced, trip-specific recovery job instead of letting
+  an older global WorkManager `KEEP` job suppress a manual retry or trip-end
+  drain.
+- Explicitly accepted and duplicate sequences remain independently acknowledged;
+  known retained HTTP-422 rows are repaired only when their payload changes
+  safely, while unresolved invalid rows remain preserved as dead-letter evidence.
+- Android sensor accuracy is normalized from the platform's `-1` unavailable
+  value to the backend-compatible unknown value `0` for both newly captured and
+  safely recoverable retained windows.
+- Backend 422 responses now contain sanitized field-level validation details and
+  pre-contract failures are recorded in the existing telemetry-rejection table
+  without raw payloads, coordinates, tokens, or other sensitive values.
+- Regression coverage proves the historical blocked-cursor pattern: after a
+  repaired first sequence arrives, the server cursor advances across the already
+  stored tail. Backend tests passed `132/132`; mobile JavaScript tests passed
+  `9/9`; Android release tests passed `48`, release lint passed, and Terraform
+  format/validate/topology checks passed.
+- Cloud Build `9201c7b9-72d2-454b-bc1d-ebce53511d4d` produced backend digest
+  `sha256:e65af8cc9559cf0695c256960310ad1208de8d6cc4c65767ecd8c9e1b388aaf7`.
+  All six GPS Cloud Run services and all four jobs use that exact digest. API and
+  WebSocket health checks return `200`, and the new revisions had no error-level
+  logs at verification time. No database migration was required.
+- The existing Vercel frontend was not changed for this patch. Both
+  `trickee.co.in` and `www.trickee.co.in` return `200` and resolve to the existing
+  live frontend.
+- Signed AAB `1.0.8 (9)` is at
+  `play-store-assets/Trickee-GPS-Driver-public-1.0.8-9.aab`, SHA-256
+  `D3170BF1CFCF679F86D820468C5665814338A38229FCFB5F6EC6AAE480785B25`.
+  Package, target SDK 36, bundle signature, APK signature, and registered upload
+  certificate SHA-1 were independently verified.
+- Google Play reports the internal track as `Active` and release `9 (1.0.8)` as
+  `Available to internal testers`, released 3 September 2026 at 00:15 IST. The
+  tester opt-in URL remains
+  `https://play.google.com/apps/internaltest/4701400293644513393`.
+- Remaining physical gate: the tester must update in place without uninstalling
+  or clearing app data, open Telemetry Recovery on a stable network, retry the
+  retained trip, and export the after-state diagnostic. If the historic 422s were
+  caused by a different field, the rows will remain safely retained and the new
+  backend/client diagnostics will identify the exact field rather than deleting
+  the evidence.
