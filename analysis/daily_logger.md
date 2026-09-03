@@ -263,3 +263,26 @@
 - Physical recovery proof remains pending an in-place tester update and after-
   retry diagnostic export; uninstalling or clearing app data would destroy the
   retained Room rows and must be avoided.
+
+## 2026-09-03 - No-GPS 422 storm repair release candidate 1.0.9
+
+- Correlated the tester's repeated-crash report with 102 backend contract
+  validation events over about two minutes for trip `2e16d038...`. The 51
+  unique affected sequences all omitted `gps` when no fix was available.
+- Made omitted `gps` backward-compatible only for `gps_available=false`, added
+  an Android retained-payload repair to emit explicit `gps:null`, and replaced
+  recursive detailed-422 bisection with a single-response selective
+  dead-letter/requeue path.
+- Added regression tests first and confirmed they failed for the old behavior;
+  the completed gates pass backend `133/133`, mobile JavaScript `9/9`, Android
+  release tests `51/51`, TypeScript, ESLint, and Android release lint.
+- Deployed Cloud Build image
+  `sha256:e4852485a89efdd9526f7a83594017d247c25a394ae8ad7c8bf2ad0976958654`
+  across all six GPS services and all four jobs. API/WebSocket health is `200`,
+  each service is Ready, and post-rollout error-level logs are empty.
+- Built and verified `com.trickee.gpsdriverapp` version `1.0.9 (10)`, target SDK
+  36, signed by the registered upload certificate. AAB SHA-256 is
+  `34C71C7F90D9803CCC9A6223183553CA05164D55EBCF015CBAB760E67128EC87`.
+- Play internal-track publication is pending browser reconnection. Physical
+  validation also remains required because the confirmed network/request storm
+  has no matching Play Console Android stack trace yet.

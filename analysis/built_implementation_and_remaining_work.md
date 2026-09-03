@@ -328,3 +328,41 @@ Remaining pilot evidence:
   caused by a different field, the rows will remain safely retained and the new
   backend/client diagnostics will identify the exact field rather than deleting
   the evidence.
+
+### No-GPS contract and HTTP-422 request-storm repair — 2026-09-03
+
+- Production evidence for trip `2e16d038-4331-4fbd-af43-9870a1dd7dea`
+  showed 102 contract-validation log events in roughly two minutes. All 51
+  unique rejected sequences omitted `gps` while reporting no available GPS
+  fix. The prior backend type was nullable but still required the key under
+  Pydantic v2.
+- Backend schema v1 now normalizes an omitted `gps` field to `null`; the
+  existing invariant still rejects a missing GPS sample when
+  `gps_available=true`.
+- Android repairs retained schema-v1 rows by adding explicit `gps:null` only
+  when `gps_available=false`. It does not invent a fix or coordinates.
+- A detailed field-level HTTP 422 response now dead-letters only the explicitly
+  rejected sequence and immediately requeues unaffected peers. This removes
+  recursive batch bisection and its upload/request storm while preserving the
+  conservative fallback for older or non-specific 422 responses.
+- Regression tests covered omitted-no-fix compatibility, retained-row repair,
+  no invention when GPS is declared available, and a two-row detailed 422 that
+  completes in one HTTP request. Full gates passed: backend `133/133`, mobile
+  JavaScript `9/9`, TypeScript, ESLint, Android release unit tests `51/51`, and
+  Android release lint.
+- Cloud Build `c2d31c62-ab62-486c-b0fa-681f04e86c2e` produced immutable image
+  `sha256:e4852485a89efdd9526f7a83594017d247c25a394ae8ad7c8bf2ad0976958654`.
+  All six GPS Cloud Run services and all four jobs use that digest; API and
+  WebSocket health return `200`, all service revisions are Ready, and no
+  error-level logs were present after rollout. No database migration was
+  required.
+- Signed release candidate `1.0.9 (10)` is at
+  `play-store-assets/Trickee-GPS-Driver-public-1.0.9-10.aab`, SHA-256
+  `34C71C7F90D9803CCC9A6223183553CA05164D55EBCF015CBAB760E67128EC87`.
+  Package `com.trickee.gpsdriverapp`, target SDK 36, bundle/APK signatures, and
+  registered upload certificate SHA-1 were independently verified.
+- Google Play internal publication and physical-device confirmation are still
+  pending. The confirmed request storm is crash-adjacent, but Play has not yet
+  supplied an Android stack trace for the tester warning, so a successful
+  in-place update and real trip remain required before claiming the OS crash is
+  eliminated.
