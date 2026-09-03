@@ -13,9 +13,9 @@ class AppIdentityTest {
     }
 
     @Test
-    fun appVersionAdvancesPastBrokenPlayOAuthBuild() {
-        assertEquals(9, BuildConfig.VERSION_CODE)
-        assertEquals("1.0.8", BuildConfig.VERSION_NAME)
+    fun appVersionMatchesContractRepairRelease() {
+        assertEquals(10, BuildConfig.VERSION_CODE)
+        assertEquals("1.0.9", BuildConfig.VERSION_NAME)
     }
 
     @Test

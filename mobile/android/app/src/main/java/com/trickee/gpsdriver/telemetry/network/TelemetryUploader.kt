@@ -104,9 +104,10 @@ class TelemetryUploader(
                         }
                     }
                     UploadFailureDecision.ReduceBatch,
-                    UploadFailureDecision.BisectBatch -> splitOrDeadLetter(
-                        session, tripId, rows, response.code, "HTTP_${response.code}", allowRefresh
-                    )
+                    UploadFailureDecision.BisectBatch ->
+                        handleDetailedContractFailure(response, rows) ?: splitOrDeadLetter(
+                            session, tripId, rows, response.code, "HTTP_${response.code}", allowRefresh
+                        )
                     UploadFailureDecision.RetainOversizeSingle -> {
                         retainForRetry(rows, response.code, "PAYLOAD_TOO_LARGE_SINGLE", UploadPolicy.MAX_RETRY_DELAY_MS)
                         false
@@ -180,6 +181,52 @@ class TelemetryUploader(
         val firstProgress = sendRows(session, tripId, rows.subList(0, middle), allowRefresh)
         val secondProgress = sendRows(session, tripId, rows.subList(middle, rows.size), allowRefresh)
         return firstProgress || secondProgress
+    }
+
+    private suspend fun handleDetailedContractFailure(
+        response: Response,
+        rows: List<TelemetryOutboxEntity>,
+    ): Boolean? {
+        val leasedBySequence = rows.associateBy { it.sequenceNo }
+        val failures = runCatching {
+            val root = JsonParser.parseString(response.body?.string().orEmpty()).asJsonObject
+            val detail = root.getAsJsonObject("detail") ?: return null
+            if (detail.get("code")?.asString != "INVALID_TELEMETRY_CONTRACT") return null
+            val errors = detail.getAsJsonArray("errors") ?: return null
+            if (errors.size() == 0) return null
+            errors.map { item ->
+                val error = item.takeIf { it.isJsonObject }?.asJsonObject ?: return null
+                val sequence = error.get("sequence_no")?.takeUnless { it.isJsonNull }?.asLong ?: return null
+                if (sequence !in leasedBySequence) return null
+                val field = sanitizeDiagnosticText(error.get("field")?.asString.orEmpty())
+                val reason = sanitizeDiagnosticText(error.get("reason")?.asString.orEmpty())
+                sequence to listOf(field, reason)
+                    .filter { it.isNotBlank() }
+                    .joinToString(": ")
+                    .take(255)
+                    .ifBlank { diagnosticDetail(response.code, "HTTP_${response.code}") }
+            }.toMap()
+        }.getOrNull() ?: return null
+
+        failures.forEach { (sequence, detail) ->
+            deadLetter(
+                row = requireNotNull(leasedBySequence[sequence]),
+                httpStatus = response.code,
+                errorCode = "HTTP_${response.code}",
+                detail = detail,
+            )
+        }
+        val unaffected = rows.filterNot { it.sequenceNo in failures }
+        if (unaffected.isNotEmpty()) {
+            retainForRetry(
+                rows = unaffected,
+                httpStatus = response.code,
+                errorCode = "CONTRACT_BATCH_PEER_REJECTED",
+                minimumDelayMs = 0,
+                detail = "A peer window failed contract validation; this window remains queued",
+            )
+        }
+        return true
     }
 
     private suspend fun retainForRetry(

@@ -88,6 +88,24 @@ class TelemetryUploaderTest {
     }
 
     @Test
+    fun fieldLevelContractErrorsDeadLetterOnlyNamedRowsWithoutRequestStorm() = runBlocking {
+        queue.rows += row(1)
+        queue.rows += row(2)
+        server.enqueue(
+            MockResponse().setResponseCode(422).setBody(
+                """{"detail":{"code":"INVALID_TELEMETRY_CONTRACT","errors":[{"sequence_no":2,"field":"gps","reason":"Field required"}]}}""",
+            ),
+        )
+
+        assertTrue(uploader().runOnce("trip-1"))
+
+        assertEquals(1, server.requestCount)
+        assertEquals(OutboxState.PENDING, queue.row(1).state)
+        assertEquals(OutboxState.PERMANENTLY_REJECTED, queue.row(2).state)
+        assertEquals("gps: Field required", queue.row(2).lastErrorDetail)
+    }
+
+    @Test
     fun contractDeadLetterRetainsOnlySafeFieldLevelServerDetail() = runBlocking {
         queue.rows += row(1)
         server.enqueue(

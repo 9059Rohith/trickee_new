@@ -82,7 +82,9 @@ class TelemetryWindowV1(StrictContract):
     monotonic_time_ns: int = Field(ge=0)
     window_duration_ms: int = Field(gt=0)
     gps_available: bool
-    gps: GpsSampleV1 | None
+    # Older Android releases omitted the nullable key when no fix existed.
+    # gps_available remains the authoritative consistency guard below.
+    gps: GpsSampleV1 | None = None
     imu: ImuSummaryV1
     health: DeviceHealthV1
 

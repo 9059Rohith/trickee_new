@@ -1,5 +1,6 @@
 package com.trickee.gpsdriver.telemetry.network
 
+import com.google.gson.JsonNull
 import com.google.gson.JsonParser
 
 /** Repairs only known Android-to-server representation mismatches; measurements are untouched. */
@@ -9,6 +10,10 @@ object TelemetryPayloadRepair {
         if (root.get("schema_version")?.asInt != 1) return null
         val imu = root.getAsJsonObject("imu") ?: return null
         var changed = false
+        if (root.get("gps_available")?.asBoolean == false && !root.has("gps")) {
+            root.add("gps", JsonNull.INSTANCE)
+            changed = true
+        }
         listOf("accelerometer_accuracy", "gyroscope_accuracy").forEach { field ->
             val value = imu.get(field)?.takeUnless { it.isJsonNull }?.asInt ?: return@forEach
             if (value == ANDROID_SENSOR_STATUS_NO_CONTACT) {

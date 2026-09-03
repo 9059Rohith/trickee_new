@@ -83,6 +83,17 @@ def test_missing_gps_window_is_valid():
     assert window.gps_available is False
 
 
+def test_omitted_gps_is_normalized_when_window_reports_no_fix():
+    contracts = _contracts()
+    payload = valid_window(gps_available=False)
+    payload.pop("gps")
+
+    window = contracts.TelemetryWindowV1.model_validate(payload)
+
+    assert window.gps is None
+    assert window.gps_available is False
+
+
 def test_claiming_gps_without_payload_is_rejected():
     contracts = _contracts()
     with pytest.raises(ValidationError):

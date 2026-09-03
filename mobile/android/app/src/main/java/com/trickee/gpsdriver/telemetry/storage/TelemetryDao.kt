@@ -71,7 +71,7 @@ abstract class TelemetryDao {
             rejection_code = NULL,
             last_http_status = NULL,
             last_error_code = 'HTTP_422_REPAIRED',
-            last_error_detail = 'Known Android sensor accuracy mismatch repaired',
+            last_error_detail = 'Known Android telemetry contract mismatch repaired',
             last_failure_at_utc_ms = NULL,
             permanently_rejected_at_utc_ms = NULL
         WHERE sample_id = :sampleId AND state = 'PERMANENTLY_REJECTED'
