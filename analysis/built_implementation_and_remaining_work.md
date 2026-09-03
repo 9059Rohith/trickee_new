@@ -361,8 +361,11 @@ Remaining pilot evidence:
   `34C71C7F90D9803CCC9A6223183553CA05164D55EBCF015CBAB760E67128EC87`.
   Package `com.trickee.gpsdriverapp`, target SDK 36, bundle/APK signatures, and
   registered upload certificate SHA-1 were independently verified.
-- Google Play internal publication and physical-device confirmation are still
-  pending. The confirmed request storm is crash-adjacent, but Play has not yet
-  supplied an Android stack trace for the tester warning, so a successful
-  in-place update and real trip remain required before claiming the OS crash is
-  eliminated.
+- Google Play reports the internal track as `Active` and release `10 (1.0.9)` as
+  `Available to internal testers`, released 3 September 2026 at 10:22 IST. The
+  tester opt-in URL remains
+  `https://play.google.com/apps/internaltest/4701400293644513393`.
+- Physical-device confirmation remains pending. The confirmed request storm is
+  crash-adjacent, but Play has not supplied an Android stack trace for the
+  tester warning, so an in-place update and real trip remain required before
+  claiming the OS crash is eliminated.

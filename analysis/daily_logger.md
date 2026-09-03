@@ -283,6 +283,9 @@
 - Built and verified `com.trickee.gpsdriverapp` version `1.0.9 (10)`, target SDK
   36, signed by the registered upload certificate. AAB SHA-256 is
   `34C71C7F90D9803CCC9A6223183553CA05164D55EBCF015CBAB760E67128EC87`.
-- Play internal-track publication is pending browser reconnection. Physical
-  validation also remains required because the confirmed network/request storm
-  has no matching Play Console Android stack trace yet.
+- Published version `10 (1.0.9)` to the existing Play internal-testing track.
+  Play independently reports the track as `Active` and the release as
+  `Available to internal testers`, released 3 September 2026 at 10:22 IST.
+- Physical validation remains required because the confirmed network/request
+  storm has no matching Play Console Android stack trace yet. The tester must
+  update in place and must not uninstall or clear app data before recovery.
