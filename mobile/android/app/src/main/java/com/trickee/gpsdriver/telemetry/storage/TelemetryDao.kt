@@ -88,9 +88,17 @@ abstract class TelemetryDao {
     @Query("UPDATE local_trips SET state = 'ENDING' WHERE trip_id = :tripId AND state = 'ACTIVE' AND final_sequence_no IS NULL")
     protected abstract suspend fun markEnding(tripId: String): Int
 
+    @Query("UPDATE local_trips SET state = 'SYNC_PENDING' WHERE trip_id = :tripId AND final_sequence_no IS NOT NULL AND state IN ('CREATED_LOCAL', 'START_PENDING', 'ACTIVE', 'ENDING')")
+    protected abstract suspend fun normalizeLegacySealedTrip(tripId: String): Int
+
     @Transaction
     open suspend fun beginEnding(tripId: String) {
         val trip = requireNotNull(trip(tripId)) { "Trip not found" }
+        val targetState = TripEndRecoveryPolicy.stateAfterStopRequest(trip.state, trip.finalSequenceNo)
+        if (targetState == TripState.SYNC_PENDING && trip.state != TripState.SYNC_PENDING) {
+            check(normalizeLegacySealedTrip(tripId) == 1) { "Sealed trip state changed concurrently" }
+            return
+        }
         if (trip.finalSequenceNo != null || trip.state == TripState.ENDING) return
         require(trip.state == TripState.ACTIVE) { "Only an active trip can begin ending" }
         check(markEnding(tripId) == 1) { "Trip state changed concurrently" }

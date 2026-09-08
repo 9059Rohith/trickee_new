@@ -60,6 +60,51 @@ class TelemetryMigrationTest {
         }
     }
 
+    @Test
+    fun migrationRepairsAnActiveTripThatWasAlreadySealed() {
+        helper.createDatabase(DATABASE_NAME, 2).use { database ->
+            database.execSQL(
+                "INSERT INTO local_trips (trip_id, device_id, vehicle_id, state, next_sequence_no, final_sequence_no, started_at_utc_ms, ended_at_utc_ms) VALUES ('trip', 'device', 'vehicle', 'ACTIVE', 3225, 1345, 1000, 2000)"
+            )
+            insertVersionTwoOutbox(database, "within-final", 1345L, "ACKED")
+            insertVersionTwoOutbox(database, "late-acked", 3223L, "ACKED")
+            insertVersionTwoOutbox(database, "late-pending", 3224L, "PENDING")
+        }
+
+        helper.runMigrationsAndValidate(
+            DATABASE_NAME,
+            3,
+            true,
+            TelemetryDatabase.MIGRATION_2_3,
+        ).use { database ->
+            database.query(
+                "SELECT state, final_sequence_no, next_sequence_no FROM local_trips WHERE trip_id = 'trip'"
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("SYNC_PENDING", cursor.getString(0))
+                assertEquals(1345L, cursor.getLong(1))
+                assertEquals(3225L, cursor.getLong(2))
+            }
+
+            database.query(
+                "SELECT sample_id, state, rejection_code FROM telemetry_outbox ORDER BY sequence_no"
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("within-final", cursor.getString(0))
+                assertEquals("ACKED", cursor.getString(1))
+
+                cursor.moveToNext()
+                assertEquals("late-acked", cursor.getString(0))
+                assertEquals("ACKED", cursor.getString(1))
+
+                cursor.moveToNext()
+                assertEquals("late-pending", cursor.getString(0))
+                assertEquals("PERMANENTLY_REJECTED", cursor.getString(1))
+                assertEquals("CAPTURED_AFTER_FINAL_SEQUENCE", cursor.getString(2))
+            }
+        }
+    }
+
     private fun insertTrip(database: SupportSQLiteDatabase) {
         database.execSQL(
             "INSERT INTO local_trips (trip_id, device_id, vehicle_id, state, next_sequence_no, final_sequence_no, started_at_utc_ms, ended_at_utc_ms) VALUES ('trip', 'device', 'vehicle', 'ACTIVE', 3, NULL, 1000, NULL)"
@@ -77,6 +122,18 @@ class TelemetryMigrationTest {
         database.execSQL(
             "INSERT INTO telemetry_outbox (sample_id, trip_id, sequence_no, event_time_utc_ms, monotonic_time_ns, payload_json, state, attempt_count, next_attempt_at_utc_ms, lease_until_utc_ms, server_committed_at_utc_ms, created_at_utc_ms, rejection_code) VALUES (?, 'trip', ?, 2000, 3000, ?, ?, 1, 0, NULL, NULL, 2001, ?)",
             arrayOf<Any?>(sampleId, sequenceNo, payload, state, rejectionCode),
+        )
+    }
+
+    private fun insertVersionTwoOutbox(
+        database: SupportSQLiteDatabase,
+        sampleId: String,
+        sequenceNo: Long,
+        state: String,
+    ) {
+        database.execSQL(
+            "INSERT INTO telemetry_outbox (sample_id, trip_id, sequence_no, event_time_utc_ms, monotonic_time_ns, payload_json, state, attempt_count, next_attempt_at_utc_ms, lease_until_utc_ms, server_committed_at_utc_ms, created_at_utc_ms, rejection_code, last_http_status, last_error_code, last_error_detail, last_failure_at_utc_ms, permanently_rejected_at_utc_ms) VALUES (?, 'trip', ?, 2000, 3000, '{\"kept\":true}', ?, 1, 0, NULL, NULL, 2001, NULL, NULL, NULL, NULL, NULL, NULL)",
+            arrayOf<Any?>(sampleId, sequenceNo, state),
         )
     }
 

@@ -8,6 +8,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -56,7 +57,7 @@ class TelemetryRepositoryTest {
     @Test
     fun exactAcknowledgementClearsAcceptedRowsWhileAnEarlierGapRemainsPending() = runBlocking {
         repository.createTrip("trip", "device", "vehicle", 1_000L)
-        repository.setTripState("trip", TripState.ACTIVE)
+        assertTrue(repository.activateForCapture("trip"))
         repeat(10) { index ->
             val sequence = index + 1L
             repository.commitWindowAndAdvanceCursor(
@@ -130,7 +131,7 @@ class TelemetryRepositoryTest {
     @Test
     fun endedTripIsBackfillEligibleButNeverCaptureRecoverable() = runBlocking {
         repository.createTrip("trip", "device", "vehicle", 1_000L)
-        repository.setTripState("trip", TripState.ACTIVE)
+        assertTrue(repository.activateForCapture("trip"))
         repository.commitWindowAndAdvanceCursor("trip", "sample-1", 2_000, 3_000, "{}", 2_001)
         repository.recordEnd("trip", finalSequenceNo = 1, endedAtUtcMs = 3_001)
 
@@ -162,7 +163,7 @@ class TelemetryRepositoryTest {
     @Test
     fun sealingReturnsThePersistedLastSequenceAndIsIdempotent() = runBlocking {
         repository.createTrip("trip", "device", "vehicle", 1_000L)
-        repository.setTripState("trip", TripState.ACTIVE)
+        assertTrue(repository.activateForCapture("trip"))
         repository.commitWindowAndAdvanceCursor("trip", "sample-1", 2_000, 3_000, "{}", 2_001)
 
         repository.beginEnding("trip")
@@ -178,7 +179,7 @@ class TelemetryRepositoryTest {
     @Test
     fun windowCommittedWhileEndingIsIncludedInTheSeal() = runBlocking {
         repository.createTrip("trip", "device", "vehicle", 1_000L)
-        repository.setTripState("trip", TripState.ACTIVE)
+        assertTrue(repository.activateForCapture("trip"))
 
         repository.beginEnding("trip")
         repository.commitWindowAndAdvanceCursor("trip", "final-sample", 2_000, 3_000, "{}", 2_001)
@@ -191,7 +192,7 @@ class TelemetryRepositoryTest {
     fun sealedTripRejectsAnyLaterWindow() {
         runBlocking {
             repository.createTrip("trip", "device", "vehicle", 1_000L)
-            repository.setTripState("trip", TripState.ACTIVE)
+            assertTrue(repository.activateForCapture("trip"))
             repository.beginEnding("trip")
             repository.sealTrip("trip", 2_000L)
 
@@ -261,7 +262,7 @@ class TelemetryRepositoryTest {
 
     private suspend fun createTripWithWindow(tripId: String, sampleId: String) {
         repository.createTrip(tripId, "device", "vehicle", 1_000L)
-        repository.setTripState(tripId, TripState.ACTIVE)
+        assertTrue(repository.activateForCapture(tripId))
         repository.commitWindowAndAdvanceCursor(tripId, sampleId, 2_000, 3_000, "{}", 2_001)
     }
 }
