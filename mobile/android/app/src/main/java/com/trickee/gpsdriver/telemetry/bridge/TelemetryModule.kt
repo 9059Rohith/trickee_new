@@ -123,48 +123,68 @@ class TelemetryModule(private val context: ReactApplicationContext) : ReactConte
     @ReactMethod
     fun stopTrip(promise: Promise) {
         val before = TripCollectorService.currentStatus
-        if (!before.active || before.tripId == null) {
-            scope.launch {
-                val ended = repository.latestEndedTrip()
-                promise.resolve(Arguments.createMap().apply {
-                    putString("tripId", ended?.tripId)
-                    putInt("pendingWindowCount", ended?.let { repository.pendingCount(it.tripId) } ?: 0)
-                    putDouble("finalSequenceNo", (ended?.finalSequenceNo ?: 0L).toDouble())
-                    putString("collectorState", if (ended == null) before.collectorState else "SYNC_PENDING")
-                })
-            }
-            return
-        }
         scope.launch {
-            context.startService(TripCollectorService.stopIntent(context))
-            var sealed: LocalTripEntity? = null
-            withTimeoutOrNull(TRIP_SEAL_TIMEOUT_MS) {
-                while (sealed == null) {
-                    val trip = repository.trip(before.tripId)
-                    if (
-                        trip?.finalSequenceNo != null &&
-                        trip.state in setOf(TripState.SYNC_PENDING, TripState.FINALIZING, TripState.COMPLETED)
-                    ) {
-                        sealed = trip
-                        continue
-                    }
-                    delay(TRIP_SEAL_POLL_MS)
+            try {
+                val tripId = before.tripId
+                    ?: repository.activeTrip()?.tripId
+                    ?: repository.endingTrip()?.tripId
+                if (tripId == null) {
+                    val ended = repository.latestEndedTrip()
+                    promise.resolve(Arguments.createMap().apply {
+                        putString("tripId", ended?.tripId)
+                        putInt("pendingWindowCount", ended?.let { repository.pendingCount(it.tripId) } ?: 0)
+                        putDouble("finalSequenceNo", (ended?.finalSequenceNo ?: 0L).toDouble())
+                        putString("collectorState", if (ended == null) before.collectorState else "SYNC_PENDING")
+                    })
+                    return@launch
                 }
+
+                // Persist ENDING before dispatching the service command so a poll-driven
+                // repeated START cannot race the collector back to ACTIVE.
+                repository.beginEnding(tripId)
+                context.startService(TripCollectorService.stopIntent(context))
+                var sealed: LocalTripEntity? = null
+                withTimeoutOrNull(TRIP_SEAL_TIMEOUT_MS) {
+                    while (sealed == null) {
+                        val trip = repository.trip(tripId)
+                        if (
+                            trip?.finalSequenceNo != null &&
+                            trip.state in setOf(TripState.SYNC_PENDING, TripState.FINALIZING, TripState.COMPLETED)
+                        ) {
+                            sealed = trip
+                            continue
+                        }
+                        delay(TRIP_SEAL_POLL_MS)
+                    }
+                }
+                val sealedTrip = sealed
+                if (sealedTrip == null) {
+                    promise.reject("TRIP_SEAL_TIMEOUT", "Trip capture did not finish sealing within 15 seconds")
+                    return@launch
+                }
+                promise.resolve(Arguments.createMap().apply {
+                    putString("tripId", tripId)
+                    putInt("pendingWindowCount", repository.pendingCount(tripId))
+                    if (before.tripId == tripId) {
+                        before.lastLatitude?.let { putDouble("lastLatitude", it) }
+                        before.lastLongitude?.let { putDouble("lastLongitude", it) }
+                    }
+                    putDouble("finalSequenceNo", sealedTrip.finalSequenceNo!!.toDouble())
+                    putString("collectorState", sealedTrip.state.name)
+                })
+            } catch (error: Exception) {
+                promise.reject("TRIP_SEAL_FAILED", error.message ?: "Trip capture could not be sealed", error)
             }
-            val sealedTrip = sealed
-            if (sealedTrip == null) {
-                promise.reject("TRIP_SEAL_TIMEOUT", "Trip capture did not finish sealing within 15 seconds")
-                return@launch
-            }
-            promise.resolve(Arguments.createMap().apply {
-                putString("tripId", before.tripId)
-                putInt("pendingWindowCount", repository.pendingCount(before.tripId))
-                before.lastLatitude?.let { putDouble("lastLatitude", it) }
-                before.lastLongitude?.let { putDouble("lastLongitude", it) }
-                putDouble("finalSequenceNo", sealedTrip.finalSequenceNo!!.toDouble())
-                putString("collectorState", sealedTrip.state.name)
-            })
         }
+    }
+
+    @ReactMethod
+    fun acknowledgeStationaryNudge(promise: Promise) {
+        context.startService(
+            android.content.Intent(context, TripCollectorService::class.java)
+                .setAction(TripCollectorService.ACTION_WAITING),
+        )
+        promise.resolve(true)
     }
 
     @ReactMethod
@@ -293,6 +313,7 @@ class TelemetryModule(private val context: ReactApplicationContext) : ReactConte
         putString("tripId", status.tripId)
         putInt("pendingWindowCount", status.pendingWindowCount)
         putString("collectorState", status.collectorState)
+        putBoolean("stationaryNudgePending", status.stationaryNudgePending)
         putString("deviceId", session?.deviceId)
         putString("vehicleId", session?.vehicleId)
     }

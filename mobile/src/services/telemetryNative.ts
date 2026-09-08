@@ -14,6 +14,7 @@ export type NativeTelemetryStatus = {
   tripId: string | null;
   pendingWindowCount: number;
   collectorState: string;
+  stationaryNudgePending: boolean;
   deviceId?: string | null;
   vehicleId?: string | null;
 };
@@ -129,6 +130,10 @@ export async function stopTelemetryTrip(): Promise<NativeStopResult> {
 
 export async function telemetryStatus(): Promise<NativeTelemetryStatus> {
   return requireAndroidModule().status();
+}
+
+export async function acknowledgeStationaryNudge(): Promise<void> {
+  await requireAndroidModule().acknowledgeStationaryNudge();
 }
 
 export async function exportTelemetryDiagnostics(): Promise<NativeTelemetryDiagnosticSummary> {

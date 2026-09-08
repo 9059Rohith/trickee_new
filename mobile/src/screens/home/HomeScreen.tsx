@@ -7,8 +7,9 @@
  * - TripActiveBanner when GPS tracking is running
  * - Shows estimated_wh_per_km and soc_consumed when SOC absent
  */
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -26,6 +27,10 @@ import DriverActionSheet from "../../components/DriverActionSheet";
 import SOCEntryModal from "../../components/SOCEntryModal";
 import { LoadingState, ErrorState } from "../../components/StateViews";
 import { useLiveData } from "../../context/LiveDataContext";
+import {
+  acknowledgeStationaryNudge,
+  telemetryStatus,
+} from "../../services/telemetryNative";
 
 const fmt = (val: number | null | undefined, digits = 1) =>
   typeof val === "number" && Number.isFinite(val) ? val.toFixed(digits) : "--";
@@ -45,6 +50,59 @@ const HomeScreen: React.FC = () => {
   } = useLiveData();
   const [actionsOpen, setActionsOpen] = useState(false);
   const [socModalVisible, setSocModalVisible] = useState(false);
+  const stationaryPromptVisible = useRef(false);
+
+  const activeTrip = me?.active_trip ?? null;
+  const activeTripId = activeTrip?.id ?? null;
+  const vehicleCode = vehicle?.vehicle_code || "No vehicle";
+  const driverCode = driver?.driver_code || "--";
+  const driverStyle = driver?.style_label || "Unknown";
+  const unresolved = (me?.alerts || []).filter((a) => !a.is_resolved);
+
+  useEffect(() => {
+    if (!activeTripId) {
+      stationaryPromptVisible.current = false;
+      return;
+    }
+    let cancelled = false;
+    const checkStationaryNudge = async () => {
+      const status = await telemetryStatus().catch(() => null);
+      if (cancelled || !status) return;
+      if (!status.stationaryNudgePending) {
+        stationaryPromptVisible.current = false;
+        return;
+      }
+      if (stationaryPromptVisible.current) return;
+      stationaryPromptVisible.current = true;
+      Alert.alert(
+        "Are you waiting?",
+        "The vehicle has been stationary for 7 minutes. Is this a temporary stop, or has the trip ended?",
+        [
+          {
+            text: "I'm waiting",
+            onPress: () => {
+              acknowledgeStationaryNudge().catch(() => {});
+            },
+          },
+          {
+            text: "End trip",
+            style: "destructive",
+            onPress: () => {
+              acknowledgeStationaryNudge().catch(() => {});
+              setActionsOpen(true);
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    };
+    checkStationaryNudge();
+    const interval = setInterval(checkStationaryNudge, 5_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeTripId]);
 
   if (loading && !me) {
     return <LoadingState label="Loading your fleet…" />;
@@ -52,12 +110,6 @@ const HomeScreen: React.FC = () => {
   if (error && !me) {
     return <ErrorState message={error} onRetry={refresh} />;
   }
-
-  const activeTrip = me?.active_trip ?? null;
-  const vehicleCode = vehicle?.vehicle_code || "No vehicle";
-  const driverCode = driver?.driver_code || "--";
-  const driverStyle = driver?.style_label || "Unknown";
-  const unresolved = (me?.alerts || []).filter((a) => !a.is_resolved);
 
   // GPS-first data
   const pred = gpsSummary?.latest_prediction;

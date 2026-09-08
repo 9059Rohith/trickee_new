@@ -50,6 +50,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -62,6 +63,7 @@ data class CollectorStatus(
     val lastLatitude: Double?,
     val lastLongitude: Double?,
     val collectorState: String,
+    val stationaryNudgePending: Boolean,
 )
 
 class TripCollectorService : Service(), SensorEventListener {
@@ -79,6 +81,7 @@ class TripCollectorService : Service(), SensorEventListener {
     private var captureAnchorNs = 0L
     private var captureAnchorUtcMs = 0L
     private var latestLocation: Location? = null
+    private val stationaryNudgeTracker = StationaryNudgeTracker()
     @Volatile private var acceptingEvents = false
     private var accelerometerAccuracy = 0
     private var gyroscopeAccuracy = 0
@@ -92,6 +95,18 @@ class TripCollectorService : Service(), SensorEventListener {
             if (locations.isEmpty()) return
             gpsWindowBuffer.add(locations.map(::locationPayload))
             latestLocation = locations.maxByOrNull { it.elapsedRealtimeNanos }
+            latestLocation?.let { location ->
+                val wasPending = stationaryNudgeTracker.isPending
+                val triggered = stationaryNudgeTracker.observe(
+                    nowMs = SystemClock.elapsedRealtime(),
+                    latitude = location.latitude,
+                    longitude = location.longitude,
+                    speedMps = location.speed.takeIf { location.hasSpeed() }?.toDouble(),
+                )
+                if (triggered) showStationaryNudge()
+                if (wasPending && !stationaryNudgeTracker.isPending) cancelStationaryNudge()
+                if (triggered || wasPending != stationaryNudgeTracker.isPending) publishStatus("ACTIVE")
+            }
         }
     }
 
@@ -113,6 +128,7 @@ class TripCollectorService : Service(), SensorEventListener {
                 startForegroundCollector(tripId, deviceId, vehicleId)
             }
             ACTION_STOP -> stopForegroundCollector()
+            ACTION_WAITING -> acknowledgeWaiting()
             else -> recoverCollector()
         }
         return START_STICKY
@@ -126,7 +142,14 @@ class TripCollectorService : Service(), SensorEventListener {
             if (repository.trip(tripId) == null) {
                 repository.createTrip(tripId, deviceId, vehicleId, System.currentTimeMillis())
             }
-            repository.setTripState(tripId, TripState.ACTIVE)
+            if (!repository.activateForCapture(tripId)) {
+                publishStatus(repository.trip(tripId)?.state?.name ?: "IDLE")
+                if (activeTripId == null) {
+                    ServiceCompat.stopForeground(this@TripCollectorService, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+                return@launch
+            }
             repository.purgeAcknowledged(System.currentTimeMillis())
             beginCapture(tripId)
         }
@@ -170,6 +193,8 @@ class TripCollectorService : Service(), SensorEventListener {
         windowStartedNs = captureAnchorNs
         gpsWindowBuffer = GpsWindowBuffer()
         latestLocation = null
+        stationaryNudgeTracker.start(SystemClock.elapsedRealtime())
+        cancelStationaryNudge()
         acceptingEvents = true
         registerSensors()
         requestLocationUpdates()
@@ -233,22 +258,28 @@ class TripCollectorService : Service(), SensorEventListener {
 
     private fun stopForegroundCollector() {
         scope.launch {
-            val tripId = activeTripId
-            windowJob?.cancel()
+            val capturedTripId = activeTripId
+            val tripId = capturedTripId
+                ?: repository.activeTrip()?.tripId
+                ?: repository.endingTrip()?.tripId
+            windowJob?.cancelAndJoin()
+            uploadJob?.cancel()
             if (tripId != null) {
                 repository.beginEnding(tripId)
                 acceptingEvents = false
                 sensorManager.unregisterListener(this@TripCollectorService)
                 locationClient.removeLocationUpdates(locationCallback)
-                val stoppedAtNs = SystemClock.elapsedRealtimeNanos()
-                while (windowStartedNs + WINDOW_NS <= stoppedAtNs) {
-                    val windowEndNs = windowStartedNs + WINDOW_NS
-                    commitWindow(windowStartedNs, windowEndNs)
-                    windowStartedNs = windowEndNs
-                }
-                if (windowStartedNs < stoppedAtNs) {
-                    commitWindow(windowStartedNs, stoppedAtNs)
-                    windowStartedNs = stoppedAtNs
+                if (capturedTripId == tripId && windowStartedNs > 0) {
+                    val stoppedAtNs = SystemClock.elapsedRealtimeNanos()
+                    while (windowStartedNs + WINDOW_NS <= stoppedAtNs) {
+                        val windowEndNs = windowStartedNs + WINDOW_NS
+                        commitWindow(windowStartedNs, windowEndNs)
+                        windowStartedNs = windowEndNs
+                    }
+                    if (windowStartedNs < stoppedAtNs) {
+                        commitWindow(windowStartedNs, stoppedAtNs)
+                        windowStartedNs = stoppedAtNs
+                    }
                 }
                 repository.sealTrip(tripId, System.currentTimeMillis())
                 uploader.flush(tripId, backfill = true)
@@ -256,10 +287,23 @@ class TripCollectorService : Service(), SensorEventListener {
             }
             unregisterCapture()
             activeTripId = null
+            stationaryNudgeTracker.reset()
+            cancelStationaryNudge()
             publishStatus("SYNC_PENDING")
             ServiceCompat.stopForeground(this@TripCollectorService, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
+    }
+
+    private fun acknowledgeWaiting() {
+        if (activeTripId == null) {
+            cancelStationaryNudge()
+            stopSelf()
+            return
+        }
+        stationaryNudgeTracker.acknowledgeWaiting()
+        cancelStationaryNudge()
+        publishStatus("ACTIVE_WAITING")
     }
 
     private fun registerSensors() {
@@ -389,8 +433,40 @@ class TripCollectorService : Service(), SensorEventListener {
                 lastLatitude = location?.latitude,
                 lastLongitude = location?.longitude,
                 collectorState = state,
+                stationaryNudgePending = stationaryNudgeTracker.isPending,
             )
         }
+    }
+
+    private fun showStationaryNudge() {
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        val waitingIntent = PendingIntent.getService(
+            this,
+            1,
+            Intent(this, TripCollectorService::class.java).setAction(ACTION_WAITING),
+            flags,
+        )
+        val endTripIntent = PendingIntent.getActivity(
+            this,
+            2,
+            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            flags,
+        )
+        val alert = NotificationCompat.Builder(this, STATIONARY_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Are you waiting or has the trip ended?")
+            .setContentText("The vehicle has been stationary for 7 minutes.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(false)
+            .setContentIntent(endTripIntent)
+            .addAction(0, "I'm waiting", waitingIntent)
+            .addAction(0, "End trip", endTripIntent)
+            .build()
+        getSystemService(NotificationManager::class.java).notify(STATIONARY_NOTIFICATION_ID, alert)
+    }
+
+    private fun cancelStationaryNudge() {
+        getSystemService(NotificationManager::class.java).cancel(STATIONARY_NOTIFICATION_ID)
     }
 
     private fun notification(text: String) = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -409,7 +485,15 @@ class TripCollectorService : Service(), SensorEventListener {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(CHANNEL_ID, "Trip telemetry", NotificationManager.IMPORTANCE_LOW)
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            val stationaryChannel = NotificationChannel(
+                STATIONARY_CHANNEL_ID,
+                "Stationary trip checks",
+                NotificationManager.IMPORTANCE_HIGH,
+            )
+            getSystemService(NotificationManager::class.java).apply {
+                createNotificationChannel(channel)
+                createNotificationChannel(stationaryChannel)
+            }
         }
     }
 
@@ -422,16 +506,19 @@ class TripCollectorService : Service(), SensorEventListener {
     companion object {
         const val ACTION_START = "com.trickee.gpsdriver.telemetry.START"
         const val ACTION_STOP = "com.trickee.gpsdriver.telemetry.STOP"
+        const val ACTION_WAITING = "com.trickee.gpsdriver.telemetry.WAITING"
         const val EXTRA_TRIP_ID = "trip_id"
         const val EXTRA_DEVICE_ID = "device_id"
         const val EXTRA_VEHICLE_ID = "vehicle_id"
         private const val CHANNEL_ID = "trickee_trip_telemetry"
         private const val NOTIFICATION_ID = 2101
+        private const val STATIONARY_NOTIFICATION_ID = 2102
+        private const val STATIONARY_CHANNEL_ID = "trickee_stationary_alerts"
         private const val SENSOR_PERIOD_US = 20_000
         private const val EXPECTED_IMU_SAMPLES = 50
         private const val WINDOW_NS = 1_000_000_000L
         private const val LOCATION_LATENESS_NS = 2_000_000_000L
-        @Volatile var currentStatus = CollectorStatus(false, null, 0, null, null, "IDLE")
+        @Volatile var currentStatus = CollectorStatus(false, null, 0, null, null, "IDLE", false)
             private set
 
         fun startIntent(context: Context, tripId: String, deviceId: String, vehicleId: String) =

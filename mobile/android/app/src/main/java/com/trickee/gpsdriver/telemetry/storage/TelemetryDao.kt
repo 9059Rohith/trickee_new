@@ -273,6 +273,6 @@ abstract class TelemetryDao {
     @Query("SELECT COUNT(*) FROM telemetry_outbox WHERE trip_id = :tripId AND state IN ('PENDING', 'IN_FLIGHT')")
     abstract suspend fun pendingCount(tripId: String): Int
 
-    @Query("UPDATE local_trips SET state = :state WHERE trip_id = :tripId")
-    abstract suspend fun setTripState(tripId: String, state: TripState): Int
+    @Query("UPDATE local_trips SET state = 'ACTIVE' WHERE trip_id = :tripId AND final_sequence_no IS NULL AND state IN ('CREATED_LOCAL', 'START_PENDING', 'ACTIVE')")
+    abstract suspend fun activateForCapture(tripId: String): Int
 }

@@ -10,6 +10,7 @@ import React, {
 import { api, ApiError } from "../services/api";
 import type { User } from "../services/types";
 import { nativeAuth } from "../services/authNative";
+import { SessionRestorer } from "../services/sessionRecovery";
 
 type AuthContextValue = {
   token: string | null;
@@ -19,7 +20,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   googleLogin: () => Promise<void>;
   logout: () => Promise<void>;
-  restore: () => Promise<boolean>;
+  restore: () => Promise<string | null>;
   setUser: (user: User) => void;
 };
 
@@ -32,7 +33,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUserState] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const restoringRef = useRef(false);
+  const restorerRef = useRef<SessionRestorer<User> | null>(null);
+  if (!restorerRef.current) {
+    restorerRef.current = new SessionRestorer<User>({
+      load: nativeAuth.load,
+      verify: api.me,
+      refresh: api.refreshAuth,
+      save: nativeAuth.save,
+      clear: nativeAuth.clear,
+    });
+  }
 
   const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
@@ -91,38 +101,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [token]);
 
   const restore = useCallback(async () => {
-    if (restoringRef.current) return false;
-    restoringRef.current = true;
-    try {
-      const saved = await nativeAuth.load();
-      if (!saved?.accessToken) {
-        return false;
+    const restored = await restorerRef.current!.recover();
+    if (!restored) {
+      const retained = await nativeAuth.load().catch(() => null);
+      if (!retained) {
+        setToken(null);
+        setUserState(null);
       }
-      try {
-        const me = await api.me(saved.accessToken);
-        setToken(saved.accessToken);
-        setUserState(me);
-      } catch (err) {
-        if (!(err instanceof ApiError) || !err.isAuth || !saved.refreshToken) {
-          throw err;
-        }
-        const refreshed = await api.refreshAuth(saved.refreshToken);
-        await nativeAuth.save({
-          accessToken: refreshed.access_token,
-          refreshToken: refreshed.refresh_token,
-        });
-        setToken(refreshed.access_token);
-        setUserState(refreshed.user);
-      }
-      return true;
-    } catch (err) {
-      if (err instanceof ApiError && err.isAuth) {
-        await nativeAuth.clear();
-      }
-      return false;
-    } finally {
-      restoringRef.current = false;
+      return null;
     }
+    setToken(restored.accessToken);
+    setUserState(restored.user);
+    return restored.accessToken;
   }, []);
 
   useEffect(() => {

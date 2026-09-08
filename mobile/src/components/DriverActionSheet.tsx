@@ -27,6 +27,7 @@ import {
   stopTelemetryTrip,
 } from "../services/telemetryNative";
 import { waitForTripFinalization } from "../services/tripFinalization";
+import { runWithSessionRecovery } from "../services/sessionRecovery";
 
 type Props = {
   visible: boolean;
@@ -34,7 +35,7 @@ type Props = {
 };
 
 const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
-  const { token } = useAuth();
+  const { token, restore } = useAuth();
   const { me, vehicle, refresh } = useLiveData();
   const [loading, setLoading] = useState(false);
   const [socModalVisible, setSocModalVisible] = useState(false);
@@ -60,11 +61,14 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
     setLoading(true);
     setError(null);
     try {
-      await prepareTelemetryCollector(token, vehicle.id);
-      const trip = await api.startTrip(token, {
-        vehicle_id: vehicle.id,
-        starting_soc: startingSoc,
-        idempotency_key: `trip-${Date.now()}`,
+      const idempotencyKey = `trip-${Date.now()}`;
+      const trip = await runWithSessionRecovery(token, restore, async (sessionToken) => {
+        await prepareTelemetryCollector(sessionToken, vehicle.id);
+        return api.startTrip(sessionToken, {
+          vehicle_id: vehicle.id,
+          starting_soc: startingSoc,
+          idempotency_key: idempotencyKey,
+        });
       });
       await startTelemetryTrip(trip.id, vehicle.id);
       await refresh();
@@ -97,13 +101,16 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
       if (!telemetry.tripId) {
         throw new Error("No active native telemetry trip was found.");
       }
-      await api.completeTelemetryTrip(token, telemetry.tripId, {
-        ending_soc: endingSoc,
-        final_sequence_no: telemetry.finalSequenceNo,
-        location: telemetry.lastLocation,
-        idempotency_key: `end-${Date.now()}`,
+      const idempotencyKey = `end-${Date.now()}`;
+      const finalized = await runWithSessionRecovery(token, restore, async (sessionToken) => {
+        await api.completeTelemetryTrip(sessionToken, telemetry.tripId!, {
+          ending_soc: endingSoc,
+          final_sequence_no: telemetry.finalSequenceNo,
+          location: telemetry.lastLocation,
+          idempotency_key: idempotencyKey,
+        });
+        return waitForTripFinalization(sessionToken, telemetry.tripId!);
       });
-      const finalized = await waitForTripFinalization(token, telemetry.tripId);
       if (finalized.state === "completed") {
         setCalculationResult(finalized.overlayResult);
       } else {

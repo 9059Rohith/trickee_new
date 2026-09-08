@@ -34,6 +34,7 @@ import {
   startTelemetryTrip,
   stopTelemetryTrip,
 } from "../services/telemetryNative";
+import { resolveCollectorSync } from "../services/collectorSyncPolicy";
 import {
   connectLiveState,
   type LiveStateSnapshot,
@@ -63,7 +64,7 @@ const LiveDataContext = createContext<LiveDataValue | undefined>(undefined);
 export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { token, logout, setUser } = useAuth();
+  const { token, restore, setUser } = useAuth();
   const [me, setMe] = useState<MobileMe | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,7 +105,7 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
         if (err instanceof ApiError && err.isAuth) {
-          await logout();
+          await restore();
           return;
         }
         if (mode !== "poll" || meRef.current === null) {
@@ -122,7 +123,7 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
     },
-    [token, logout, setUser]
+    [token, restore, setUser]
   );
 
   // Initial load
@@ -134,24 +135,31 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
       setMe(null);
       setAlerts([]);
       setLoading(false);
-      stopTelemetryTrip().catch(() => {});
     }
     return () => {
       inFlight.current?.abort();
-      stopTelemetryTrip().catch(() => {});
     };
   }, [token, load]);
 
-  // GPS tracking tied to active trip
+  const liveTripId = me?.active_trip?.id ?? null;
+  const liveVehicleId = me?.vehicle?.id ?? null;
+  const liveDataResolved = me !== null;
+
+  // GPS tracking follows authoritative trip state but survives unresolved auth/data transitions.
   useEffect(() => {
     let cancelled = false;
-    const activeTripId = me?.active_trip?.id;
     const sync = async () => {
       try {
-        if (token && activeTripId && me?.vehicle) {
-          await ensureTelemetryDevice(token, me.vehicle.id);
-          await startTelemetryTrip(activeTripId, me.vehicle.id);
-        } else if (!cancelled) {
+        const decision = resolveCollectorSync(
+          Boolean(token),
+          liveDataResolved,
+          liveTripId,
+          liveVehicleId
+        );
+        if (decision.action === "start" && token) {
+          await ensureTelemetryDevice(token, decision.vehicleId);
+          await startTelemetryTrip(decision.tripId, decision.vehicleId);
+        } else if (decision.action === "stop" && !cancelled) {
           await stopTelemetryTrip().catch(() => {});
         }
       } catch (err) {
@@ -168,7 +176,7 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => {
       cancelled = true;
     };
-  }, [me?.active_trip?.id, me?.vehicle, token]);
+  }, [liveDataResolved, liveTripId, liveVehicleId, token]);
 
   useEffect(() => {
     const vehicleId = me?.vehicle?.id;

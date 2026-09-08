@@ -135,8 +135,10 @@ class TelemetryRepository(private val dao: TelemetryDao) : TelemetryUploadQueue 
         }
     suspend fun pendingCount(tripId: String): Int = dao.pendingCount(tripId)
     suspend fun pendingTripIds(): List<String> = dao.pendingTripIds()
-    suspend fun setTripState(tripId: String, state: TripState) {
-        check(dao.setTripState(tripId, state) == 1) { "Trip not found" }
+    suspend fun activateForCapture(tripId: String): Boolean {
+        val trip = requireNotNull(dao.trip(tripId)) { "Trip not found" }
+        if (!TripCaptureStartPolicy.canActivate(trip.state, trip.finalSequenceNo)) return false
+        return dao.activateForCapture(tripId) == 1
     }
 
     fun storagePressure(databaseBytes: Long, availableBytes: Long): StoragePressure =
