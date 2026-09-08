@@ -543,3 +543,25 @@ Remaining pilot evidence:
   remains separate from the locally verified high-priority reminder path until
   the GPS Android Firebase identity and a physical background-delivery trace are
   verified.
+
+### Daily planner production rollout — 2026-09-09
+
+- Deployed the daily-plan schema through the dedicated migration job after
+  Cloud SQL backup `1788891590710`.
+- API revision `trickee-pilot-api-00012-zb8` serves 100% of traffic at image
+  digest `sha256:3f9e86ac42ea62ea8542dac3d0766b1099019f0d8eb8010b4d98570fd3d4d321`.
+- Live canaries returned two Places results, one traffic-aware Route and an
+  allowlisted `parse_day_schedule` Groq call. The unavailable legacy model was
+  replaced with verified `openai/gpt-oss-20b`.
+- Reminder hardening reports permission denial, exposes retry and filters
+  expired departures.
+- Evidence is green: backend `149/149`, mobile `24/24`, TypeScript, ESLint,
+  Android `57/57`, release compilation, package/permission/signature checks and
+  registered Play upload SHA-1 verification.
+- Signed `1.0.12 (13)` AAB SHA-256 is
+  `14591D08AD3A29575755D040A5C7BB332CC7C6FE0E4EE824E3603E0BD32EAA69`;
+  APK SHA-256 is
+  `DE4A9007602D59055D73663CA46B749899416EB48FB97C997DB7C8F06AEAE04C`.
+  Play accepted version `13 (1.0.12)` on the release preview with only the
+  non-blocking missing-deobfuscation-file warning. Final publish and physical
+  handset proof remain outstanding.

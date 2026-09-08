@@ -416,3 +416,17 @@
 - Next release identity is `1.0.12 (13)`. Production deployment, artifact
   signature/hash, Play acceptance and physical background notification receipt
   are recorded only after their respective live gates complete.
+
+## 2026-09-09 - Daily planner deployed and Play bundle accepted
+
+- Ran the dedicated migration after Cloud SQL backup `1788891590710`, then
+  deployed API revision `trickee-pilot-api-00012-zb8` at 100% traffic.
+- Live canaries passed for health, Google Places, traffic-aware Routes and Groq
+  `parse_day_schedule`; selected verified model `openai/gpt-oss-20b`.
+- Hardened reminder permissions, retry UX and expired-alert filtering.
+- Full verification: backend `149/149`, mobile `24/24`, Android `57/57`,
+  TypeScript, ESLint, signed release compilation and identity checks.
+- Play validated `1.0.12 (13)`. AAB SHA-256:
+  `14591D08AD3A29575755D040A5C7BB332CC7C6FE0E4EE824E3603E0BD32EAA69`.
+  Its only warning is missing optional deobfuscation data; final internal
+  publish and physical-device proof remain pending.
