@@ -90,12 +90,26 @@ const DailyPlannerScreen: React.FC = () => {
       });
       setPlan(confirmed);
       await saveDailyPlan(confirmed);
-      const reminders = await schedulePlanReminders(confirmed);
-      setReminderStatus(
-        `${reminders.scheduled} high-priority departure reminder${reminders.scheduled === 1 ? "" : "s"} scheduled on this phone.`
-      );
+      await scheduleReminders(confirmed);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not confirm the daily plan.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const scheduleReminders = async (confirmedPlan = plan) => {
+    if (!confirmedPlan) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const reminders = await schedulePlanReminders(confirmedPlan);
+      setReminderStatus(
+        `${reminders.scheduled} high-priority departure reminder${reminders.scheduled === 1 ? "" : "s"} scheduled on this phone${reminders.skipped ? `; ${reminders.skipped} expired reminder${reminders.skipped === 1 ? " was" : "s were"} skipped` : ""}.`
+      );
+    } catch (caught) {
+      setReminderStatus(null);
+      setError(caught instanceof Error ? caught.message : "Could not schedule departure reminders.");
     } finally {
       setBusy(false);
     }
@@ -143,6 +157,11 @@ const DailyPlannerScreen: React.FC = () => {
               {plan.status !== "confirmed" && validation?.valid ? (
                 <TouchableOpacity style={styles.confirmButton} disabled={busy} onPress={confirm}>
                   <Text style={styles.confirmText}>Confirm, predict SOC and schedule alerts</Text>
+                </TouchableOpacity>
+              ) : null}
+              {plan.status === "confirmed" && !reminderStatus ? (
+                <TouchableOpacity style={styles.confirmButton} disabled={busy} onPress={() => scheduleReminders()}>
+                  <Text style={styles.confirmText}>Schedule high-priority reminders</Text>
                 </TouchableOpacity>
               ) : null}
               {reminderStatus ? <Text style={styles.success}>{reminderStatus}</Text> : null}

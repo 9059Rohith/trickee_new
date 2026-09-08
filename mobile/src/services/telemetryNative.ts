@@ -74,6 +74,27 @@ async function requestCollectorPermissions(): Promise<void> {
   }
 }
 
+async function requestPlannerLocationPermission(): Promise<void> {
+  const result = await PermissionsAndroid.request(
+    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+  );
+  if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+    throw new Error("Precise location is required to calculate the first route.");
+  }
+}
+
+async function requestReminderPermission(): Promise<void> {
+  if (Number(Platform.Version) < 33) return;
+  const result = await PermissionsAndroid.request(
+    PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+  );
+  if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+    throw new Error(
+      "High-priority notification permission is required to schedule departure alerts."
+    );
+  }
+}
+
 export async function ensureTelemetryDevice(
   userToken: string,
   vehicleId: string
@@ -137,7 +158,7 @@ export async function currentPlannerLocation(): Promise<{
   lat: number;
   lng: number;
 }> {
-  await requestCollectorPermissions();
+  await requestPlannerLocationPermission();
   const result = await requireAndroidModule().currentLocation();
   const lat = Number(result.lat);
   const lng = Number(result.lng);
@@ -154,7 +175,7 @@ export async function scheduleHighPriorityReminder(data: {
   dueAtMs: number;
   planId: string;
 }): Promise<void> {
-  await requestCollectorPermissions();
+  await requestReminderPermission();
   await requireAndroidModule().scheduleHighPriorityReminder(data);
 }
 

@@ -179,6 +179,9 @@ def confirm_daily_plan(
             continue
         departure = datetime.fromisoformat(departure_raw)
         departure_utc = departure.astimezone(timezone.utc).replace(tzinfo=None)
+        expires_at_utc = departure_utc + timedelta(minutes=30)
+        if expires_at_utc <= datetime.now(timezone.utc).replace(tzinfo=None):
+            continue
         destination = (leg.get("destination") or {}).get("name") or (leg.get("destination") or {}).get("query") or "your stop"
         arrival_soc = leg.get("arrival_soc_pct")
         soc_text = f" Estimated arrival SOC {arrival_soc:.1f}%." if arrival_soc is not None else " Arrival SOC is unavailable."
@@ -191,7 +194,7 @@ def confirm_daily_plan(
             payload={
                 "screen": "daily_planner", "plan_id": plan.id, "leg_index": leg["index"],
                 "delivery_priority": "high", "android_channel_id": "trickee_route_alerts_high",
-                "expires_at": (departure_utc + timedelta(minutes=30)).replace(tzinfo=timezone.utc).isoformat(),
+                "expires_at": expires_at_utc.replace(tzinfo=timezone.utc).isoformat(),
                 "route_source": leg.get("route_source"), "confidence": leg.get("confidence"),
             },
             status="pending", due_at=departure_utc - timedelta(minutes=15),

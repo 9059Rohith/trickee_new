@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -118,3 +118,23 @@ def test_other_driver_cannot_read_or_confirm_plan():
 
     assert client.get(f"/api/v1/daily-plans/{plan_id}", headers=other_headers).status_code == 404
     assert client.post(f"/api/v1/daily-plans/{plan_id}/confirm", headers=other_headers, json={"confirmation_key": "other-key", "origin": {"lat": 21.15, "lng": 72.80}}).status_code == 404
+
+
+def test_confirmation_does_not_enqueue_expired_departure_notifications():
+    _, headers = seed_driver()
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+    chat = client.post("/api/v1/daily-plans/chat", headers=headers, json={
+        "message": "Office at 9 am", "service_date": yesterday,
+        "timezone": "Asia/Kolkata", "starting_soc_pct": 80,
+    })
+    plan_id = chat.json()["data"]["plan"]["id"]
+
+    response = client.post(
+        f"/api/v1/daily-plans/{plan_id}/confirm", headers=headers,
+        json={"confirmation_key": "expired-alert", "origin": {"lat": 21.15, "lng": 72.80}},
+    )
+
+    assert response.status_code == 200
+    db = TestSession()
+    assert db.query(NotificationOutbox).count() == 0
+    db.close()
