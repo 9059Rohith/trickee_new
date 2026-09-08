@@ -37,7 +37,9 @@ class Settings(BaseSettings):
     external_api_timeout_seconds: float = Field(default=5.0, ge=1.0, le=20.0)
     external_api_cache_seconds: int = Field(default=300, ge=30, le=3600)
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    # This account exposes GPT-OSS for chat-completions tool calling; keep the
+    # model configurable so availability changes do not require protocol edits.
+    groq_model: str = "openai/gpt-oss-20b"
     llm_timeout_seconds: float = Field(default=8.0, ge=1.0, le=30.0)
 
     @property
