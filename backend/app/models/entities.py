@@ -137,6 +137,8 @@ class Device(Base):
     platform: Mapped[str] = mapped_column(String(20), nullable=False)
     device_model: Mapped[str] = mapped_column(String(100), nullable=False)
     app_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    fcm_registration_token: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
+    fcm_token_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

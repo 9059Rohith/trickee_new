@@ -439,3 +439,21 @@
   00:55`.
 - No automated or console gate is outstanding. Physical-device verification
   remains required; remote FCM delivery is still not claimed.
+
+## 2026-09-09 - Real map, route actions and FCM implementation
+
+- Removed mock map/charger behavior from the standalone GPS Driver and wired
+  live GPS, real OSM tiles, Google Places/Routes evidence, SOC-based range and
+  charging guidance, functional directions, and persisted nudge actions.
+- Separated live telemetry from stored model results in Monitoring and bounded
+  the LLM assistant behind an authoritative GPS/vehicle-summary tool.
+- Added durable Firebase HTTP v1 dispatch plus Android high-priority receipt,
+  deep links, deterministic de-duplication and native token rotation resync.
+- Deployed API revision `trickee-pilot-api-00014-bf9` at 100%; health and the
+  three required OpenAPI paths verify successfully. Full local gates pass:
+  backend 161, mobile 30, Android 59, TypeScript, ESLint and Terraform.
+- Did not build or publish `1.0.13 (14)`: Firebase project creation is denied
+  to the active Editor account. Owner `rhythm@trickee.co.in` must enable
+  Firebase on `trickee-jaswanth-pilot` and register
+  `com.trickee.gpsdriverapp`; then the notification worker, signed bundle and
+  physical high-priority background-delivery canary can be completed.

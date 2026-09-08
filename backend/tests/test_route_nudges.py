@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
-from app.models.entities import Driver, Fleet, NotificationOutbox, NudgeOutcome, User
+from app.models.entities import DailyPlan, Driver, Fleet, NotificationOutbox, NudgeOutcome, User
 from app.services.auth import create_access_token
 
 
@@ -130,3 +130,67 @@ def test_outcomes_are_idempotent_and_do_not_regress_lifecycle():
     db = TestSession()
     assert db.query(NudgeOutcome).count() == 1
     db.close()
+
+
+def test_inbox_enriches_legacy_daily_plan_nudge_with_route_evidence_and_destination():
+    user_id, driver_id, token = seed_driver("driver@example.com", "DRIVER-1")
+    db = TestSession()
+    plan = DailyPlan(
+        id="plan-legacy",
+        user_id=user_id,
+        driver_id=driver_id,
+        vehicle_id="vehicle-not-required-for-read",
+        service_date=datetime(2026, 9, 9).date(),
+        timezone="Asia/Kolkata",
+        starting_soc_pct=80,
+        source_message="Office at 9 am",
+        parser_source="deterministic",
+        draft_payload={"stops": []},
+        status="confirmed",
+        result_payload={
+            "legs": [
+                {
+                    "index": 0,
+                    "destination": {
+                        "name": "Office",
+                        "coordinates": {"lat": 21.171, "lng": 72.831},
+                    },
+                    "planned_departure_at": "2026-09-09T08:40:00+05:30",
+                    "arrival_soc_pct": 72.5,
+                    "route_source": "google_routes",
+                    "degraded_reason": None,
+                }
+            ]
+        },
+    )
+    db.add(plan)
+    db.add(
+        NotificationOutbox(
+            id="legacy-plan-nudge",
+            idempotency_key="daily-plan:plan-legacy:leg:0:departure",
+            user_id=user_id,
+            driver_id=driver_id,
+            planned_trip_id="plan-legacy",
+            nudge_type="daily_departure",
+            title="Leave soon",
+            body="Head to Office",
+            payload={"plan_id": "plan-legacy", "leg_index": 0},
+            status="pending",
+            due_at=datetime(2026, 9, 9, 3, 10),
+        )
+    )
+    db.commit()
+    db.close()
+
+    response = client.get(
+        "/api/v1/route-nudges/inbox",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"][0]["payload"]
+    assert payload["destination_lat"] == 21.171
+    assert payload["occurrence_id"] == "plan-legacy-leg-0"
+    assert payload["destination_lng"] == 72.831
+    assert payload["provider_source"] == "google_routes"
+    assert payload["degraded_reason"] is None

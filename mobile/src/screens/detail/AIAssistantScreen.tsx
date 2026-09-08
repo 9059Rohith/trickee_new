@@ -16,7 +16,11 @@ import { useAuth } from "../../context/AuthContext";
 import { useLiveData } from "../../context/LiveDataContext";
 import { api } from "../../services/api";
 
-type Message = { role: "user" | "assistant"; text: string };
+type Message = {
+  role: "user" | "assistant";
+  text: string;
+  evidence?: string;
+};
 
 const AIAssistantScreen: React.FC = () => {
   const { token } = useAuth();
@@ -46,7 +50,13 @@ const AIAssistantScreen: React.FC = () => {
       });
       setMessages((items) => [
         ...items,
-        { role: "assistant", text: reply.answer },
+        {
+          role: "assistant",
+          text: reply.answer,
+          evidence: reply.llm_used
+            ? `LLM response · authoritative tool: ${(reply.tools_called || []).join(", ") || "vehicle summary"}`
+            : "Deterministic fallback · authoritative vehicle summary",
+        },
       ]);
     } catch {
       setMessages((items) => [
@@ -84,6 +94,9 @@ const AIAssistantScreen: React.FC = () => {
             >
               {message.text}
             </Text>
+            {message.role === "assistant" && message.evidence ? (
+              <Text style={styles.evidence}>{message.evidence}</Text>
+            ) : null}
           </View>
         ))}
         {sending && (
@@ -134,6 +147,7 @@ const styles = StyleSheet.create({
   },
   userText: { color: Colors.buttonText, fontWeight: "700" },
   assistantText: { color: Colors.white, lineHeight: 20 },
+  evidence: { color: Colors.secondaryText, fontSize: 10, lineHeight: 15, marginTop: 7 },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",

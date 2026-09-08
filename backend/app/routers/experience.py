@@ -1,15 +1,19 @@
 """Compatibility endpoints used by the complete driver experience."""
 from __future__ import annotations
 
+import math
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.entities import MobileTripSession, TripFeature, TripPrediction, User
+from app.models.entities import Driver, MobileTripSession, TripFeature, TripPrediction, User, Vehicle
 from app.schemas.api import ok, utc_iso
 from app.services.auth import get_current_user
+from app.services.daily_plan_tools import daily_plan_tools
 from app.services.gps_prediction_service import get_vehicle_gps_summary
+from app.services.vehicle_assistant import vehicle_assistant
 
 router = APIRouter(tags=["driver-experience"])
 
@@ -75,24 +79,110 @@ class ChargerRequest(BaseModel):
     vehicle_id: str
     lat: float = Field(ge=-90, le=90)
     lng: float = Field(ge=-180, le=180)
-    soc: float = Field(ge=0, le=100)
+    soc: float | None = Field(default=None, ge=0, le=100)
     destination_km: float = Field(ge=0)
     available_time_min: float = Field(ge=0)
 
 
 @router.post("/chargers/recommend")
 def recommend_chargers(
-    _body: ChargerRequest,
+    body: ChargerRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return ok(
-        {
-            "recommended_charger": None,
-            "reason": "No verified charger provider is configured for this build.",
-            "alternatives": [],
-            "fallback_used": True,
-        }
+    driver = db.query(Driver).filter(Driver.id == body.driver_id).first()
+    vehicle = db.query(Vehicle).filter(Vehicle.id == body.vehicle_id).first()
+    if (
+        not driver
+        or not vehicle
+        or current_user.driver_id != driver.id
+        or driver.assigned_vehicle_id != vehicle.id
+        or current_user.fleet_id != vehicle.fleet_id
+    ):
+        raise HTTPException(403, "Not allowed to request guidance for this vehicle")
+
+    def haversine_km(lat: float, lng: float) -> float:
+        radius = 6371.0
+        d_lat = math.radians(lat - body.lat)
+        d_lng = math.radians(lng - body.lng)
+        a = (
+            math.sin(d_lat / 2) ** 2
+            + math.cos(math.radians(body.lat))
+            * math.cos(math.radians(lat))
+            * math.sin(d_lng / 2) ** 2
+        )
+        return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    provider_rows = daily_plan_tools.find_route_chargers(
+        {"lat": body.lat, "lng": body.lng}, radius_m=5000
     )
+    chargers = []
+    for row in provider_rows:
+        coordinates = row.get("coordinates") or {}
+        lat = coordinates.get("lat")
+        lng = coordinates.get("lng")
+        if not isinstance(lat, (int, float)) or not isinstance(lng, (int, float)):
+            continue
+        chargers.append(
+            {
+                "place_id": row.get("place_id"),
+                "name": row.get("name"),
+                "formatted_address": row.get("formatted_address"),
+                "distance_km": round(haversine_km(float(lat), float(lng)), 2),
+                "rating": row.get("rating"),
+                "charger_type": row.get("charger_type"),
+                "estimated_soc_gain": None,
+                "availability_confirmed": row.get("availability_confirmed") is True,
+                "lat": float(lat),
+                "lng": float(lng),
+                "google_maps_uri": row.get("google_maps_uri"),
+                "provider_source": row.get("source") or "unavailable",
+            }
+        )
+    chargers.sort(key=lambda item: item["distance_km"])
+
+    estimated_range = (
+        vehicle.certified_range * body.soc / 100.0
+        if body.soc is not None and vehicle.certified_range and vehicle.certified_range > 0
+        else None
+    )
+    needs_charge = body.soc is not None and (body.soc <= 25 or (
+        estimated_range is not None
+        and body.destination_km > 0
+        and estimated_range < body.destination_km * 1.2
+    ))
+    charge_advice = (
+        "soc_required" if body.soc is None
+        else "charge_now" if needs_charge
+        else "plan_charging" if body.soc <= 40
+        else "not_needed"
+    )
+    recommended = chargers[0] if needs_charge and chargers else None
+    alternatives = chargers[1:] if recommended else chargers
+    if not chargers:
+        reason = "No verified nearby Google Places charger listing is available."
+    elif body.soc is None:
+        reason = "Nearby verified station listings are shown; add SOC for charging advice."
+    elif needs_charge:
+        reason = (
+            "Charging is recommended from the current SOC and route reserve. "
+            "The station listing is verified, but live connector availability is not."
+        )
+    else:
+        reason = (
+            "Charging is not required from the current SOC and destination estimate; "
+            "nearby verified station listings are shown as options."
+        )
+    return ok({
+        "recommended_charger": recommended,
+        "reason": reason,
+        "alternatives": alternatives,
+        "fallback_used": not bool(chargers),
+        "charge_advice": charge_advice,
+        "provider_source": "google_places" if chargers else "unavailable",
+        "evaluated_soc_pct": body.soc,
+        "estimated_range_km": estimated_range,
+    })
 
 
 class AssistantRequest(BaseModel):
@@ -109,28 +199,16 @@ def assistant_message(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if current_user.driver_id != body.driver_id:
+        raise HTTPException(403, "Not allowed to use assistant for this driver")
     summary = get_vehicle_gps_summary(db, body.vehicle_id)
     if "error" in summary:
         raise HTTPException(404, "Vehicle not found")
-    prediction = summary.get("latest_prediction") or {}
-    soc = summary.get("soc") or {}
-    parts = ["I can only report verified or explicitly estimated GPS-first data."]
-    if prediction.get("wh_per_km") is not None:
-        parts.append(
-            f"Estimated efficiency is {prediction['wh_per_km']:.1f} Wh/km "
-            f"with {prediction.get('confidence') or 'low'} confidence."
-        )
-    if soc.get("is_recent"):
-        parts.append(f"The latest SOC reading is {soc['value']:.1f}%.")
-    else:
-        parts.append("Add a recent SOC reading before using any remaining-range estimate.")
-    return ok(
-        {
-            "intent": "gps_vehicle_summary",
-            "answer": " ".join(parts),
-            "tools_called": ["gps_vehicle_summary"],
-            "confidence": 0.8 if prediction else 0.5,
-            "escalated": False,
-            "fallback_used": False,
-        }
-    )
+    result = vehicle_assistant.answer(message=body.message, summary=summary)
+    return ok({
+        "intent": "gps_vehicle_summary",
+        **result,
+        "confidence": 0.8 if summary.get("latest_prediction") else 0.5,
+        "escalated": False,
+        "fallback_used": not result["llm_used"],
+    })

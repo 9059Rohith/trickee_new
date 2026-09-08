@@ -345,6 +345,11 @@ export const api = {
   assistantMessage: (token: string, data: any) =>
     request<any>("POST", "/assistant/message", token, data),
 
+  registerDevicePushToken: (token: string, deviceId: string, pushToken: string) =>
+    request<any>("PUT", `/api/v2/devices/${deviceId}/push-token`, token, {
+      token: pushToken,
+    }),
+
   transcribeVoice: async (
     _token: string,
     _fileUri: string

@@ -22,3 +22,9 @@ resource "google_storage_bucket_iam_member" "archive_verifier" {
   role   = "roles/storage.objectViewer"
   member = "serviceAccount:${google_service_account.role["archive"].email}"
 }
+
+resource "google_project_iam_member" "fcm_sender" {
+  project = var.project_id
+  role    = "roles/firebasecloudmessaging.admin"
+  member  = "serviceAccount:${google_service_account.role["notification-fcm"].email}"
+}

@@ -54,9 +54,25 @@ if (releaseStoreFile && !releaseStoreFile.isAbsolute() && externalSigningPropert
 def releaseTaskRequested = gradle.startParameter.taskNames.any {
     it.toLowerCase(Locale.ROOT).contains("release")
 }
+def firebasePropertyNames = [
+    "TRICKEE_FIREBASE_API_KEY",
+    "TRICKEE_FIREBASE_APP_ID",
+    "TRICKEE_FIREBASE_PROJECT_ID",
+    "TRICKEE_FIREBASE_SENDER_ID",
+]
+def hasFirebaseConfig = firebasePropertyNames.every {
+    def value = project.findProperty(it)?.toString()
+        ?: externalSigningProperties.getProperty(it)
+    value != null && !value.trim().isEmpty()
+}
 if (releaseTaskRequested && !hasReleaseSigning) {
     throw new GradleException(
         "GPS Driver release builds require the registered upload key through all TRICKEE_RELEASE_* properties or TRICKEE_RELEASE_PROPERTIES_FILE."
+    )
+}
+if (releaseTaskRequested && !hasFirebaseConfig) {
+    throw new GradleException(
+        "GPS Driver release builds require all TRICKEE_FIREBASE_* properties so FCM cannot be silently omitted."
     )
 }
 
@@ -74,12 +90,16 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        versionCode 13
-        versionName "1.0.12"
+        versionCode 14
+        versionName "1.0.13"
         manifestPlaceholders = [usesCleartextTraffic: "false"]
         buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", "\"${project.findProperty('TRICKEE_GOOGLE_WEB_CLIENT_ID') ?: ''}\""
         buildConfigField "String", "API_ORIGIN", "\"${project.findProperty('TRICKEE_API_ORIGIN') ?: ''}\""
         buildConfigField "String", "WEBSOCKET_ORIGIN", "\"${project.findProperty('TRICKEE_WEBSOCKET_ORIGIN') ?: project.findProperty('TRICKEE_API_ORIGIN') ?: ''}\""
+        buildConfigField "String", "FIREBASE_API_KEY", "\"${project.findProperty('TRICKEE_FIREBASE_API_KEY') ?: externalSigningProperties.getProperty('TRICKEE_FIREBASE_API_KEY') ?: ''}\""
+        buildConfigField "String", "FIREBASE_APP_ID", "\"${project.findProperty('TRICKEE_FIREBASE_APP_ID') ?: externalSigningProperties.getProperty('TRICKEE_FIREBASE_APP_ID') ?: ''}\""
+        buildConfigField "String", "FIREBASE_PROJECT_ID", "\"${project.findProperty('TRICKEE_FIREBASE_PROJECT_ID') ?: externalSigningProperties.getProperty('TRICKEE_FIREBASE_PROJECT_ID') ?: ''}\""
+        buildConfigField "String", "FIREBASE_SENDER_ID", "\"${project.findProperty('TRICKEE_FIREBASE_SENDER_ID') ?: externalSigningProperties.getProperty('TRICKEE_FIREBASE_SENDER_ID') ?: ''}\""
     }
 
     signingConfigs {
@@ -132,6 +152,8 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
+    implementation("com.google.firebase:firebase-messaging")
     kapt("androidx.room:room-compiler:2.8.4")
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")

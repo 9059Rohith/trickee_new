@@ -49,6 +49,8 @@ export type NativeTelemetryRetryResult = {
 
 const nativeTelemetry = NativeModules.TrickeeTelemetry;
 
+type NativePushToken = { configured: boolean; token?: string | null };
+
 function requireAndroidModule() {
   if (Platform.OS !== "android" || !nativeTelemetry) {
     throw new Error(
@@ -102,6 +104,7 @@ export async function ensureTelemetryDevice(
   const module = requireAndroidModule();
   const current = (await module.status()) as NativeTelemetryStatus;
   if (current.deviceId && current.vehicleId === vehicleId) {
+    await registerPushNotifications(userToken, current.deviceId).catch(() => undefined);
     return current;
   }
   const info = (await module.installationInfo()) as NativeInstallationInfo;
@@ -119,7 +122,26 @@ export async function ensureTelemetryDevice(
     accessToken: session.access_token,
     refreshToken: session.refresh_token,
   });
+  await registerPushNotifications(userToken, session.device.id).catch(() => undefined);
   return module.status();
+}
+
+export async function registerPushNotifications(
+  userToken: string,
+  deviceId: string
+): Promise<{ configured: boolean; registered: boolean }> {
+  await requestReminderPermission();
+  const result = (await requireAndroidModule().pushToken()) as NativePushToken;
+  if (!result.configured || !result.token) {
+    return { configured: false, registered: false };
+  }
+  await api.registerDevicePushToken(userToken, deviceId, result.token);
+  return { configured: true, registered: true };
+}
+
+export async function showTestHighPriorityNotification(): Promise<void> {
+  await requestReminderPermission();
+  await requireAndroidModule().showTestHighPriorityNotification();
 }
 
 export async function prepareTelemetryCollector(

@@ -7,6 +7,15 @@ outbox relay and each processor; one-shot migration/archive/retention jobs; a
 private versioned archive bucket; Secret Manager; Artifact Registry; and
 role-specific service accounts.
 
+The `notification-fcm` service claims due notification-outbox rows and sends
+high-priority, data-only FCM messages with Application Default Credentials.
+The Android build must receive `TRICKEE_FIREBASE_API_KEY`,
+`TRICKEE_FIREBASE_APP_ID`, `TRICKEE_FIREBASE_PROJECT_ID`, and
+`TRICKEE_FIREBASE_SENDER_ID` as Gradle properties. Firebase must first be added
+to this Google Cloud project and the Android app must be registered for
+`com.trickee.gpsdriverapp`; otherwise the app deliberately reports push as
+unconfigured instead of crashing.
+
 No credentials, secret values, Terraform state, or service-account keys belong
 in this repository. Supply sensitive variables through the company CI secret
 store. Use an immutable `image` value containing `@sha256:`.

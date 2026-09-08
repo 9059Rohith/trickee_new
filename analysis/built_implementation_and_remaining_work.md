@@ -576,3 +576,36 @@ Remaining pilot evidence:
 - Publication is complete. The remaining release gate is physical-handset
   verification of update-in-place migration, planner chat, route/SOC output,
   background reminders and a fresh start/end trip cycle.
+
+### Real navigation, vehicle intelligence and FCM hardening — 2026-09-09
+
+- Replaced the drawn/mock map with real OpenStreetMap tiles and live vehicle
+  coordinates. Live Map and Route Intelligence now use Google Places/Routes
+  evidence, real directions links, provider/degraded-state labels and
+  SOC/range-aware charging advice. Unsupported charger availability, power and
+  wait times remain explicitly unknown.
+- Monitoring now separates the live GPS packet, sequence and accumulated trip
+  distance from the latest stored model prediction. The assistant uses Groq
+  tool calling but can only explain the authoritative driver/vehicle summary
+  returned by backend functions; it has a truthful deterministic fallback.
+- Route Updates now persist Accept/Dismiss outcomes, show the action state,
+  enrich legacy notifications with coordinates/route evidence and open a
+  universal HTTPS Google Maps directions URL. Daily-plan and remote push alerts
+  share an occurrence ID so one replaces the other instead of duplicating it.
+- Added Firebase HTTP v1 dispatch, durable retries, invalid-token disabling,
+  high-priority data notifications, Android deep links and native token-rotation
+  resync with access-token refresh. Release builds fail closed if any Firebase
+  app identity value is missing.
+- Database migration `0007` is live. Cloud Run API revision
+  `trickee-pilot-api-00014-bf9` serves 100% of traffic from image digest
+  `sha256:ebaf152e8bdd75fbd0fc4afab23e35a275e72ef29f749b088d723a78012a9b7f`;
+  health and OpenAPI checks confirm the device-token, charger and assistant
+  endpoints, with no revision error logs in the verification window.
+- Fresh local evidence: backend `161 passed`, mobile `30 passed`, Android JVM
+  `59 passed`, TypeScript and ESLint pass, Terraform formats and validates.
+- Live remote FCM and Play `1.0.13 (14)` remain blocked: the active Google
+  account is an Editor, Firebase is not enabled on `trickee-jaswanth-pilot`, and
+  `projects:addFirebase` returns HTTP 403. Project Owner
+  `rhythm@trickee.co.in` must add Firebase to that existing project and register
+  Android package `com.trickee.gpsdriverapp`. A physical background push/tap
+  trace is still required before remote notifications can be called verified.

@@ -100,7 +100,7 @@ export type RouteNudgeEvent =
   | "followed";
 
 export type RouteNudgePayload = {
-  screen: "route_nudge";
+  screen: "route_nudge" | "daily_planner";
   decision_id?: string;
   planned_trip_id?: string;
   selected_route_id?: string | null;
@@ -115,6 +115,7 @@ export type RouteNudgePayload = {
   destination_lng?: number | null;
   place_confirmed?: boolean | null;
   availability_confirmed?: boolean | null;
+  google_maps_uri?: string | null;
 };
 
 export type RouteNudgeOutcome = {
@@ -230,6 +231,7 @@ export type TripSession = {
   destination_lng?: number;
   confidence?: number;
   source?: string;
+  starting_soc?: number | null;
 };
 
 export type Trip = {
@@ -254,6 +256,7 @@ export type Trip = {
 };
 
 export type ChargerOption = {
+  place_id?: string | null;
   name?: string | null;
   distance_km?: number | null;
   rating?: number | null;
@@ -263,6 +266,9 @@ export type ChargerOption = {
   availability_confirmed?: boolean | null;
   lat?: number | null;
   lng?: number | null;
+  google_maps_uri?: string | null;
+  provider_source?: string | null;
+  formatted_address?: string | null;
 };
 
 export type ChargerRecommendation = {
@@ -270,6 +276,10 @@ export type ChargerRecommendation = {
   reason: string;
   alternatives: ChargerOption[];
   fallback_used: boolean;
+  charge_advice?: "charge_now" | "plan_charging" | "not_needed" | "soc_required";
+  provider_source?: string;
+  evaluated_soc_pct?: number;
+  estimated_range_km?: number | null;
 };
 
 // --- GPS Raw Sample (§6.1) ---

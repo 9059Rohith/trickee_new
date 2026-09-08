@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     # model configurable so availability changes do not require protocol edits.
     groq_model: str = "openai/gpt-oss-20b"
     llm_timeout_seconds: float = Field(default=8.0, ge=1.0, le=30.0)
+    fcm_project_id: str = ""
+    fcm_timeout_seconds: float = Field(default=8.0, ge=1.0, le=30.0)
 
     @property
     def allowed_origin_list(self) -> list[str]:

@@ -20,6 +20,7 @@ import { api } from "../../services/api";
 import { schedulePlanReminders } from "../../services/dailyPlanNotifications";
 import { loadDailyPlan, saveDailyPlan, validateDailyPlanDraft } from "../../services/dailyPlans";
 import { currentPlannerLocation } from "../../services/telemetryNative";
+import { showTestHighPriorityNotification } from "../../services/telemetryNative";
 import type { DailyPlan } from "../../services/types";
 
 const localDate = () => {
@@ -41,6 +42,16 @@ const DailyPlannerScreen: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reminderStatus, setReminderStatus] = useState<string | null>(null);
+
+  const testNotification = async () => {
+    setError(null);
+    try {
+      await showTestHighPriorityNotification();
+      setReminderStatus("Test notification sent. Confirm it appeared in the Android notification tray.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not show a test notification.");
+    }
+  };
 
   useEffect(() => {
     loadDailyPlan().then(setPlan).catch(() => undefined);
@@ -142,6 +153,9 @@ const DailyPlannerScreen: React.FC = () => {
           <TouchableOpacity style={styles.primaryButton} disabled={busy} onPress={createDraft}>
             {busy ? <ActivityIndicator color={Colors.darkText} /> : <Text style={styles.primaryText}>Ask AI to structure my day</Text>}
           </TouchableOpacity>
+          <TouchableOpacity style={styles.testButton} disabled={busy} onPress={testNotification}>
+            <Text style={styles.testButtonText}>Send a test notification now</Text>
+          </TouchableOpacity>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {reply ? <View style={styles.assistantBubble}><Text style={styles.assistantText}>{reply}</Text></View> : null}
           {plan ? (
@@ -187,6 +201,8 @@ const styles = StyleSheet.create({
   half: { flex: 1 },
   primaryButton: { minHeight: 50, borderRadius: 14, backgroundColor: Colors.trickeeYellow, alignItems: "center", justifyContent: "center", padding: 10 },
   primaryText: { color: Colors.darkText, fontWeight: "900" },
+  testButton: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: Colors.neonBlue, alignItems: "center", justifyContent: "center", padding: 10 },
+  testButtonText: { color: Colors.neonBlue, fontWeight: "800" },
   section: { gap: 11, marginTop: 8 },
   sectionTitle: { color: Colors.white, fontSize: 20, fontWeight: "900" },
   stopRow: { flexDirection: "row", padding: 13, borderRadius: 12, backgroundColor: Colors.premiumCardBg },

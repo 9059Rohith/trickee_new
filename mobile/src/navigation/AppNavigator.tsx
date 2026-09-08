@@ -29,6 +29,15 @@ const RootStack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
 const MainTab = createBottomTabNavigator();
 const navigationRef = createNavigationContainerRef<any>();
+const linking = {
+  prefixes: ["trickeegps://"],
+  config: {
+    screens: {
+      RouteNudges: "route-nudges",
+      DailyPlanner: "daily-planner",
+    },
+  },
+};
 
 function AuthNavigator() {
   return (
@@ -120,7 +129,7 @@ export default function AppNavigator() {
     user?.role === "fleet_admin" ||
     user?.role === "admin";
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} linking={linking}>
       <RootStack.Navigator
         screenOptions={{
           headerShown: false,

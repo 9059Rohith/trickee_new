@@ -96,6 +96,15 @@ def test_chat_persists_driver_scoped_draft_and_confirm_schedules_high_priority_o
     assert len(notices) == 2
     assert all(n.payload["delivery_priority"] == "high" for n in notices)
     assert all(n.payload["android_channel_id"] == "trickee_route_alerts_high" for n in notices)
+    first_payload = notices[0].payload
+    assert first_payload["screen"] == "route_nudge"
+    assert first_payload["provider_source"] == "test_routes"
+    assert first_payload["degraded_reason"] is None
+    assert first_payload["destination_lat"] == 21.17
+    assert first_payload["occurrence_id"] == f"{plan_id}-leg-0"
+    assert first_payload["destination_lng"] == 72.83
+    assert first_payload["arrival_soc_pct"] is not None
+    assert first_payload["leave_at"] == first.json()["data"]["result"]["legs"][0]["planned_departure_at"]
     db.close()
 
 

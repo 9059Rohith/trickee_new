@@ -13,12 +13,13 @@ import EstimatedBadge from "../../components/EstimatedBadge";
 import ConfidenceIndicator from "../../components/ConfidenceIndicator";
 import { LoadingState, ErrorState } from "../../components/StateViews";
 import { useLiveData } from "../../context/LiveDataContext";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 const fmt = (val: number | null | undefined, d = 1) =>
   typeof val === "number" && Number.isFinite(val) ? val.toFixed(d) : "--";
 
 const MonitoringScreen: React.FC = () => {
-  const { me, vehicle, gpsSummary, loading, error, refresh } = useLiveData();
+  const { me, vehicle, gpsSummary, liveState, loading, error, refresh } = useLiveData();
 
   if (loading && !me) {
     return <LoadingState />;
@@ -41,11 +42,42 @@ const MonitoringScreen: React.FC = () => {
         />
       </View>
 
-      {/* Energy Metrics */}
       <GlassCard style={styles.card} cornerRadius={16}>
         <View style={styles.cardInner}>
           <View style={styles.row}>
-            <Text style={styles.cardLabel}>ENERGY METRICS</Text>
+            <Text style={styles.cardLabel}>LIVE GPS PIPELINE</Text>
+            <View style={styles.liveBadge}>
+              <Icon
+                name={liveState?.freshness === "LIVE" ? "access-point" : "clock-outline"}
+                size={13}
+                color={liveState?.freshness === "LIVE" ? Colors.neonGreen : Colors.trickeeYellow}
+              />
+              <Text style={styles.liveBadgeText}>{liveState?.freshness || "WAITING"}</Text>
+            </View>
+          </View>
+          <View style={styles.grid}>
+            <View style={styles.gridItem}>
+              <Text style={styles.gridLabel}>Sequence</Text>
+              <Text style={styles.gridValue}>{liveState?.sequence_no ?? "--"}</Text>
+            </View>
+            <View style={styles.gridItem}>
+              <Text style={styles.gridLabel}>Trip distance</Text>
+              <Text style={styles.gridValue}>{fmt(liveState?.distance_km, 2)} km</Text>
+            </View>
+          </View>
+          <Text style={styles.evidenceText}>
+            {liveState?.event_time
+              ? `Last committed GPS event: ${new Date(liveState.event_time).toLocaleString()}`
+              : "No committed live GPS packet is available yet."}
+          </Text>
+        </View>
+      </GlassCard>
+
+      {/* Latest stored model prediction, distinct from the live GPS stream above. */}
+      <GlassCard style={styles.card} cornerRadius={16}>
+        <View style={styles.cardInner}>
+          <View style={styles.row}>
+            <Text style={styles.cardLabel}>LATEST STORED MODEL PREDICTION</Text>
             <ConfidenceIndicator confidence={pred?.confidence} />
           </View>
 
@@ -175,6 +207,9 @@ const styles = StyleSheet.create({
   specWarning: { color: Colors.red, fontSize: 12, fontWeight: "600" },
   specGrid: { gap: 4 },
   specItem: { color: Colors.primaryText, fontSize: 13 },
+  liveBadge: { flexDirection: "row", alignItems: "center", gap: 5 },
+  liveBadgeText: { color: Colors.primaryText, fontSize: 10, fontWeight: "800" },
+  evidenceText: { color: Colors.secondaryText, fontSize: 11, lineHeight: 17, marginTop: 10 },
 });
 
 export default MonitoringScreen;

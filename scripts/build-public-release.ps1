@@ -112,8 +112,8 @@ if ($actualApplicationId -ne $publicApplicationId) {
 if ($targetSdk -ne '36') {
     throw "Wrong target SDK in release manifest. Expected 36, found $targetSdk."
 }
-if ($versionCode -ne '13' -or $versionName -ne '1.0.12') {
-    throw "Wrong release version. Expected 1.0.12 (13), found $versionName ($versionCode)."
+if ($versionCode -ne '14' -or $versionName -ne '1.0.13') {
+    throw "Wrong release version. Expected 1.0.13 (14), found $versionName ($versionCode)."
 }
 $requiredPermissions = @(
     'android.permission.INTERNET',
@@ -148,6 +148,18 @@ if ($buildConfigText -notmatch 'API_ORIGIN\s*=\s*"https://') {
 }
 if ($buildConfigText -notmatch 'WEBSOCKET_ORIGIN\s*=\s*"https://') {
     throw 'Release WebSocket origin is missing or is not HTTPS.'
+}
+$firebaseBuildConfigFields = @(
+    'FIREBASE_API_KEY',
+    'FIREBASE_APP_ID',
+    'FIREBASE_PROJECT_ID',
+    'FIREBASE_SENDER_ID'
+)
+$missingFirebaseFields = @($firebaseBuildConfigFields | Where-Object {
+    $buildConfigText -notmatch ('{0}\s*=\s*"[^\"]+"' -f [regex]::Escape($_))
+})
+if ($missingFirebaseFields.Count -gt 0) {
+    throw "Release Firebase configuration is missing: $($missingFirebaseFields -join ', ')."
 }
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem

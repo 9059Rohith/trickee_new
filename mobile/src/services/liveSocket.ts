@@ -9,6 +9,7 @@ export type LiveStateSnapshot = {
   gps_available: boolean;
   location: { lat: number; lng: number } | null;
   health?: Record<string, unknown> | null;
+  distance_km?: number;
   projection_status: string;
 };
 

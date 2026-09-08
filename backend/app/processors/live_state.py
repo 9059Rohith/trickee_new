@@ -1,11 +1,49 @@
 """Rebuildable live-state projection from canonical telemetry windows."""
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.models.entities import TelemetryWindow, VehicleLiveStateSnapshot
 from app.streams.redis_client import StreamClient
+
+
+def advance_live_distance_km(
+    *,
+    previous_trip_id: str | None,
+    next_trip_id: str,
+    previous_latitude: float | None,
+    previous_longitude: float | None,
+    next_latitude: float | None,
+    next_longitude: float | None,
+    previous_distance_km: float,
+) -> float:
+    if previous_trip_id != next_trip_id:
+        return 0.0
+    values = (
+        previous_latitude,
+        previous_longitude,
+        next_latitude,
+        next_longitude,
+    )
+    if any(value is None or not math.isfinite(float(value)) for value in values):
+        return max(0.0, previous_distance_km)
+    lat1, lng1, lat2, lng2 = (float(value) for value in values)
+    radius = 6371.0
+    d_lat = math.radians(lat2 - lat1)
+    d_lng = math.radians(lng2 - lng1)
+    a = (
+        math.sin(d_lat / 2) ** 2
+        + math.cos(math.radians(lat1))
+        * math.cos(math.radians(lat2))
+        * math.sin(d_lng / 2) ** 2
+    )
+    step = radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    # A one-window teleport is invalid GPS for live range accounting.
+    if step > 2.0:
+        return max(0.0, previous_distance_km)
+    return max(0.0, previous_distance_km) + step
 
 
 def new_live_state(vehicle_id: str) -> VehicleLiveStateSnapshot:
@@ -56,6 +94,16 @@ def project_live_state(db: Session, event: dict, streams: StreamClient | None = 
         db.add(state)
     if latest.sequence_no <= state.sequence_no:
         return
+    previous_health = state.health_payload or {}
+    live_distance_km = advance_live_distance_km(
+        previous_trip_id=state.trip_id,
+        next_trip_id=latest.trip_id,
+        previous_latitude=state.latitude,
+        previous_longitude=state.longitude,
+        next_latitude=latest.latitude if latest.gps_available else None,
+        next_longitude=latest.longitude if latest.gps_available else None,
+        previous_distance_km=float(previous_health.get("live_distance_km") or 0.0),
+    )
     state.trip_id = latest.trip_id
     state.state_version += 1
     state.sequence_no = latest.sequence_no
@@ -64,7 +112,10 @@ def project_live_state(db: Session, event: dict, streams: StreamClient | None = 
     state.gps_available = latest.gps_available
     state.latitude = latest.latitude
     state.longitude = latest.longitude
-    state.health_payload = latest.health_payload
+    state.health_payload = {
+        **(latest.health_payload or {}),
+        "live_distance_km": round(live_distance_km, 4),
+    }
     state.freshness = freshness_label(latest.received_at, gps_available=latest.gps_available)
     state.projection_status = "CURRENT"
     db.flush()
@@ -88,5 +139,6 @@ def snapshot_dict(state: VehicleLiveStateSnapshot, *, now: datetime | None = Non
         "gps_available": bool(state.gps_available),
         "location": {"lat": state.latitude, "lng": state.longitude} if state.gps_available else None,
         "health": state.health_payload,
+        "distance_km": float((state.health_payload or {}).get("live_distance_km") or 0.0),
         "projection_status": state.projection_status,
     }

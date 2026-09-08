@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Linking,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../../constants/Colors";
@@ -20,6 +21,8 @@ import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
 import { DEFAULT_MAP_CENTER } from "../../config";
 import type { ChargerOption } from "../../services/types";
+import { buildDirectionsUrl } from "../../services/mapNavigation";
+import { estimateLiveSoc } from "../../services/liveSoc";
 
 const FilterPill: React.FC<{
   title: string;
@@ -93,6 +96,7 @@ const LiveMapScreen: React.FC = () => {
     driver,
     gpsSummary,
     latestSoc,
+    liveState,
     refreshing,
     refresh,
   } = useLiveData();
@@ -100,22 +104,37 @@ const LiveMapScreen: React.FC = () => {
   const [filterFast, setFilterFast] = useState(false);
   const [filterNormal, setFilterNormal] = useState(false);
   const [filterAvailable, setFilterAvailable] = useState(false);
-  const [filterSafeRoute, setFilterSafeRoute] = useState(false);
-
   const [chargers, setChargers] = useState<ChargerOption[]>([]);
   const [chargerReason, setChargerReason] = useState<string | null>(null);
   const [chargersLoading, setChargersLoading] = useState(false);
   const [chargersError, setChargersError] = useState<string | null>(null);
+  const [chargeAdvice, setChargeAdvice] = useState<string | null>(null);
 
-  const vehicleLat = telemetry?.lat ?? DEFAULT_MAP_CENTER.latitude;
-  const vehicleLng = telemetry?.lng ?? DEFAULT_MAP_CENTER.longitude;
+  const hasVehicleLocation = telemetry?.lat != null && telemetry?.lng != null;
+  const vehicleLat = hasVehicleLocation ? telemetry!.lat! : DEFAULT_MAP_CENTER.latitude;
+  const vehicleLng = hasVehicleLocation ? telemetry!.lng! : DEFAULT_MAP_CENTER.longitude;
+  // Re-query roughly every 100 m instead of on every one-second GPS packet.
+  const chargerLat = Math.round(vehicleLat * 1000) / 1000;
+  const chargerLng = Math.round(vehicleLng * 1000) / 1000;
   const vehicleCode = vehicle?.vehicle_code || "No vehicle";
-  const soc = gpsSummary?.soc?.is_recent ? latestSoc : null;
-  const range = gpsSummary?.soc?.is_recent
-    ? gpsSummary.estimated_range_km ?? null
-    : null;
-  const speed = telemetry?.speed ?? 0;
   const activeTrip = me?.active_trip ?? null;
+  const storedSoc = gpsSummary?.soc?.is_recent ? latestSoc : null;
+  const liveSoc = activeTrip
+    ? estimateLiveSoc({
+        startingSocPct: activeTrip.starting_soc,
+        distanceKm: liveState?.distance_km,
+        usableKwh: vehicle?.usable_kwh,
+        whPerKm: gpsSummary?.latest_prediction?.wh_per_km,
+      })
+    : null;
+  const soc = liveSoc ?? storedSoc;
+  const range =
+    soc != null && vehicle?.usable_kwh && gpsSummary?.latest_prediction?.wh_per_km
+      ? (soc * vehicle.usable_kwh * 10) / gpsSummary.latest_prediction.wh_per_km
+      : gpsSummary?.soc?.is_recent
+      ? gpsSummary.estimated_range_km ?? null
+      : null;
+  const speed = telemetry?.speed ?? 0;
 
   const dest = useMemo(
     () =>
@@ -139,10 +158,10 @@ const LiveMapScreen: React.FC = () => {
         !token ||
         !driver ||
         !vehicle ||
-        telemetry?.lat == null ||
-        telemetry?.lng == null
+        !hasVehicleLocation
       ) {
         setChargers([]);
+        setChargeAdvice(null);
         return;
       }
       setChargersLoading(true);
@@ -159,9 +178,9 @@ const LiveMapScreen: React.FC = () => {
           {
             driver_id: driver.id,
             vehicle_id: vehicle.id,
-            lat: vehicleLat,
-            lng: vehicleLng,
-            soc: soc ?? 0,
+            lat: chargerLat,
+            lng: chargerLng,
+            soc,
             destination_km: Math.min(destinationKm, 500),
             available_time_min: 30,
           },
@@ -173,6 +192,7 @@ const LiveMapScreen: React.FC = () => {
         ];
         setChargers(list);
         setChargerReason(result.reason);
+        setChargeAdvice(result.charge_advice || null);
       } catch (err) {
         if (!signal?.aborted) {
           setChargersError("Could not load charger recommendations.");
@@ -188,8 +208,9 @@ const LiveMapScreen: React.FC = () => {
       token,
       driver?.id,
       vehicle?.id,
-      telemetry?.lat,
-      telemetry?.lng,
+      hasVehicleLocation,
+      chargerLat,
+      chargerLng,
       soc,
       dest?.lat,
       dest?.lng,
@@ -224,16 +245,16 @@ const LiveMapScreen: React.FC = () => {
       title: string;
       color: string;
       icon: "car" | "charger" | "user" | "destination";
-    }> = [
-      {
+    }> = hasVehicleLocation
+      ? [{
         id: "vehicle-1",
         latitude: vehicleLat,
         longitude: vehicleLng,
         title: vehicleCode,
         color: Colors.trickeeYellow,
         icon: "car",
-      },
-    ];
+      }]
+      : [];
     if (dest) {
       list.push({
         id: "destination",
@@ -257,7 +278,24 @@ const LiveMapScreen: React.FC = () => {
       }
     });
     return list;
-  }, [vehicleLat, vehicleLng, vehicleCode, dest, visibleChargers]);
+  }, [hasVehicleLocation, vehicleLat, vehicleLng, vehicleCode, dest, visibleChargers]);
+
+  const openCharger = async (charger: ChargerOption) => {
+    const url = charger.google_maps_uri || buildDirectionsUrl({
+      lat: charger.lat,
+      lng: charger.lng,
+      label: charger.name,
+    });
+    if (!url) {
+      setChargersError("This charger has no valid map coordinates.");
+      return;
+    }
+    try {
+      await Linking.openURL(url);
+    } catch {
+      setChargersError("Google Maps could not be opened on this phone.");
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -300,14 +338,19 @@ const LiveMapScreen: React.FC = () => {
             activeColor={Colors.neonGreen}
             onToggle={() => setFilterAvailable((v) => !v)}
           />
-          <FilterPill
-            title="Safe Route"
-            icon="shield"
-            isOn={filterSafeRoute}
-            activeColor={Colors.trickeeYellow}
-            onToggle={() => setFilterSafeRoute((v) => !v)}
-          />
         </ScrollView>
+
+        {!hasVehicleLocation ? (
+          <Text style={styles.liveWarning}>
+            Waiting for a real GPS packet. The fallback center below is not a vehicle position.
+          </Text>
+        ) : (
+          <Text style={styles.liveEvidence}>
+            {liveState?.freshness === "LIVE"
+              ? `Live GPS · sequence ${liveState.sequence_no}`
+              : `Last GPS packet · ${liveState?.freshness || "polling"}`}
+          </Text>
+        )}
 
         <OpenStreetMap
           initialLatitude={vehicleLat}
@@ -368,20 +411,21 @@ const LiveMapScreen: React.FC = () => {
 
             <View style={styles.hudDestRow}>
               <Icon
-                name={filterSafeRoute ? "shield" : "map-marker-circle"}
+                name="map-marker-circle"
                 size={16}
-                color={
-                  filterSafeRoute ? Colors.neonGreen : Colors.trickeeYellow
-                }
+                color={Colors.trickeeYellow}
               />
               <Text style={styles.hudDestText}>
                 {dest
-                  ? filterSafeRoute
-                    ? `Safe route to ${dest.label}`
-                    : `Heading to ${dest.label}`
+                  ? `Heading to ${dest.label}`
                   : "No active destination"}
               </Text>
             </View>
+            {activeTrip && liveSoc != null ? (
+              <Text style={styles.estimateNote}>
+                Live SOC is estimated from starting SOC, GPS distance and the latest Wh/km model.
+              </Text>
+            ) : null}
           </View>
         </GlassCard>
 
@@ -401,6 +445,17 @@ const LiveMapScreen: React.FC = () => {
         {chargerReason && visibleChargers.length > 0 && (
           <Text style={styles.reasonText}>{chargerReason}</Text>
         )}
+        {chargeAdvice ? (
+          <Text style={chargeAdvice === "charge_now" ? styles.chargeNow : styles.chargeStatus}>
+            {chargeAdvice === "charge_now"
+              ? "Charge recommended now"
+              : chargeAdvice === "plan_charging"
+              ? "Plan a charging stop"
+              : chargeAdvice === "not_needed"
+              ? "Charging not required for the current estimate"
+              : "Add a current SOC to receive charging advice"}
+          </Text>
+        ) : null}
 
         {visibleChargers.length === 0 && !chargersLoading ? (
           <GlassCard cornerRadius={16}>
@@ -443,7 +498,7 @@ const LiveMapScreen: React.FC = () => {
                       {c.name || "Charger"}
                     </Text>
                     <Text style={styles.chargerAddress}>
-                      {isFast(c) ? "DC Fast charger" : "AC charger"}
+                      {c.formatted_address || c.charger_type || "Verified Google Places listing"}
                     </Text>
                   </View>
                   <View style={styles.chargerMeta}>
@@ -469,11 +524,18 @@ const LiveMapScreen: React.FC = () => {
                     </View>
                   </View>
                 </View>
+                <TouchableOpacity
+                  style={styles.openChargerButton}
+                  onPress={() => openCharger(c)}
+                  disabled={c.lat == null || c.lng == null}
+                >
+                  <Text style={styles.openChargerText}>Open directions</Text>
+                </TouchableOpacity>
                 <View style={styles.chargerStats}>
                   <View style={styles.chargerStat}>
                     <Text style={styles.statLabel}>Type</Text>
                     <Text style={styles.statValue}>
-                      {isFast(c) ? "DC Fast" : "AC"}
+                      {c.charger_type || "Not provided"}
                     </Text>
                   </View>
                   <View style={styles.chargerStat}>
@@ -516,6 +578,18 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   filterRow: { flexDirection: "row", gap: 8, paddingVertical: 4 },
+  liveWarning: {
+    color: Colors.trickeeYellow,
+    fontSize: 12,
+    lineHeight: 18,
+    paddingHorizontal: 4,
+  },
+  liveEvidence: {
+    color: Colors.neonGreen,
+    fontSize: 12,
+    fontWeight: "700",
+    paddingHorizontal: 4,
+  },
   hudCard: { marginTop: -4 },
   hudContent: { padding: 18, gap: 14 },
   hudTopRow: {
@@ -564,6 +638,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginTop: 6,
   },
+  estimateNote: {
+    color: Colors.secondaryText,
+    fontSize: 10,
+    lineHeight: 15,
+  },
   chargerSpinner: { marginLeft: 8 },
   sectionLabel: {
     fontSize: 11,
@@ -577,6 +656,18 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     paddingHorizontal: 4,
     fontStyle: "italic",
+  },
+  chargeNow: {
+    color: Colors.redSoft,
+    fontSize: 13,
+    fontWeight: "800",
+    paddingHorizontal: 4,
+  },
+  chargeStatus: {
+    color: Colors.trickeeYellow,
+    fontSize: 13,
+    fontWeight: "700",
+    paddingHorizontal: 4,
   },
   chargerCard: {},
   chargerContent: { padding: 16, gap: 12 },
@@ -613,6 +704,19 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 204, 0, 0.3)",
   },
   busyText: { color: Colors.moderateYellow },
+  openChargerButton: {
+    alignSelf: "flex-start",
+    borderColor: Colors.trickeeYellow,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  openChargerText: {
+    color: Colors.trickeeYellow,
+    fontSize: 12,
+    fontWeight: "800",
+  },
   chargerStats: {
     flexDirection: "row",
     justifyContent: "space-around",

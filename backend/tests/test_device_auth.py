@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import get_settings
 from app.database import Base, get_db
 from app.main import app
-from app.models.entities import Driver, Fleet, User, Vehicle
+from app.models.entities import Device, Driver, Fleet, User, Vehicle
 from app.services.auth import create_access_token
 
 
@@ -218,3 +218,68 @@ def test_device_token_cannot_authenticate_as_human_user(seeded_fleets):
     )
 
     assert response.status_code == 401
+
+
+def test_authenticated_user_registers_and_rotates_device_push_token(seeded_fleets):
+    registered = register_device(seeded_fleets).json()["data"]
+    device_id = registered["device"]["id"]
+
+    first = client.put(
+        f"/api/v2/devices/{device_id}/push-token",
+        headers=user_headers(seeded_fleets),
+        json={"token": "fcm-token-" + "a" * 64},
+    )
+    second = client.put(
+        f"/api/v2/devices/{device_id}/push-token",
+        headers=user_headers(seeded_fleets),
+        json={"token": "fcm-token-" + "b" * 64},
+    )
+
+    assert first.status_code == second.status_code == 200
+    db = TestSession()
+    device = db.query(Device).filter(Device.id == device_id).one()
+    assert device.fcm_registration_token == "fcm-token-" + "b" * 64
+    assert device.fcm_token_updated_at is not None
+    db.close()
+
+
+def test_device_session_can_resync_rotated_push_token(seeded_fleets):
+    registered = register_device(seeded_fleets).json()["data"]
+
+    response = client.put(
+        "/api/v2/devices/self/push-token",
+        headers={"Authorization": f"Bearer {registered['access_token']}"},
+        json={"token": "fcm-token-" + "d" * 64},
+    )
+
+    assert response.status_code == 200
+    db = TestSession()
+    device = db.query(Device).filter(Device.id == registered["device"]["id"]).one()
+    assert device.fcm_registration_token == "fcm-token-" + "d" * 64
+    assert device.fcm_token_updated_at is not None
+    db.close()
+
+
+def test_user_cannot_register_push_token_for_another_fleet_device(seeded_fleets):
+    db = TestSession()
+    other = Device(
+        fleet_id=db.query(Vehicle).filter(Vehicle.id == seeded_fleets["other_vehicle_id"]).one().fleet_id,
+        vehicle_id=seeded_fleets["other_vehicle_id"],
+        registered_by_user_id=seeded_fleets["user_id"],
+        installation_id="other-fleet-installation",
+        platform="android",
+        device_model="Other",
+        app_version="1",
+    )
+    db.add(other)
+    db.commit()
+    other_id = other.id
+    db.close()
+
+    response = client.put(
+        f"/api/v2/devices/{other_id}/push-token",
+        headers=user_headers(seeded_fleets),
+        json={"token": "fcm-token-" + "c" * 64},
+    )
+
+    assert response.status_code == 404

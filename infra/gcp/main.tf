@@ -179,12 +179,13 @@ resource "google_secret_manager_secret_iam_member" "access" {
 
 locals {
   run_roles = {
-    api            = { command = "api", max = var.api_max_instances, concurrency = 40, timeout = "60s" }
-    websocket      = { command = "websocket", max = var.websocket_max_instances, concurrency = 200, timeout = "3600s" }
-    relay          = { command = "relay", max = var.worker_max_instances, concurrency = 1, timeout = "3600s" }
-    live-state     = { command = "live-state", max = var.worker_max_instances, concurrency = 1, timeout = "3600s" }
-    imu-rules      = { command = "imu-rules", max = var.worker_max_instances, concurrency = 1, timeout = "3600s" }
-    trip-finalizer = { command = "trip-finalizer", max = var.worker_max_instances, concurrency = 1, timeout = "3600s" }
+    api              = { command = "api", max = var.api_max_instances, concurrency = 40, timeout = "60s" }
+    websocket        = { command = "websocket", max = var.websocket_max_instances, concurrency = 200, timeout = "3600s" }
+    relay            = { command = "relay", max = var.worker_max_instances, concurrency = 1, timeout = "3600s" }
+    live-state       = { command = "live-state", max = var.worker_max_instances, concurrency = 1, timeout = "3600s" }
+    imu-rules        = { command = "imu-rules", max = var.worker_max_instances, concurrency = 1, timeout = "3600s" }
+    trip-finalizer   = { command = "trip-finalizer", max = var.worker_max_instances, concurrency = 1, timeout = "3600s" }
+    notification-fcm = { command = "notification-fcm", max = 1, concurrency = 1, timeout = "3600s" }
   }
 }
 
@@ -272,6 +273,13 @@ resource "google_cloud_run_v2_service" "role" {
       env {
         name  = "TRICKEE_DB_MAX_OVERFLOW"
         value = "1"
+      }
+      dynamic "env" {
+        for_each = each.key == "notification-fcm" ? [1] : []
+        content {
+          name  = "TRICKEE_FCM_PROJECT_ID"
+          value = var.project_id
+        }
       }
       env {
         name = "TRICKEE_DATABASE_URL"

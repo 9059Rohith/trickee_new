@@ -2,6 +2,7 @@ import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../constants/Colors";
+import { nudgeActionState } from "../services/mapNavigation";
 import type { RouteNudge, RouteNudgeEvent } from "../services/types";
 
 const formatLeaveTime = (value?: string | null) => {
@@ -14,11 +15,16 @@ const formatLeaveTime = (value?: string | null) => {
 const RouteNudgeCard: React.FC<{
   nudge: RouteNudge;
   onAction: (event: RouteNudgeEvent) => void;
-}> = ({ nudge, onAction }) => {
+  busy?: boolean;
+}> = ({ nudge, onAction, busy = false }) => {
   const leaveTime = formatLeaveTime(nudge.payload.leave_at);
   const liveTraffic =
     nudge.payload.provider_source === "google_routes" &&
     !nudge.payload.degraded_reason;
+  const actionState = nudgeActionState(nudge.outcome?.latest_event);
+  const mapAvailable =
+    typeof nudge.payload.destination_lat === "number" &&
+    typeof nudge.payload.destination_lng === "number";
   return (
     <View style={styles.card} accessibilityLabel="Route recommendation">
       <View style={styles.headerRow}>
@@ -37,34 +43,52 @@ const RouteNudgeCard: React.FC<{
         </Text>
       ) : null}
       <Text style={liveTraffic ? styles.evidence : styles.warning}>
-        {liveTraffic ? "Live traffic checked" : "Live traffic unavailable"}
+        {liveTraffic
+          ? "Google live traffic used for this route"
+          : `Live traffic unavailable${nudge.payload.degraded_reason ? ` · ${nudge.payload.degraded_reason.replace(/_/g, " ")}` : ""}`}
       </Text>
       {nudge.payload.place_confirmed === true &&
       nudge.payload.availability_confirmed !== true ? (
         <Text style={styles.warning}>Charger exists; live slot availability is not confirmed</Text>
       ) : null}
       <View style={styles.actions}>
+        {actionState.label ? (
+          <View style={actionState.terminal ? styles.terminalBadge : styles.infoBadge}>
+            <Text style={actionState.terminal ? styles.terminalText : styles.infoText}>
+              {actionState.label}
+            </Text>
+          </View>
+        ) : null}
+        {!actionState.terminal ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.primaryButton}
+            disabled={busy}
+            onPress={() => onAction("accepted")}
+          >
+            <Text style={styles.primaryText}>{busy ? "Saving…" : "Accept"}</Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           accessibilityRole="button"
-          style={styles.primaryButton}
-          onPress={() => onAction("accepted")}
-        >
-          <Text style={styles.primaryText}>Accept</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          style={styles.secondaryButton}
+          style={[styles.secondaryButton, !mapAvailable && styles.disabledButton]}
+          disabled={busy || !mapAvailable}
           onPress={() => onAction("opened")}
         >
-          <Text style={styles.secondaryText}>Open map</Text>
+          <Text style={styles.secondaryText}>
+            {mapAvailable ? "Open map" : "Map unavailable"}
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          style={styles.textButton}
-          onPress={() => onAction("dismissed")}
-        >
-          <Text style={styles.dismissText}>Dismiss</Text>
-        </TouchableOpacity>
+        {!actionState.terminal ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.textButton}
+            disabled={busy}
+            onPress={() => onAction("dismissed")}
+          >
+            <Text style={styles.dismissText}>Dismiss</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -108,6 +132,21 @@ const styles = StyleSheet.create({
   secondaryText: { color: Colors.white, fontWeight: "700" },
   textButton: { paddingHorizontal: 9, paddingVertical: 10 },
   dismissText: { color: Colors.secondaryText, fontWeight: "700" },
+  disabledButton: { opacity: 0.45 },
+  terminalBadge: {
+    borderRadius: 10,
+    backgroundColor: "rgba(57,255,20,0.12)",
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+  },
+  terminalText: { color: Colors.neonGreen, fontWeight: "800" },
+  infoBadge: {
+    borderRadius: 10,
+    backgroundColor: "rgba(0,229,255,0.1)",
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+  },
+  infoText: { color: Colors.neonBlue, fontWeight: "800" },
 });
 
 export default RouteNudgeCard;

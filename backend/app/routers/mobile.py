@@ -124,6 +124,7 @@ def _trip_dict(t: MobileTripSession) -> dict:
         "destination_text": t.destination_text,
         "destination_lat": t.destination_lat, "destination_lng": t.destination_lng,
         "confidence": t.confidence, "source": t.source,
+        "starting_soc": (t.context or {}).get("starting_soc"),
     }
 
 
@@ -143,6 +144,7 @@ def _vehicle_dict(v: Vehicle) -> dict:
         "battery_chemistry": v.battery_chemistry, "category": v.category,
         "usable_kwh": v.usable_kwh, "kerb_weight": v.kerb_weight,
         "motor_kw": v.motor_kw, "regen_available": v.regen_available,
+        "certified_range": v.certified_range,
         "spec_incomplete": v.spec_incomplete, "is_active": v.is_active,
     }
 

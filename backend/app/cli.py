@@ -14,7 +14,7 @@ def reconciler_output(reconciled_count: int) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("role", choices=["api", "websocket", "relay", "live-state", "imu-rules", "trip-finalizer", "finalization-reconciler", "migrate", "archive", "retention", "provision"])
+    parser.add_argument("role", choices=["api", "websocket", "relay", "live-state", "imu-rules", "trip-finalizer", "notification-fcm", "finalization-reconciler", "migrate", "archive", "retention", "provision"])
     args = parser.parse_args()
     port = os.getenv("PORT", "8000")
     if args.role in {"api", "websocket"}:

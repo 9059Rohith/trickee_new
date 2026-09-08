@@ -13,7 +13,7 @@ from app.database import Base, get_db
 from app.main import app
 from app.models.entities import Fleet, User, Vehicle, VehicleLiveStateSnapshot
 from app.observability.metrics import WEBSOCKET_CONNECTIONS, validate_metric_privacy
-from app.processors.live_state import freshness_label
+from app.processors.live_state import advance_live_distance_km, freshness_label
 from app.realtime import websocket_gateway
 from app.services.auth import create_access_token
 from app.worker import outbox_metric_record
@@ -27,6 +27,30 @@ def test_freshness_labels_cover_recovery_states():
     assert freshness_label(now, now=now, gps_available=False) == "GPS_LOST"
     assert freshness_label(now, now=now, syncing=True) == "SYNCING"
     assert freshness_label(now, now=now, degraded=True) == "DEGRADED"
+
+
+def test_live_distance_accumulates_same_trip_and_resets_for_new_trip():
+    first = advance_live_distance_km(
+        previous_trip_id="trip-1",
+        next_trip_id="trip-1",
+        previous_latitude=21.1700,
+        previous_longitude=72.8300,
+        next_latitude=21.1710,
+        next_longitude=72.8310,
+        previous_distance_km=2.5,
+    )
+    reset = advance_live_distance_km(
+        previous_trip_id="trip-1",
+        next_trip_id="trip-2",
+        previous_latitude=21.1700,
+        previous_longitude=72.8300,
+        next_latitude=21.1710,
+        next_longitude=72.8310,
+        previous_distance_km=2.5,
+    )
+
+    assert 2.64 < first < 2.66
+    assert reset == 0.0
 
 
 def test_archive_manifest_refuses_any_mismatch_and_requires_restore():

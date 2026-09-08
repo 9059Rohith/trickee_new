@@ -48,6 +48,19 @@ def _start_health_server() -> None:
 
 def run(role: str) -> None:
     _start_health_server()
+    if role == "notification-fcm":
+        from app.services.fcm_notifications import GoogleFcmSender, dispatch_due_notifications
+
+        sender = GoogleFcmSender()
+        while True:
+            db = SessionLocal()
+            try:
+                work = dispatch_due_notifications(db, sender=sender)["selected"]
+            finally:
+                db.close()
+            if not work:
+                time.sleep(5.0)
+        return
     streams = RedisStreamClient(os.environ["TRICKEE_REDIS_URL"])
     consumer = f"{socket.gethostname()}-{os.getpid()}"
     handlers = {

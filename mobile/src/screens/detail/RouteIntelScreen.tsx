@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../../constants/Colors";
 import DetailHeader from "../../components/DetailHeader";
@@ -10,21 +10,51 @@ import { useAuth } from "../../context/AuthContext";
 import { useLiveData } from "../../context/LiveDataContext";
 import { api } from "../../services/api";
 import type { ChargerRecommendation } from "../../services/types";
+import { buildDirectionsUrl } from "../../services/mapNavigation";
+import { estimateLiveSoc } from "../../services/liveSoc";
+
+const haversineKm = (
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number }
+) => {
+  const radiusKm = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const value =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return radiusKm * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+};
 
 const fmt = (v: number | null | undefined, d = 1) =>
   typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "--";
 
 const RouteIntelScreen: React.FC = () => {
   const { token } = useAuth();
-  const { driver, vehicle, telemetry, gpsSummary, latestSoc } = useLiveData();
+  const { me, driver, vehicle, telemetry, gpsSummary, latestSoc, liveState } = useLiveData();
   const [rec, setRec] = useState<ChargerRecommendation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const soc = gpsSummary?.soc?.is_recent ? latestSoc : null;
-  const range = gpsSummary?.soc?.is_recent
-    ? gpsSummary.estimated_range_km ?? null
+  const liveSoc = me?.active_trip
+    ? estimateLiveSoc({
+        startingSocPct: me.active_trip.starting_soc,
+        distanceKm: liveState?.distance_km,
+        usableKwh: vehicle?.usable_kwh,
+        whPerKm: gpsSummary?.latest_prediction?.wh_per_km,
+      })
     : null;
+  const soc = liveSoc ?? (gpsSummary?.soc?.is_recent ? latestSoc : null);
+  const range =
+    soc != null && vehicle?.usable_kwh && gpsSummary?.latest_prediction?.wh_per_km
+      ? (soc * vehicle.usable_kwh * 10) / gpsSummary.latest_prediction.wh_per_km
+      : null;
+  const destination =
+    me?.active_trip?.destination_lat != null && me.active_trip.destination_lng != null
+      ? { lat: me.active_trip.destination_lat, lng: me.active_trip.destination_lng }
+      : null;
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -48,8 +78,16 @@ const RouteIntelScreen: React.FC = () => {
             vehicle_id: vehicle.id,
             lat: telemetry.lat,
             lng: telemetry.lng,
-            soc: soc ?? 0,
-            destination_km: 10,
+            soc,
+            destination_km: destination
+              ? Math.min(
+                  haversineKm(
+                    { lat: telemetry.lat, lng: telemetry.lng },
+                    destination
+                  ),
+                  500
+                )
+              : 10,
             available_time_min: 30,
           },
           signal
@@ -66,7 +104,7 @@ const RouteIntelScreen: React.FC = () => {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [token, driver?.id, vehicle?.id, telemetry?.lat, telemetry?.lng, soc]
+    [token, driver?.id, vehicle?.id, telemetry?.lat, telemetry?.lng, soc, destination?.lat, destination?.lng]
   );
 
   useEffect(() => {
@@ -77,6 +115,20 @@ const RouteIntelScreen: React.FC = () => {
 
   const best = rec?.recommended_charger ?? null;
   const lowBattery = soc != null && soc < 25;
+  const advice = rec?.charge_advice;
+
+  const openDirections = async (lat?: number | null, lng?: number | null, label?: string | null) => {
+    const url = buildDirectionsUrl({ lat, lng, label });
+    if (!url) {
+      setError("This charger has no valid map coordinates.");
+      return;
+    }
+    try {
+      await Linking.openURL(url);
+    } catch {
+      setError("Google Maps could not be opened on this phone.");
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -122,9 +174,15 @@ const RouteIntelScreen: React.FC = () => {
                 color={lowBattery ? Colors.redSoft : Colors.neonGreen}
               />
               <Text style={styles.bannerText}>
-                {lowBattery
+                {soc == null
+                  ? "Add a current SOC to receive charging guidance."
+                  : advice === "charge_now"
+                  ? "Charge now — the route estimate is below the reserve threshold."
+                  : advice === "plan_charging"
+                  ? "Plan a charging stop before completing the route."
+                  : lowBattery
                   ? "Battery is low — plan a charging stop soon."
-                  : "Range is healthy for typical delivery distances."}
+                  : "The current estimate does not require a charging stop."}
               </Text>
             </View>
           </GlassCard>
@@ -174,6 +232,15 @@ const RouteIntelScreen: React.FC = () => {
                 {rec?.reason ? (
                   <Text style={styles.reason}>{rec.reason}</Text>
                 ) : null}
+                <Text style={styles.source}>
+                  Source: {best.provider_source || rec?.provider_source || "not provided"}. Live connector availability is not claimed.
+                </Text>
+                <TouchableOpacity
+                  style={styles.mapButton}
+                  onPress={() => openDirections(best.lat, best.lng, best.name)}
+                >
+                  <Text style={styles.mapButtonText}>Open directions</Text>
+                </TouchableOpacity>
               </View>
             </GlassCard>
           ) : (
@@ -211,6 +278,9 @@ const RouteIntelScreen: React.FC = () => {
                         ? `${c.distance_km.toFixed(1)} km`
                         : "--"}
                     </Text>
+                    <TouchableOpacity onPress={() => openDirections(c.lat, c.lng, c.name)}>
+                      <Icon name="directions" size={20} color={Colors.trickeeYellow} />
+                    </TouchableOpacity>
                   </View>
                 </GlassCard>
               ))}
@@ -290,6 +360,16 @@ const styles = StyleSheet.create({
   },
   gainText: { fontSize: 13, fontWeight: "800", color: Colors.neonGreen },
   reason: { fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 19 },
+  source: { fontSize: 11, color: Colors.secondaryText, lineHeight: 16 },
+  mapButton: {
+    alignSelf: "flex-start",
+    borderColor: Colors.trickeeYellow,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  mapButtonText: { color: Colors.trickeeYellow, fontSize: 12, fontWeight: "800" },
   altCard: { marginBottom: 2 },
   altRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14 },
   altName: { flex: 1, fontSize: 14, fontWeight: "600", color: Colors.white },

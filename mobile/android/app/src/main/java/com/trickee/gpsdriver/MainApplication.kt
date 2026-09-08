@@ -10,6 +10,7 @@ import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.trickee.gpsdriver.telemetry.bridge.TelemetryPackage
+import com.trickee.gpsdriver.telemetry.notifications.FirebaseBootstrap
 
 class MainApplication : Application(), ReactApplication {
 
@@ -33,6 +34,7 @@ class MainApplication : Application(), ReactApplication {
 
     override fun onCreate() {
         super.onCreate()
+        FirebaseBootstrap.initialize(this)
         loadReactNative(this)
     }
 }

@@ -23,6 +23,9 @@ import com.trickee.gpsdriver.telemetry.collector.TripCollectorService
 import com.trickee.gpsdriver.telemetry.diagnostics.TelemetryDiagnosticSnapshot
 import com.trickee.gpsdriver.telemetry.network.BackfillWorker
 import com.trickee.gpsdriver.telemetry.notifications.DailyPlanReminderWorker
+import com.trickee.gpsdriver.telemetry.notifications.FirebaseBootstrap
+import com.trickee.gpsdriver.telemetry.notifications.TrickeeNotificationPresenter
+import com.google.firebase.messaging.FirebaseMessaging
 import com.trickee.gpsdriver.telemetry.security.DeviceCredentialStore
 import com.trickee.gpsdriver.telemetry.security.DeviceSession
 import com.trickee.gpsdriver.telemetry.storage.TelemetryDatabase
@@ -359,6 +362,42 @@ class TelemetryModule(private val context: ReactApplicationContext) : ReactConte
         } catch (error: Exception) {
             promise.reject("PLANNER_REMINDER_FAILED", "Could not schedule high-priority reminder", error)
         }
+    }
+
+    @ReactMethod
+    fun pushToken(promise: Promise) {
+        if (!FirebaseBootstrap.initialize(context)) {
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("configured", false)
+                putNull("token")
+            })
+            return
+        }
+        FirebaseMessaging.getInstance().token
+            .addOnSuccessListener { token ->
+                promise.resolve(Arguments.createMap().apply {
+                    putBoolean("configured", true)
+                    putString("token", token)
+                })
+            }
+            .addOnFailureListener { error ->
+                promise.reject("FCM_TOKEN_FAILED", "Could not obtain the FCM registration token", error)
+            }
+    }
+
+    @ReactMethod
+    fun showTestHighPriorityNotification(promise: Promise) {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            promise.reject("NOTIFICATION_PERMISSION", "Notification permission is required")
+            return
+        }
+        TrickeeNotificationPresenter.show(
+            context = context,
+            occurrenceId = "tester-${System.currentTimeMillis()}",
+            title = "Trickee notifications are working",
+            body = "High-priority route, charging and departure nudges can appear on this phone.",
+        )
+        promise.resolve(null)
     }
 
     @ReactMethod fun status(promise: Promise) = promise.resolve(statusMap())

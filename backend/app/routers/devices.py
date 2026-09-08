@@ -11,7 +11,11 @@ from app.database import get_db
 from app.models.entities import Device, DeviceRefreshToken, User, Vehicle
 from app.schemas.api import ok
 from app.services.auth import get_current_user
-from app.services.device_auth import create_device_session, rotate_device_session
+from app.services.device_auth import (
+    create_device_session,
+    get_current_device,
+    rotate_device_session,
+)
 
 
 router = APIRouter(prefix="/api/v2/devices", tags=["devices"])
@@ -32,6 +36,25 @@ class DeviceTokenRequest(BaseModel):
     refresh_token: str = Field(min_length=32, max_length=512)
 
 
+class PushTokenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: str = Field(min_length=20, max_length=4096)
+
+
+def _save_push_token(db: Session, device: Device, token: str) -> None:
+    # FCM may rotate a token or move it to a restored installation. Keep one
+    # authoritative owner so a handset never receives another driver's nudge.
+    db.query(Device).filter(
+        Device.fcm_registration_token == token,
+        Device.id != device.id,
+    ).update(
+        {Device.fcm_registration_token: None, Device.fcm_token_updated_at: None},
+        synchronize_session=False,
+    )
+    device.fcm_registration_token = token
+    device.fcm_token_updated_at = datetime.utcnow()
+
+
 def _device_dict(device: Device) -> dict:
     return {
         "id": device.id,
@@ -42,6 +65,7 @@ def _device_dict(device: Device) -> dict:
         "device_model": device.device_model,
         "app_version": device.app_version,
         "is_active": device.is_active,
+        "push_registered": bool(device.fcm_registration_token),
     }
 
 
@@ -135,3 +159,37 @@ def revoke_device(
     ).update({DeviceRefreshToken.revoked_at: now}, synchronize_session=False)
     db.commit()
     return ok({"device_id": device.id, "revoked": True})
+
+
+@router.put("/self/push-token")
+def register_current_device_push_token(
+    body: PushTokenRequest,
+    db: Session = Depends(get_db),
+    device: Device = Depends(get_current_device),
+):
+    _save_push_token(db, device, body.token)
+    db.commit()
+    return ok({"device_id": device.id, "push_registered": True})
+
+
+@router.put("/{device_id}/push-token")
+def register_push_token(
+    device_id: str,
+    body: PushTokenRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    device = db.query(Device).filter(
+        Device.id == device_id,
+        Device.fleet_id == current_user.fleet_id,
+        Device.is_active.is_(True),
+        Device.revoked_at.is_(None),
+    ).first()
+    if not device or (
+        current_user.role == "driver"
+        and device.registered_by_user_id != current_user.id
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Device not found")
+    _save_push_token(db, device, body.token)
+    db.commit()
+    return ok({"device_id": device.id, "push_registered": True})
