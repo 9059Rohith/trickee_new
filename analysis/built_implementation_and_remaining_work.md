@@ -369,3 +369,177 @@ Remaining pilot evidence:
   crash-adjacent, but Play has not supplied an Android stack trace for the
   tester warning, so an in-place update and real trip remain required before
   claiming the OS crash is eliminated.
+
+### Physical 1.0.8/1.0.9 delivery and training audit — 2026-09-03
+
+- Reconciled tester diagnostics for trips `f53249a5...` (1.0.8) and
+  `fa4febce...` (1.0.9) against production Cloud SQL in a read-only
+  transaction. Both trips achieved exact phone/cloud/receipt parity: 2,093 of
+  2,093 and 889 of 889 sequences, cursors at their final sequences, no missing
+  ranges, no backend rejections, and finalization completed.
+- The repaired upload path sustained one-second cadence, p95 upload latency
+  below 4.4 seconds, and a maximum observed phone backlog of five rows on both
+  cellular trips. This is positive physical evidence for the lossless-delivery
+  and no-GPS 422 repairs, although it does not prove absence of every possible
+  Android crash.
+- GPS quality was 97.229% and 99.438%, accelerometer completeness was 100%, and
+  gyroscope completeness remained 0%; the backend consequently emitted an
+  `IMU_LOW_QUALITY` warning for every window.
+- The 1.0.8 trip persisted an eligible manual-SOC label (20.262 km, 75% to 49%,
+  38.239 Wh/km). The 1.0.9 trip was correctly rejected for training because
+  7.865 km is below the 10 km threshold despite complete transport.
+- Dataset verdict remains **not ready for model training**: there is only one
+  eligible trip, no gyroscope signal, manual rather than BMS energy labels, and
+  no driver/route/device diversity. The phone diagnostics also remain marked
+  `SYNC_PENDING` after the authoritative cloud state is completed; client
+  finalization-state propagation remains a UI/diagnostic follow-up.
+
+### GPS-only synthetic development dataset — 2026-09-04
+
+- Generated a deterministic, privacy-separated OLA S1 synthetic dataset from
+  the verified telemetry distributions available through the 1.0.8/1.0.9
+  physical-trip audit cutoff (`2026-09-03T11:48:12Z`). A 2026-09-04 live
+  calibration refresh was not used because `gcloud` required reauthentication.
+- The dataset contains 500 synthetic trips and 1,265,829 one-second GPS windows:
+  350/890,800 train, 75/191,223 validation, and 75/183,806 test. Simulated
+  drivers and route families are disjoint across the three splits.
+- Every synthetic trip is at least 10 km, has 100% stored-sequence continuity,
+  at least 95.364% valid GPS, at least 5% SOC delta, no charging, and a target
+  between 29.2144 and 37.9952 Wh/km. The primary target is
+  `actual_wh_per_km`; it is stored only in the trip-label file and is absent
+  from telemetry shards.
+- The generator uses GPS-derived kinematics, generated coordinates, realistic
+  GPS outages/accuracy and upload latency, dashboard-style SOC quantization,
+  and explicit `is_synthetic=true` / `label_source=synthetic_simulation_v1`
+  provenance. It excludes gyroscope from the GPS-only feature contract.
+- A full independent decompression scan verified all 1,265,829 rows, contiguous
+  one-second sequences, trip/window parity, hashes, synthetic markers, target
+  isolation, and zero driver/route-family leakage. The workbook's 12 quality
+  gates pass and its formula-error scan is empty.
+- Synthetic data is approved only for feature engineering, pipeline testing,
+  and pretraining. It does not make the production model training-ready and
+  must not replace untouched eligible real trips for final evaluation or
+  published accuracy claims.
+
+### GPS-only energy-model training baseline — 2026-09-05
+
+- Added an isolated offline modeling package under `modeling/`; it does not
+  replace or modify the backend's live physics prediction path.
+- The extractor aggregates the 1,265,829 one-second windows into 500 trip rows
+  with 31 GPS-derived quality, distance, speed, stop, acceleration, turn,
+  altitude and time features. SOC, measured energy, target values, raw
+  coordinates, trip IDs and simulated route/driver IDs are excluded from model
+  input.
+- Preserved the existing route-family/driver-isolated 350/75/75
+  train/validation/test split and compared a train-mean baseline, ElasticNet and
+  CatBoost. Model selection uses validation MAE only.
+- ElasticNet narrowly selected on validation MAE (`1.2021 Wh/km`) and scored
+  test MAE `1.1704 Wh/km`, RMSE `1.4773 Wh/km`, MAPE `3.5261%`, and R2 `0.1049`.
+  CatBoost scored test MAE `1.2010 Wh/km`; the mean baseline scored `1.2286
+  Wh/km`.
+- The low test R2 and small improvement over the mean baseline are an explicit
+  non-promotion result. The synthetic SOC-derived label is quantized and much
+  of its variance is not explained by GPS alone. No learned artifact is enabled
+  in production.
+- Reproducible models, predictions, feature importance, metrics and a model card
+  are in `outputs/01a066ed-bf5d-71d0-9c75-2454ccf6e3e6/gps_energy_model_v1_robust/`.
+  Production promotion still requires a sufficiently large untouched physical
+  test cohort with authoritative energy labels.
+
+### Trip lifecycle, stationary nudge and session repair — 2026-09-08
+
+- Root cause of the tester's 15-second trip-seal timeout was a native lifecycle
+  race: the recurring `/mobile/me` refresh could replay `ACTION_START` while an
+  end request was moving the same Room trip to `ENDING`, and the collector used
+  to write that trip back to `ACTIVE`. The timer therefore continued and the
+  backend correctly refused a second active trip.
+- Trip activation is now conditional and atomic. `ENDING` or sealed trips cannot
+  be reopened; the bridge persists `ENDING` before dispatching the stop command;
+  the service cancels capture work before committing the final partial window;
+  and it can recover an `ACTIVE`/`ENDING` trip from Room when process memory has
+  been lost.
+- Added a native seven-minute stationary tracker in the foreground service. It
+  produces a high-priority notification and in-app choice between `I'm waiting`
+  and `End trip`; waiting suppresses repeats until genuine movement resumes.
+- Session recovery now rotates refresh tokens once even when several requests
+  receive 401 concurrently. Polling no longer logs the driver out immediately,
+  and protected start/end operations retry once with the renewed access token.
+- Release candidate `1.0.10 (11)` is signed by the registered upload certificate
+  (`1F:B5:89:39:0D:03:53:49:80:A2:90:B1:80:CE:13:B0:8F:48:07:9A`). AAB:
+  `play-store-assets/Trickee-GPS-Driver-public-1.0.10-11.aab`, SHA-256
+  `EE50FB6CA455662D79D644A110F863F4E180D32C6717E078755B89AF60CC97B1`.
+- Verification: mobile Jest `15/15`, Android release tests `55/55`, TypeScript,
+  ESLint, release build, release lint, package/version/SDK checks and bundle
+  signature checks pass. Google Play Console shows `11 (1.0.10)` active and
+  `Available to internal testers` on the Internal testing track, released on
+  8 Sept 2026 at 15:25. Physical-device recovery and live cloud incident
+  correlation remain pending; the current gcloud account still requires
+  interactive reauthentication.
+
+### Legacy sealed-active recovery and exact production force-close — 2026-09-08
+
+- The tester diagnostic for trip `153c02bb-720e-4f19-b13f-d5d3864918c0`
+  proved a second lifecycle defect not covered by 1.0.10: Room stored the trip
+  as `ACTIVE` even though `final_sequence_no=1345` and `ended_at` were already
+  present. `beginEnding()` returned early for an existing final sequence, so
+  the state could never reach `SYNC_PENDING` and every UI retry timed out.
+- Android database version 3 now normalizes any pre-end state with an existing
+  final sequence to `SYNC_PENDING`. The same normalization is performed
+  transactionally on an End Trip retry, so the repair does not depend only on
+  app-start migration timing.
+- Pending or in-flight rows captured after the sealed boundary are preserved
+  locally with `CAPTURED_AFTER_FINAL_SEQUENCE`; they are excluded from upload
+  without being silently deleted. Previously acknowledged rows remain intact
+  as audit evidence.
+- Production Cloud SQL was preflighted through an exact-trip, read-only Cloud
+  Run job. Before recovery the backend still reported `active / collecting`,
+  no final sequence, no ending SOC and no finalization record. Cloud held all
+  1,345 authoritative sequences plus later post-seal rows.
+- The exact trip was force-closed at the phone's sealed timestamp
+  `2026-09-08T02:12:48.750Z` and sequence 1,345. An independent post-check
+  confirmed status/finalization `incomplete`, 1,345/1,345 authoritative rows,
+  zero missing sequences, zero active trips for the driver, and 1,961 later
+  rows preserved for audit. The label is explicitly training-ineligible with
+  reason `missing_ending_soc_manual_recovery`; no SOC was invented.
+- Version `1.0.11 (12)` is the published repair. JVM unit tests, React Native
+  tests `15/15`, TypeScript, ESLint and Android instrumentation APK compilation
+  pass. The signed AAB SHA-256 is
+  `7DA05AB1C69BC61B3FA8BAF07CD85A52718238007E992C61CA8E0536ED3C269D`.
+  Google Play Console shows `12 (1.0.11)` active and `Available to internal
+  testers`, released on 8 Sept 2026 at 16:56. Physical in-place migration on
+  the tester's handset remains required before claiming device recovery is
+  complete.
+
+### Daily planner chat, pre-trip SOC and high-priority reminders — 2026-09-08
+
+- Added a driver-scoped `Plan My Day` chat flow to the Play application. The
+  LLM is limited to an allowlisted `parse_day_schedule` tool; the original
+  bounded request and deterministic parser remain authoritative when the LLM is
+  absent, unavailable, malformed, or requests an unknown tool.
+- Added bounded Google Places, Routes and nearby EV-charger adapters with
+  timeouts, short-lived caching, normalized evidence timestamps and explicit
+  degraded reasons. Missing provider evidence remains null; a charger place
+  listing never claims live connector availability or known charging power.
+- Confirmed plans are computed leg by leg. Each leg prefers the latest stored
+  GPS prediction's Wh/km for the assigned vehicle and carries its projected SOC
+  into the next leg. When no prior prediction exists, the output explicitly
+  identifies the lower-confidence vehicle-spec range baseline. The synthetic
+  offline ElasticNet artifact remains unpromoted because it requires completed
+  telemetry features and has not cleared the real-label validation gate.
+- Added durable daily-plan, notification-outbox and nudge-outcome records with
+  driver scoping and confirmation/notification idempotency. The Android app
+  caches the latest plan separately from telemetry Room data.
+- Added local Android reminders backed by WorkManager and a dedicated
+  `trickee_route_alerts_high` high-importance channel. Reminder IDs cannot use
+  telemetry notification IDs 2101/2102. Cloud outbox payloads also request high
+  delivery priority and carry expiry metadata.
+- Fresh local evidence: backend `148 passed`; daily-plan focused `10 passed`;
+  mobile Jest `22 passed` across 8 suites; TypeScript and ESLint pass; Android
+  `testDebugUnitTest` succeeds; migration 0006 passed an
+  upgrade/downgrade/upgrade roundtrip.
+- A fresh Cloud SQL backup (`1788891590710`) completed before any production
+  migration. Live Google/Groq secrets exist in the project but must be mounted
+  on the GPS pilot service without exposing their values. Remote FCM delivery
+  remains separate from the locally verified high-priority reminder path until
+  the GPS Android Firebase identity and a physical background-delivery trace are
+  verified.

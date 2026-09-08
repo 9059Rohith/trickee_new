@@ -13,6 +13,10 @@ import type {
   SOCReadingRequest,
   TripPrediction,
   Alert,
+  RouteNudge,
+  RouteNudgeEvent,
+  DailyPlan,
+  DailyPlanChatResponse,
   Vehicle,
   VehicleSpecUpdate,
 } from "./types";
@@ -199,6 +203,49 @@ export const api = {
 
   ackAlert: (token: string, alertId: string) =>
     request<any>("POST", `/mobile/alerts/${alertId}/ack`, token),
+
+  listRouteNudges: (token: string, limit = 50, signal?: AbortSignal) =>
+    request<RouteNudge[]>(
+      "GET",
+      `/route-nudges/inbox?limit=${Math.max(1, Math.min(limit, 100))}`,
+      token,
+      undefined,
+      signal
+    ),
+
+  recordRouteNudgeOutcome: (
+    token: string,
+    nudgeId: string,
+    data: {
+      event: RouteNudgeEvent;
+      occurred_at: string;
+      selected_route_id?: string;
+      selected_charger_id?: string;
+      metadata?: Record<string, unknown>;
+    }
+  ) => request<any>("POST", `/route-nudges/${nudgeId}/outcome`, token, data),
+
+  createDailyPlanDraft: (
+    token: string,
+    data: {
+      message: string;
+      service_date: string;
+      timezone: string;
+      starting_soc_pct: number;
+    }
+  ) => request<DailyPlanChatResponse>("POST", "/daily-plans/chat", token, data),
+
+  confirmDailyPlan: (
+    token: string,
+    planId: string,
+    data: {
+      confirmation_key: string;
+      origin: { lat: number; lng: number };
+    }
+  ) => request<DailyPlan>("POST", `/daily-plans/${planId}/confirm`, token, data),
+
+  getDailyPlan: (token: string, planId: string) =>
+    request<DailyPlan>("GET", `/daily-plans/${planId}`, token),
 
   // --- Trips ---
   startTrip: (

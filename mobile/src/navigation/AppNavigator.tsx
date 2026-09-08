@@ -19,6 +19,8 @@ import AIAssistantScreen from "../screens/detail/AIAssistantScreen";
 import RouteIntelScreen from "../screens/detail/RouteIntelScreen";
 import PastTripsScreen from "../screens/detail/PastTripsScreen";
 import DailyImpactScreen from "../screens/detail/DailyImpactScreen";
+import RouteNudgesScreen from "../screens/detail/RouteNudgesScreen";
+import DailyPlannerScreen from "../screens/detail/DailyPlannerScreen";
 import AppHeader from "../components/AppHeader";
 import SideDrawer from "../components/SideDrawer";
 import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
@@ -144,6 +146,14 @@ export default function AppNavigator() {
               <RootStack.Screen
                 name="DailyImpact"
                 component={DailyImpactScreen}
+              />
+              <RootStack.Screen
+                name="RouteNudges"
+                component={RouteNudgesScreen}
+              />
+              <RootStack.Screen
+                name="DailyPlanner"
+                component={DailyPlannerScreen}
               />
               <RootStack.Screen
                 name="VehicleOnboarding"

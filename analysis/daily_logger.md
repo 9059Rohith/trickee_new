@@ -289,3 +289,130 @@
 - Physical validation remains required because the confirmed network/request
   storm has no matching Play Console Android stack trace yet. The tester must
   update in place and must not uninstall or clear app data before recovery.
+
+## 2026-09-03 - Physical telemetry and training-readiness audit
+
+- Reconciled the Rhythm tester's 1.0.8 and 1.0.9 phone diagnostics with a
+  production Cloud SQL read-only audit, then removed and independently verified
+  deletion of the temporary Cloud Run audit job.
+- Confirmed 2,093/2,093 and 889/889 end-to-end sequences, full receipt parity,
+  contiguous cursors at final sequence, zero missing cloud windows, zero
+  rejections, completed finalizers, p95 upload latency below 4.4 seconds, and a
+  maximum reported phone backlog of five.
+- Verified 97.229% and 99.438% valid GPS quality, one-second cadence, 100%
+  accelerometer completeness, and 0% gyroscope completeness on both trips.
+- Confirmed the 1.0.8 trip is individually training-eligible with a persisted
+  manual-SOC label; the 1.0.9 trip is correctly ineligible because its 7.865 km
+  distance is below the 10 km threshold.
+- Overall dataset verdict is not ready for training because only one eligible
+  trip exists in this comparison, gyroscope data is absent, labels are manual
+  SOC rather than BMS energy, and the sample lacks meaningful diversity.
+- Identified a non-transport follow-up: phone diagnostics remain `SYNC_PENDING`
+  even after the backend finalizer records `completed` through the final
+  sequence.
+
+## 2026-09-04 - GPS-only synthetic dataset v1
+
+- Created 500 deterministic synthetic OLA S1 trips with 1,265,829 one-second
+  GPS telemetry windows, calibrated against verified physical telemetry through
+  the 1.0.8/1.0.9 audit cutoff.
+- Produced disjoint train/validation/test cohorts of 350/75/75 trips and
+  890,800/191,223/183,806 windows. No simulated driver or route family appears
+  in more than one split.
+- Kept the `actual_wh_per_km` target in a separate trip-label file and verified
+  it does not appear in telemetry. All rows and labels carry explicit synthetic
+  provenance and contain no real account identifiers or copied real routes.
+- Verified all 1,265,829 compressed telemetry rows independently: exact counts,
+  one-second cadence, contiguous sequences, GPS outage null handling, no
+  charging, synthetic markers, manifest hashes, and split isolation all pass.
+- Synthetic distributions: distance 10.200-27.411 km (mean 15.904), GPS
+  completeness 95.364-100% (mean 98.280%), and target consumption
+  29.2144-37.9952 Wh/km (mean 33.2639).
+- Recorded the evidence boundary: this dataset supports development and
+  pretraining only; final model readiness and accuracy still require a
+  sufficiently large untouched real-trip evaluation set.
+
+## 2026-09-05 - GPS-only energy-model baseline
+
+- Added a tested offline training package that extracts 31 leakage-safe,
+  trip-level GPS features and leaves the production physics baseline unchanged.
+- Trained a mean baseline, ElasticNet and CatBoost on the fixed 350/75/75
+  route-family/driver-isolated split. Six modeling tests pass.
+- ElasticNet selected by validation MAE and scored test MAE `1.1704 Wh/km`,
+  RMSE `1.4773 Wh/km`, MAPE `3.5261%`, and R2 `0.1049`; CatBoost test MAE was
+  `1.2010 Wh/km`, and the mean baseline was `1.2286 Wh/km`.
+- Recorded a strict no-promotion verdict because the synthetic-only R2 is low,
+  the gain over the mean is small, and the SOC-derived target is quantized.
+  Generated artifacts include both models, test predictions, feature
+  importance, metrics, the trip feature table and a model card.
+
+## 2026-09-08 - Trip completion, stationary nudge and session hotfix
+
+- Reproduced the code path behind the tester's `Trip capture did not finish
+  sealing within 15 seconds` failure. A poll-driven native `START` could race an
+  end request and reopen the same Room trip from `ENDING` to `ACTIVE`.
+- Added state-guarded activation, ENDING-before-stop ordering, process-restart
+  recovery and final-window serialization so a retained active trip can seal
+  without losing queued telemetry.
+- Added the requested seven-minute stationary decision in the native foreground
+  collector and React UI: `I'm waiting` suppresses prompts until movement;
+  `End trip` opens the existing SOC-aware end flow.
+- Replaced immediate poll-time logout with serialized access/refresh-token
+  recovery, including one safe retry for start and end requests.
+- Built `com.trickee.gpsdriverapp` `1.0.10 (11)` with the registered upload key.
+  AAB SHA-256:
+  `EE50FB6CA455662D79D644A110F863F4E180D32C6717E078755B89AF60CC97B1`.
+  Mobile tests are `15/15`; Android release tests are `55/55`; TypeScript,
+  ESLint, release lint, release build and signature verification pass.
+- Google Play Console verified that `11 (1.0.10)` is active and `Available to
+  internal testers` on the Internal testing track, released on 8 Sept 2026 at
+  15:25. Cloud incident correlation is still pending because gcloud requires
+  interactive login. The tester must update in place and must not uninstall or
+  clear app data before ending/recovering the retained trip.
+
+## 2026-09-08 - Sealed-active trip recovery and production force-close
+
+- Reconciled the tester's pre-1.0.10 diagnostic with the post-update failure.
+  Trip `153c02bb...` was locally `ACTIVE` despite already containing final
+  sequence 1,345 and an end timestamp, so the old early-return path could not
+  advance it to `SYNC_PENDING`.
+- Added Room migration 2-to-3 and a transactional End Trip normalization for
+  this exact legacy state. Post-seal pending/in-flight rows are preserved as
+  `CAPTURED_AFTER_FINAL_SEQUENCE` instead of being uploaded or deleted.
+- Authenticated to production and ran an exact-trip read-only preflight inside
+  the private VPC. It confirmed the intended 1-to-1,345 range was fully stored;
+  the cloud trip itself was still `active / collecting` and lacked ending SOC.
+- Force-closed only that trip at `2026-09-08T02:12:48.750Z`, preserving 1,961
+  later rows for audit. Independent Cloud SQL verification reports no active
+  trip for the driver, 1,345 authoritative rows, zero missing sequences, and a
+  training-ineligible label because ending SOC is unavailable.
+- Published Android `1.0.11 (12)`. Current gates pass JVM unit tests, React
+  Native `15/15`, TypeScript, ESLint and instrumentation APK compilation.
+  The signed AAB SHA-256 is
+  `7DA05AB1C69BC61B3FA8BAF07CD85A52718238007E992C61CA8E0536ED3C269D`.
+  Play Console now shows `12 (1.0.11)` active and `Available to internal
+  testers`, released on 8 Sept 2026 at 16:56. The remaining gate is physical
+  in-place migration and end/start verification on the tester's handset.
+
+## 2026-09-08 - Daily planner chat and pre-trip SOC pilot
+
+- Added `Plan My Day` to `com.trickee.gpsdriverapp`: the tester can enter a
+  complete day in conversational text, review the deterministic stop/time
+  extraction, confirm it, and see sequential ETA, route evidence and estimated
+  arrival SOC for every leg.
+- The conversational layer uses an allowlisted LLM tool call and cannot override
+  coordinates, traffic, energy, SOC, charger evidence, notification priority or
+  send decisions. Google Places/Routes/charger calls are backend-only and fail
+  closed to explicit unavailable states.
+- Future-leg SOC uses the latest stored GPS prediction rate for the assigned
+  vehicle when available. The unpromoted synthetic ElasticNet artifact was not
+  relabeled as a live pre-trip model; vehicle-spec energy is an explicit fallback.
+- Added high-priority local Android WorkManager reminders and durable backend
+  notification occurrences. The new notification channel is isolated from the
+  foreground telemetry service.
+- Verification passed: backend 148 tests, focused daily-plan 10 tests, mobile 22
+  tests, TypeScript, ESLint, Android JVM/Kotlin build, and migration 0006
+  roundtrip. Created successful pre-deployment Cloud SQL backup 1788891590710.
+- Next release identity is `1.0.12 (13)`. Production deployment, artifact
+  signature/hash, Play acceptance and physical background notification receipt
+  are recorded only after their respective live gates complete.

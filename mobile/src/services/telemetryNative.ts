@@ -17,6 +17,7 @@ export type NativeTelemetryStatus = {
   stationaryNudgePending: boolean;
   deviceId?: string | null;
   vehicleId?: string | null;
+  lastLocation?: { lat: number; lng: number };
 };
 
 export type NativeStopResult = {
@@ -130,6 +131,31 @@ export async function stopTelemetryTrip(): Promise<NativeStopResult> {
 
 export async function telemetryStatus(): Promise<NativeTelemetryStatus> {
   return requireAndroidModule().status();
+}
+
+export async function currentPlannerLocation(): Promise<{
+  lat: number;
+  lng: number;
+}> {
+  await requestCollectorPermissions();
+  const result = await requireAndroidModule().currentLocation();
+  const lat = Number(result.lat);
+  const lng = Number(result.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error("A current GPS location is not available yet.");
+  }
+  return { lat, lng };
+}
+
+export async function scheduleHighPriorityReminder(data: {
+  occurrenceId: string;
+  title: string;
+  body: string;
+  dueAtMs: number;
+  planId: string;
+}): Promise<void> {
+  await requestCollectorPermissions();
+  await requireAndroidModule().scheduleHighPriorityReminder(data);
 }
 
 export async function acknowledgeStationaryNudge(): Promise<void> {

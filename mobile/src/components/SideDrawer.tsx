@@ -19,6 +19,8 @@ const ITEMS = [
   ["Monitoring", "gauge", "Monitoring"],
   ["AI Intelligence", "head-cog-outline", "AIAssistant"],
   ["Route Intelligence", "routes", "RouteIntel"],
+  ["Plan My Day", "calendar-clock", "DailyPlanner"],
+  ["Route Updates", "bell-outline", "RouteNudges"],
   ["Past Trips", "history", "PastTrips"],
   ["Daily Impact", "leaf", "DailyImpact"],
   ["Vehicle Specs", "motorbike-electric", "VehicleOnboarding"],

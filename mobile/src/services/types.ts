@@ -92,6 +92,128 @@ export type Alert = {
   created_at: string;
 };
 
+export type RouteNudgeEvent =
+  | "delivered"
+  | "opened"
+  | "accepted"
+  | "dismissed"
+  | "followed";
+
+export type RouteNudgePayload = {
+  screen: "route_nudge";
+  decision_id?: string;
+  planned_trip_id?: string;
+  selected_route_id?: string | null;
+  selected_charger_id?: string | null;
+  route_name?: string | null;
+  leave_at?: string | null;
+  arrival_soc_pct?: number | null;
+  provider_source?: string | null;
+  confidence?: number | null;
+  degraded_reason?: string | null;
+  destination_lat?: number | null;
+  destination_lng?: number | null;
+  place_confirmed?: boolean | null;
+  availability_confirmed?: boolean | null;
+};
+
+export type RouteNudgeOutcome = {
+  latest_event: RouteNudgeEvent;
+  delivered_at?: string | null;
+  opened_at?: string | null;
+  accepted_at?: string | null;
+  dismissed_at?: string | null;
+  followed_at?: string | null;
+  selected_route_id?: string | null;
+  selected_charger_id?: string | null;
+};
+
+export type RouteNudge = {
+  id: string;
+  driver_id?: string | null;
+  vehicle_id?: string | null;
+  planned_trip_id?: string | null;
+  route_decision_id?: string | null;
+  nudge_type: string;
+  title: string;
+  body: string;
+  payload: RouteNudgePayload;
+  delivery_status: string;
+  attempts: number;
+  due_at: string;
+  sent_at?: string | null;
+  failed_at?: string | null;
+  provider_error_code?: string | null;
+  outcome: RouteNudgeOutcome | null;
+};
+
+export type DailyPlanStop = {
+  label: string;
+  requested_arrival_local: string | null;
+  status: "unresolved" | "needs_confirmation" | string;
+};
+
+export type DailyPlanDraft = {
+  service_date: string;
+  timezone: string;
+  stops: DailyPlanStop[];
+  parser_source: string;
+  warnings: string[];
+};
+
+export type DailyPlanLeg = {
+  index: number;
+  destination: {
+    query?: string;
+    name?: string | null;
+    coordinates?: { lat: number; lng: number } | null;
+    source?: string;
+  };
+  requested_arrival_local: string | null;
+  planned_departure_at: string | null;
+  estimated_arrival_at: string | null;
+  distance_m: number | null;
+  duration_s: number | null;
+  traffic_delay_s: number | null;
+  starting_soc_pct: number | null;
+  energy_wh: number | null;
+  arrival_soc_pct: number | null;
+  route_source: string;
+  energy_source: string;
+  confidence: number;
+  degraded_reason: string | null;
+  chargers: Array<Record<string, unknown>>;
+};
+
+export type DailyPlan = {
+  id: string;
+  driver_id: string;
+  vehicle_id: string;
+  service_date: string;
+  timezone: string;
+  starting_soc_pct: number;
+  status: "draft" | "confirmed" | string;
+  draft: DailyPlanDraft;
+  result: {
+    legs: DailyPlanLeg[];
+    final_soc_pct: number | null;
+    complete: boolean;
+  } | null;
+  confirmed_at?: string | null;
+  created_at?: string | null;
+};
+
+export type DailyPlanChatResponse = {
+  plan: DailyPlan;
+  conversation: {
+    reply: string;
+    tool_calls: string[];
+    llm_fallback_used: boolean;
+    model_name?: string | null;
+    error_code?: string | null;
+  };
+};
+
 // --- Trip ---
 export type TripSession = {
   id: string;

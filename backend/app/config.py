@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     monitoring_audience: str = ""
     monitoring_caller_service_accounts: str = ""
     incomplete_finalization_timeout_hours: int = Field(default=24, ge=1, le=720)
+    google_maps_api_key: str = ""
+    external_api_timeout_seconds: float = Field(default=5.0, ge=1.0, le=20.0)
+    external_api_cache_seconds: int = Field(default=300, ge=30, le=3600)
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+    llm_timeout_seconds: float = Field(default=8.0, ge=1.0, le=30.0)
 
     @property
     def allowed_origin_list(self) -> list[str]:

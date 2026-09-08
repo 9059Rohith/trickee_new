@@ -13,11 +13,16 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableMap
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.gson.GsonBuilder
 import com.trickee.gpsdriver.BuildConfig
 import com.trickee.gpsdriver.telemetry.collector.TripCollectorService
 import com.trickee.gpsdriver.telemetry.diagnostics.TelemetryDiagnosticSnapshot
 import com.trickee.gpsdriver.telemetry.network.BackfillWorker
+import com.trickee.gpsdriver.telemetry.notifications.DailyPlanReminderWorker
 import com.trickee.gpsdriver.telemetry.security.DeviceCredentialStore
 import com.trickee.gpsdriver.telemetry.security.DeviceSession
 import com.trickee.gpsdriver.telemetry.storage.TelemetryDatabase
@@ -34,8 +39,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 class TelemetryModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
     private val credentials = DeviceCredentialStore(context)
@@ -302,6 +312,55 @@ class TelemetryModule(private val context: ReactApplicationContext) : ReactConte
         }
     }
 
+    @ReactMethod
+    fun currentLocation(promise: Promise) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            promise.reject("PLANNER_LOCATION_PERMISSION", "Precise location permission is required")
+            return
+        }
+        val cancellation = CancellationTokenSource()
+        LocationServices.getFusedLocationProviderClient(context)
+            .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellation.token)
+            .addOnSuccessListener { location ->
+                if (location == null) {
+                    promise.reject("PLANNER_LOCATION_UNAVAILABLE", "Current GPS location is unavailable")
+                } else {
+                    promise.resolve(Arguments.createMap().apply {
+                        putDouble("lat", location.latitude)
+                        putDouble("lng", location.longitude)
+                        putDouble("accuracyM", location.accuracy.toDouble())
+                        putDouble("capturedAtMs", location.time.toDouble())
+                    })
+                }
+            }
+            .addOnFailureListener { error -> promise.reject("PLANNER_LOCATION_FAILED", "Could not obtain current GPS location", error) }
+    }
+
+    @ReactMethod
+    fun scheduleHighPriorityReminder(options: ReadableMap, promise: Promise) {
+        try {
+            val occurrenceId = options.getString("occurrenceId")?.take(160) ?: throw IllegalArgumentException("occurrenceId required")
+            val title = options.getString("title")?.take(120) ?: throw IllegalArgumentException("title required")
+            val body = options.getString("body")?.take(500) ?: throw IllegalArgumentException("body required")
+            val planId = options.getString("planId")?.take(80) ?: throw IllegalArgumentException("planId required")
+            val dueAtMs = options.getDouble("dueAtMs").toLong()
+            val data = Data.Builder()
+                .putString(DailyPlanReminderWorker.KEY_OCCURRENCE, occurrenceId)
+                .putString(DailyPlanReminderWorker.KEY_TITLE, title)
+                .putString(DailyPlanReminderWorker.KEY_BODY, body)
+                .putString(DailyPlanReminderWorker.KEY_PLAN_ID, planId)
+                .build()
+            val request = OneTimeWorkRequestBuilder<DailyPlanReminderWorker>()
+                .setInputData(data)
+                .setInitialDelay(maxOf(0L, dueAtMs - System.currentTimeMillis()), TimeUnit.MILLISECONDS)
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork("daily-plan-$occurrenceId", ExistingWorkPolicy.REPLACE, request)
+            promise.resolve(null)
+        } catch (error: Exception) {
+            promise.reject("PLANNER_REMINDER_FAILED", "Could not schedule high-priority reminder", error)
+        }
+    }
+
     @ReactMethod fun status(promise: Promise) = promise.resolve(statusMap())
     @ReactMethod fun addListener(eventName: String) = Unit
     @ReactMethod fun removeListeners(count: Int) = Unit
@@ -316,6 +375,14 @@ class TelemetryModule(private val context: ReactApplicationContext) : ReactConte
         putBoolean("stationaryNudgePending", status.stationaryNudgePending)
         putString("deviceId", session?.deviceId)
         putString("vehicleId", session?.vehicleId)
+        status.lastLatitude?.let { lat ->
+            status.lastLongitude?.let { lng ->
+                putMap("lastLocation", Arguments.createMap().apply {
+                    putDouble("lat", lat)
+                    putDouble("lng", lng)
+                })
+            }
+        }
     }
 
     private fun storagePressure() = context.getDatabasePath(TelemetryDatabase.DATABASE_NAME).let { database ->

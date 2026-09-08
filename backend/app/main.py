@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import SessionLocal, get_db
-from app.routers import auth, devices, experience, fleet_owner, gps_intelligence, mobile, pilot_monitoring, soc, vehicles
+from app.routers import auth, daily_plans, devices, experience, fleet_owner, gps_intelligence, mobile, pilot_monitoring, route_nudges, soc, vehicles
 from app.services.auth import get_current_user
 from app.models.entities import User
 from app.services.gps_retention import cleanup_expired_raw_samples
@@ -82,6 +82,8 @@ app.include_router(soc.router, prefix=settings.api_prefix)
 app.include_router(vehicles.router, prefix=settings.api_prefix)
 app.include_router(experience.router, prefix=settings.api_prefix)
 app.include_router(fleet_owner.router, prefix=settings.api_prefix)
+app.include_router(route_nudges.router, prefix=settings.api_prefix)
+app.include_router(daily_plans.router, prefix=settings.api_prefix)
 app.include_router(pilot_monitoring.router)
 # Contract-compatible v2 ingestion route; the legacy mobile-prefixed route is
 # retained for existing app builds.

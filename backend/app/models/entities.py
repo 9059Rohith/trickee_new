@@ -11,9 +11,9 @@ NON-NEGOTIABLE RULES:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -489,3 +489,92 @@ class SOCReading(Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     recorded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class NotificationOutbox(Base):
+    """Durable, auditable driver notification awaiting provider delivery."""
+
+    __tablename__ = "notification_outbox"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    driver_id: Mapped[str] = mapped_column(String(36), ForeignKey("drivers.id"), nullable=False, index=True)
+    vehicle_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("vehicles.id"), nullable=True, index=True)
+    planned_trip_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    route_decision_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    nudge_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    due_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    last_error_detail: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class DailyPlan(Base):
+    """Confirmed-input boundary for one driver day; computed values retain evidence in result_payload."""
+
+    __tablename__ = "daily_plans"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    driver_id: Mapped[str] = mapped_column(String(36), ForeignKey("drivers.id"), nullable=False, index=True)
+    vehicle_id: Mapped[str] = mapped_column(String(36), ForeignKey("vehicles.id"), nullable=False, index=True)
+    service_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False)
+    starting_soc_pct: Mapped[float] = mapped_column(Float, nullable=False)
+    source_message: Mapped[str] = mapped_column(Text, nullable=False)
+    parser_source: Mapped[str] = mapped_column(String(50), nullable=False)
+    draft_payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    result_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft", index=True)
+    confirmation_key: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class NudgeOutcome(Base):
+    """Idempotent handset acknowledgement for one notification outbox row."""
+
+    __tablename__ = "nudge_outcomes"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    notification_outbox_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("notification_outbox.id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    driver_id: Mapped[str] = mapped_column(String(36), ForeignKey("drivers.id"), nullable=False, index=True)
+    latest_event: Mapped[str] = mapped_column(String(20), nullable=False)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    followed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    selected_route_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    selected_charger_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    outcome_metadata: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
