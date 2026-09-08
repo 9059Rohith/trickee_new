@@ -430,3 +430,12 @@
   `14591D08AD3A29575755D040A5C7BB332CC7C6FE0E4EE824E3603E0BD32EAA69`.
   Its only warning is missing optional deobfuscation data; final internal
   publish and physical-device proof remain pending.
+
+## 2026-09-09 - Daily planner published to internal testing
+
+- Confirmed the final Play publication dialog for `13 (1.0.12)`.
+- The Internal testing track now reports `Active`, `Latest release: 13
+  (1.0.12)`, and `Available to internal testers` with release time `9 Sept
+  00:55`.
+- No automated or console gate is outstanding. Physical-device verification
+  remains required; remote FCM delivery is still not claimed.

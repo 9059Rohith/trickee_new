@@ -565,3 +565,14 @@ Remaining pilot evidence:
   Play accepted version `13 (1.0.12)` on the release preview with only the
   non-blocking missing-deobfuscation-file warning. Final publish and physical
   handset proof remain outstanding.
+
+### Daily planner internal release publication — 2026-09-09
+
+- Google Play Internal testing now shows track status `Active`, latest release
+  `13 (1.0.12)`, and `Available to internal testers`.
+- Play reports `Released on 9 Sept 00:55` and `Not reviewed`; the temporary
+  unreviewed package-name label remains expected until app setup/review is
+  complete.
+- Publication is complete. The remaining release gate is physical-handset
+  verification of update-in-place migration, planner chat, route/SOC output,
+  background reminders and a fresh start/end trip cycle.
