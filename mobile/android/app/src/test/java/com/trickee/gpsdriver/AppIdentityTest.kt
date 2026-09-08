@@ -13,9 +13,9 @@ class AppIdentityTest {
     }
 
     @Test
-    fun appVersionMatchesLegacySealedTripRepairRelease() {
-        assertEquals(12, BuildConfig.VERSION_CODE)
-        assertEquals("1.0.11", BuildConfig.VERSION_NAME)
+    fun appVersionMatchesDailyPlannerRelease() {
+        assertEquals(13, BuildConfig.VERSION_CODE)
+        assertEquals("1.0.12", BuildConfig.VERSION_NAME)
     }
 
     @Test
