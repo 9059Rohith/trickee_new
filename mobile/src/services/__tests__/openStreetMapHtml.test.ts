@@ -24,4 +24,28 @@ describe("real OpenStreetMap renderer", () => {
     expect(html).toContain("© OpenStreetMap contributors");
     expect(html).not.toContain("roadHorizontal");
   });
+
+  it("renders recorded polylines and emits the settled picker center", () => {
+    const html = buildOpenStreetMapHtml({
+      latitude: 21.17,
+      longitude: 72.83,
+      zoom: 14,
+      markers: [],
+      pickerMode: true,
+      polylines: [{
+        id: "trip-1",
+        color: "#00e5ff",
+        points: [
+          { latitude: 21.17, longitude: 72.83 },
+          { latitude: 21.18, longitude: 72.84 },
+        ],
+      }],
+    });
+
+    expect(html).toContain('"id":"trip-1"');
+    expect(html).toContain("L.polyline(line.points.map");
+    expect(html).toContain("map.on('moveend'");
+    expect(html).toContain("type:'map-center'");
+    expect(html).toContain("21.18");
+  });
 });

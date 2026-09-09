@@ -13,6 +13,7 @@ import {
 import BackgroundLogo from "../../components/BackgroundLogo";
 import CalendarPickerModal from "../../components/CalendarPickerModal";
 import DailyPlanStopEditor from "../../components/DailyPlanStopEditor";
+import LocationPickerModal from "../../components/LocationPickerModal";
 import DailyPlanLegCard from "../../components/DailyPlanLegCard";
 import DetailHeader from "../../components/DetailHeader";
 import { Colors } from "../../constants/Colors";
@@ -21,6 +22,7 @@ import { useLiveData } from "../../context/LiveDataContext";
 import { api } from "../../services/api";
 import { schedulePlanReminders } from "../../services/dailyPlanNotifications";
 import { loadDailyPlan, saveDailyPlan, validateDailyPlanDraft } from "../../services/dailyPlans";
+import { updatePlannerStop } from "../../services/plannerForm";
 import { currentPlannerLocation } from "../../services/telemetryNative";
 import { showTestHighPriorityNotification } from "../../services/telemetryNative";
 import type { DailyPlan } from "../../services/types";
@@ -45,6 +47,43 @@ const DailyPlannerScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [reminderStatus, setReminderStatus] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [mapStopIndex, setMapStopIndex] = useState<number | null>(null);
+  const [mapInitial, setMapInitial] = useState({ lat: 21.1702, lng: 72.8311 });
+  const [mapFallbackUsed, setMapFallbackUsed] = useState(false);
+
+  const openStopMap = async (index: number) => {
+    const existing = plan?.draft.stops[index]?.coordinates;
+    if (existing) {
+      setMapInitial(existing);
+      setMapFallbackUsed(false);
+    } else {
+      const current = await currentPlannerLocation().catch(() => null);
+      setMapInitial(current || { lat: 21.1702, lng: 72.8311 });
+      setMapFallbackUsed(!current);
+    }
+    setMapStopIndex(index);
+  };
+
+  const confirmStopMap = (coordinates: { lat: number; lng: number }) => {
+    if (mapStopIndex == null) return;
+    setPlan(current => {
+      if (!current) return current;
+      const stop = current.draft.stops[mapStopIndex];
+      const stops = updatePlannerStop(current.draft.stops, mapStopIndex, {
+        coordinates,
+        status: "resolved",
+        resolved_location: {
+          name: stop.label || `Stop ${mapStopIndex + 1}`,
+          coordinates,
+          source: "user_map_pin",
+          confidence: 1,
+          degraded_reason: null,
+        },
+      });
+      return { ...current, draft: { ...current.draft, stops, warnings: [] } };
+    });
+    setMapStopIndex(null);
+  };
 
   const testNotification = async () => {
     setError(null);
@@ -183,7 +222,7 @@ const DailyPlannerScreen: React.FC = () => {
                   ...current,
                   draft: { ...current.draft, stops, warnings: [] },
                 }) : current)}
-                onSelectMap={() => setError("Move the map pin to choose this stop in the next screen.")}
+                onSelectMap={openStopMap}
               />}
               {validation?.reason ? <Text style={styles.warning}>{validation.reason} Edit the message and ask again.</Text> : null}
               {plan.status !== "confirmed" && validation?.valid ? (
@@ -204,6 +243,7 @@ const DailyPlannerScreen: React.FC = () => {
         </ScrollView>
       </KeyboardAvoidingView>
       <CalendarPickerModal visible={calendarOpen} value={serviceDate} today={localDate()} onSelect={setServiceDate} onClose={() => setCalendarOpen(false)} />
+      <LocationPickerModal visible={mapStopIndex != null} initialCoordinates={mapInitial} fallbackUsed={mapFallbackUsed} onConfirm={confirmStopMap} onClose={() => setMapStopIndex(null)} />
     </View>
   );
 };
