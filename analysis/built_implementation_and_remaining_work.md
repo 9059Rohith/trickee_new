@@ -647,3 +647,27 @@ Remaining pilot evidence:
   is deployed as `trickee-pilot-api-00015-n9s` with 100% traffic; `/health`
   returns `status=ok`. Existing incorrectly confirmed plans are immutable and
   must be recreated from the corrected message.
+
+### Calendar, map-selected stops, grounded location and trip history — 2026-09-10
+
+- Plan My Day now uses a dependency-free calendar and editable 1–10 stop
+  cards with add, delete and reorder controls. Each stop can use an exact
+  center-pin OpenStreetMap selection; those coordinates override text lookup.
+- Draft stops are enriched with Google Places evidence. Confirmation rejects
+  client-computed traffic, route, SOC and energy values and persists only the
+  owned label, time, coordinate and provider evidence contract.
+- AI Intelligence now sends a current phone fix when available. Location-aware
+  charger questions are grounded in bounded Google Places results and the UI
+  states whether vehicle data, phone GPS and charger listings were available.
+- Past Trips cards are clickable. The new day detail screen supports All day
+  and per-trip recorded polylines, start/end markers, actual versus estimated
+  energy, SOC, speed/stops/dwell, honest stored/final/missing GPS counts,
+  finalization, training eligibility and telemetry-event summaries.
+- Backend route traces are driver-authorized, finite-coordinate filtered,
+  sequence ordered and deterministically bounded to 800 points. Missing raw
+  telemetry shows an explicit unavailable state without fabricating a route.
+- Release identity is `1.0.14 (15)`. Verified locally: backend `175 passed`,
+  mobile Jest `40 passed`, TypeScript, ESLint and the full Android JVM suite.
+  Signed artifacts, backend deployment and Play publication are recorded only
+  after their independent gates complete. Remote FCM remains a separate,
+  unclaimed capability.

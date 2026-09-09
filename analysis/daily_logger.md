@@ -486,3 +486,19 @@
   `sha256:8cea97072b0114f2dc9d0576b89b5c51a244c39e88a9fd7ce8e925df00ed26a8`.
 - Cloud Run revision `trickee-pilot-api-00015-n9s` is healthy and serves 100%
   of API traffic.
+
+## 2026-09-10 - Planner map form and recorded trip history
+
+- Added calendar-based service-date entry and editable stop cards with
+  add/remove/reorder controls and exact OSM center-pin location selection.
+- Added provider-enriched daily-plan stops and a strict confirmation override
+  contract; map coordinates take precedence and client route/energy facts are
+  rejected.
+- Grounded AI Intelligence in optional phone GPS plus verified nearby charger
+  listings, with explicit evidence/degraded labels.
+- Added an authorized trip-day endpoint and clickable Past Trips details with
+  bounded recorded polylines and provenance-separated trip summaries.
+- TDD and regression result: backend `175 passed`; mobile Jest `15 suites / 40
+  tests`; TypeScript, ESLint and Android JVM tests pass. Prepared Android
+  `1.0.14 (15)` release checks; signing, Cloud Run and Play remain separate
+  verification steps.

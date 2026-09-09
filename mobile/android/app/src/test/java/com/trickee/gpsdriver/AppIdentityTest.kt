@@ -14,8 +14,8 @@ class AppIdentityTest {
 
     @Test
     fun appVersionMatchesDailyPlannerRelease() {
-        assertEquals(14, BuildConfig.VERSION_CODE)
-        assertEquals("1.0.13", BuildConfig.VERSION_NAME)
+        assertEquals(15, BuildConfig.VERSION_CODE)
+        assertEquals("1.0.14", BuildConfig.VERSION_NAME)
     }
 
     @Test
