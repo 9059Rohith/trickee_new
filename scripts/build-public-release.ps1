@@ -6,7 +6,8 @@ param(
     [string]$ExpectedUploadSha1 = '1F:B5:89:39:0D:03:53:49:80:A2:90:B1:80:CE:13:B0:8F:48:07:9A',
     [string]$GoogleWebClientId = '1044486768873-7sq9luvpsmkppgod40p5qdtbkbaq6m7q.apps.googleusercontent.com',
     [string]$ApiOrigin = 'https://trickee-pilot-api-pylmkxap6a-el.a.run.app',
-    [string]$WebSocketOrigin = 'https://trickee-pilot-websocket-pylmkxap6a-el.a.run.app'
+    [string]$WebSocketOrigin = 'https://trickee-pilot-websocket-pylmkxap6a-el.a.run.app',
+    [switch]$AllowWithoutFirebase
 )
 
 $ErrorActionPreference = 'Stop'
@@ -64,6 +65,9 @@ if ($SigningPropertiesFile) {
     }
     $resolvedSigningPropertiesFile = (Resolve-Path -LiteralPath $SigningPropertiesFile).Path
     $gradleArguments += ('-PTRICKEE_RELEASE_PROPERTIES_FILE="{0}"' -f $resolvedSigningPropertiesFile)
+}
+if ($AllowWithoutFirebase) {
+    $gradleArguments += '-PTRICKEE_ALLOW_RELEASE_WITHOUT_FCM=true'
 }
 $gradleCommand = (
     '"{0}" -p "{1}" bundleRelease assembleRelease {2} --console=plain'
@@ -158,7 +162,7 @@ $firebaseBuildConfigFields = @(
 $missingFirebaseFields = @($firebaseBuildConfigFields | Where-Object {
     $buildConfigText -notmatch ('{0}\s*=\s*"[^\"]+"' -f [regex]::Escape($_))
 })
-if ($missingFirebaseFields.Count -gt 0) {
+if ($missingFirebaseFields.Count -gt 0 -and -not $AllowWithoutFirebase) {
     throw "Release Firebase configuration is missing: $($missingFirebaseFields -join ', ')."
 }
 
@@ -255,6 +259,7 @@ $releaseMetadata = [ordered]@{
     Apk = $releaseApk
     ApkSha256 = $apkSha256
     SignatureVerified = $true
+    RemoteFcmConfigured = ($missingFirebaseFields.Count -eq 0)
 }
 $metadataPath = Join-Path $releaseDirectory "Trickee-GPS-Driver-public-$versionName-$versionCode.metadata.json"
 $releaseMetadata | ConvertTo-Json | Set-Content -LiteralPath $metadataPath -Encoding utf8

@@ -2,4 +2,4 @@ Live Map now uses real OpenStreetMap tiles and actual GPS/charger coordinates.
 Route Updates can open directions, save Accept/Dismiss actions, and show route evidence.
 Monitoring separates live GPS from stored model predictions.
 Charging guidance uses trip SOC, distance, and verified Google Places results.
-High-priority local and FCM notification delivery is added with safe retry handling.
+High-priority local reminders remain available. Remote FCM activation is pending administrator setup.
