@@ -11,6 +11,8 @@ import {
   View,
 } from "react-native";
 import BackgroundLogo from "../../components/BackgroundLogo";
+import CalendarPickerModal from "../../components/CalendarPickerModal";
+import DailyPlanStopEditor from "../../components/DailyPlanStopEditor";
 import DailyPlanLegCard from "../../components/DailyPlanLegCard";
 import DetailHeader from "../../components/DetailHeader";
 import { Colors } from "../../constants/Colors";
@@ -42,6 +44,7 @@ const DailyPlannerScreen: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reminderStatus, setReminderStatus] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const testNotification = async () => {
     setError(null);
@@ -98,6 +101,11 @@ const DailyPlannerScreen: React.FC = () => {
       const confirmed = await api.confirmDailyPlan(token, plan.id, {
         confirmation_key: `daily-plan-confirm-${plan.id}`,
         origin,
+        stops: plan.draft.stops.map(stop => ({
+          label: stop.label.trim(),
+          requested_arrival_local: stop.requested_arrival_local,
+          coordinates: stop.coordinates,
+        })),
       });
       setPlan(confirmed);
       await saveDailyPlan(confirmed);
@@ -147,7 +155,10 @@ const DailyPlannerScreen: React.FC = () => {
             maxLength={2000}
           />
           <View style={styles.inputRow}>
-            <TextInput style={[styles.input, styles.half]} value={serviceDate} onChangeText={setServiceDate} placeholder="YYYY-MM-DD" placeholderTextColor={Colors.secondaryText} />
+            <TouchableOpacity style={[styles.input, styles.half, styles.dateButton]} onPress={() => setCalendarOpen(true)}>
+              <Text style={styles.dateLabel}>Plan date</Text>
+              <Text style={styles.dateValue}>{serviceDate}</Text>
+            </TouchableOpacity>
             <TextInput style={[styles.input, styles.half]} value={startingSoc} onChangeText={setStartingSoc} placeholder="Current SOC %" placeholderTextColor={Colors.secondaryText} keyboardType="decimal-pad" />
           </View>
           <TouchableOpacity style={styles.primaryButton} disabled={busy} onPress={createDraft}>
@@ -161,12 +172,19 @@ const DailyPlannerScreen: React.FC = () => {
           {plan ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>{plan.status === "confirmed" ? "Today's prediction" : "Confirm these stops"}</Text>
-              {plan.draft.stops.map((stop, index) => (
+              {plan.status === "confirmed" ? plan.draft.stops.map((stop, index) => (
                 <View key={`${stop.label}-${index}`} style={styles.stopRow}>
                   <Text style={styles.stopName}>{index + 1}. {stop.label}</Text>
                   <Text style={styles.stopTime}>{stop.requested_arrival_local || "Time needed"}</Text>
                 </View>
-              ))}
+              )) : <DailyPlanStopEditor
+                stops={plan.draft.stops}
+                onChange={stops => setPlan(current => current ? ({
+                  ...current,
+                  draft: { ...current.draft, stops, warnings: [] },
+                }) : current)}
+                onSelectMap={() => setError("Move the map pin to choose this stop in the next screen.")}
+              />}
               {validation?.reason ? <Text style={styles.warning}>{validation.reason} Edit the message and ask again.</Text> : null}
               {plan.status !== "confirmed" && validation?.valid ? (
                 <TouchableOpacity style={styles.confirmButton} disabled={busy} onPress={confirm}>
@@ -185,6 +203,7 @@ const DailyPlannerScreen: React.FC = () => {
           ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
+      <CalendarPickerModal visible={calendarOpen} value={serviceDate} today={localDate()} onSelect={setServiceDate} onClose={() => setCalendarOpen(false)} />
     </View>
   );
 };
@@ -199,6 +218,9 @@ const styles = StyleSheet.create({
   messageInput: { minHeight: 100, textAlignVertical: "top" },
   inputRow: { flexDirection: "row", gap: 10 },
   half: { flex: 1 },
+  dateButton: { justifyContent: "center" },
+  dateLabel: { color: Colors.secondaryText, fontSize: 10 },
+  dateValue: { color: Colors.white, fontWeight: "800", marginTop: 2 },
   primaryButton: { minHeight: 50, borderRadius: 14, backgroundColor: Colors.trickeeYellow, alignItems: "center", justifyContent: "center", padding: 10 },
   primaryText: { color: Colors.darkText, fontWeight: "900" },
   testButton: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: Colors.neonBlue, alignItems: "center", justifyContent: "center", padding: 10 },

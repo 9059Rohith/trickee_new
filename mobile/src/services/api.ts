@@ -17,6 +17,7 @@ import type {
   RouteNudgeEvent,
   DailyPlan,
   DailyPlanChatResponse,
+  DailyPlanStop,
   Vehicle,
   VehicleSpecUpdate,
 } from "./types";
@@ -241,6 +242,7 @@ export const api = {
     data: {
       confirmation_key: string;
       origin: { lat: number; lng: number };
+      stops?: Array<Pick<DailyPlanStop, "label" | "requested_arrival_local" | "coordinates">>;
     }
   ) => request<DailyPlan>("POST", `/daily-plans/${planId}/confirm`, token, data),
 

@@ -152,6 +152,16 @@ export type DailyPlanStop = {
   label: string;
   requested_arrival_local: string | null;
   status: "unresolved" | "needs_confirmation" | string;
+  coordinates?: { lat: number; lng: number } | null;
+  resolved_location?: {
+    place_id?: string | null;
+    name?: string | null;
+    formatted_address?: string | null;
+    coordinates?: { lat: number; lng: number } | null;
+    source: string;
+    confidence?: number;
+    degraded_reason?: string | null;
+  } | null;
 };
 
 export type DailyPlanDraft = {

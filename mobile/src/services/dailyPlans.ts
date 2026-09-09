@@ -27,8 +27,13 @@ export function validateDailyPlanDraft(
     return { valid: false, reason: "Add at least one stop." };
   }
   if (
-    draft.warnings.length > 0 ||
-    draft.stops.some((stop) => !stop.requested_arrival_local)
+    draft.stops.length > 10 ||
+    draft.stops.some(
+      (stop) =>
+        !stop.label.trim() ||
+        !stop.requested_arrival_local ||
+        !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(stop.requested_arrival_local)
+    )
   ) {
     return {
       valid: false,
