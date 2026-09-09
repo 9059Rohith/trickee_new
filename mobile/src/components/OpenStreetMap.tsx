@@ -60,7 +60,7 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
     [initialLatitude, initialLongitude, initialZoom, markers, polylines, pickerMode]
   );
   return (
-    <View style={[styles.map, fill ? styles.fill : { height }, { borderRadius }]}> 
+    <View style={[styles.map, fill ? styles.fill : { height }, { borderRadius }]}>
       <WebView
         originWhitelist={["https://*", "about:blank"]}
         source={{ html, baseUrl: "https://localhost/" }}

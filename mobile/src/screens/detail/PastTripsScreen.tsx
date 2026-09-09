@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
+  TouchableOpacity,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../../constants/Colors";
@@ -20,6 +21,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useLiveData } from "../../context/LiveDataContext";
 import { api, ApiError } from "../../services/api";
 import type { Trip } from "../../services/types";
+import { localServiceDate } from "../../services/tripHistory";
 
 const fmt = (v: number | null | undefined, d = 1) =>
   typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "--";
@@ -39,7 +41,7 @@ const durationLabel = (start?: string | null, end?: string | null) => {
   return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
 };
 
-const PastTripsScreen: React.FC = () => {
+const PastTripsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { token } = useAuth();
   const { driver } = useLiveData();
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -119,7 +121,8 @@ const PastTripsScreen: React.FC = () => {
                   ? trip.soc_start - trip.soc_end
                   : null;
               return (
-                <GlassCard key={trip.id} cornerRadius={16} style={styles.card}>
+                <TouchableOpacity key={trip.id} activeOpacity={0.82} onPress={() => navigation.navigate("TripDetails", { driverId: driver!.id, serviceDate: localServiceDate(trip.started_at!), selectedTripId: trip.id })}>
+                <GlassCard cornerRadius={16} style={styles.card}>
                   <View style={styles.cardContent}>
                     <View style={styles.cardHeader}>
                       <Icon
@@ -157,8 +160,10 @@ const PastTripsScreen: React.FC = () => {
                       />
                       <Stat label="Duration" value={dur || "--"} />
                     </View>
+                    <View style={styles.openRow}><Text style={styles.openText}>View route & summary</Text><Icon name="chevron-right" size={20} color={Colors.trickeeYellow} /></View>
                   </View>
                 </GlassCard>
+                </TouchableOpacity>
               );
             })
           )}
@@ -203,6 +208,8 @@ const styles = StyleSheet.create({
   stat: { flex: 1, alignItems: "center", gap: 4 },
   statValue: { fontSize: 14, fontWeight: "800", color: Colors.white },
   statLabel: { fontSize: 9, fontWeight: "600", color: "rgba(255,255,255,0.4)" },
+  openRow: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 3 },
+  openText: { color: Colors.trickeeYellow, fontWeight: "800", fontSize: 11 },
 });
 
 export default PastTripsScreen;

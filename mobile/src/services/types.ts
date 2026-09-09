@@ -263,6 +263,81 @@ export type Trip = {
   route_taken?: string | null;
   recommended_route?: string | null;
   followed_nudge?: boolean | null;
+  estimated?: boolean;
+  confidence?: string | null;
+  source?: string | null;
+};
+
+export type TripRoutePoint = {
+  latitude: number;
+  longitude: number;
+  event_time: string;
+  sequence_no: number;
+};
+
+export type TripDayDetail = {
+  id: string;
+  vehicle_id?: string | null;
+  driver_id?: string | null;
+  status: string;
+  started_at: string | null;
+  ended_at: string | null;
+  origin: { lat: number | null; lng: number | null };
+  destination: { label: string | null; lat: number | null; lng: number | null };
+  route_points: TripRoutePoint[];
+  route_trace_available: boolean;
+  route_trace_unavailable_reason: string | null;
+  features: {
+    distance_km: number | null;
+    duration_minutes: number | null;
+    avg_speed_kmh: number | null;
+    max_speed_kmh: number | null;
+    stops_count: number;
+    total_dwell_minutes: number | null;
+  } | null;
+  telemetry_quality: {
+    stored_windows: number;
+    final_windows: number | null;
+    actual_missing_windows: number | null;
+    completeness_pct: number | null;
+  };
+  finalization: {
+    state: string;
+    processed_sequence_no: number;
+    summary: Record<string, unknown> | null;
+    completed_at: string | null;
+  } | null;
+  energy_label: {
+    starting_soc_pct: number | null;
+    ending_soc_pct: number | null;
+    soc_delta_pct: number | null;
+    actual_energy_consumed_wh: number | null;
+    actual_wh_per_km: number | null;
+    usable_kwh_snapshot: number | null;
+    source: string;
+    confidence: number;
+    is_training_eligible: boolean;
+    eligibility_reason: string;
+  } | null;
+  prediction: {
+    route_energy_wh: number | null;
+    wh_per_km: number | null;
+    soc_consumed_pct: number | null;
+    source: string | null;
+    confidence: string | null;
+    estimated: boolean;
+  } | null;
+  events: {
+    by_severity: Record<string, number>;
+    by_type: Record<string, number>;
+    latest: Array<{ type: string; severity: string; confidence: number; created_at: string | null }>;
+  };
+};
+
+export type TripDayResponse = {
+  service_date: string;
+  timezone: string;
+  trips: TripDayDetail[];
 };
 
 export type ChargerOption = {

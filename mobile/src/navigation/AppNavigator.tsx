@@ -21,6 +21,7 @@ import PastTripsScreen from "../screens/detail/PastTripsScreen";
 import DailyImpactScreen from "../screens/detail/DailyImpactScreen";
 import RouteNudgesScreen from "../screens/detail/RouteNudgesScreen";
 import DailyPlannerScreen from "../screens/detail/DailyPlannerScreen";
+import TripDetailsScreen from "../screens/detail/TripDetailsScreen";
 import AppHeader from "../components/AppHeader";
 import SideDrawer from "../components/SideDrawer";
 import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
@@ -152,6 +153,7 @@ export default function AppNavigator() {
                 component={RouteIntelScreen}
               />
               <RootStack.Screen name="PastTrips" component={PastTripsScreen} />
+              <RootStack.Screen name="TripDetails" component={TripDetailsScreen} />
               <RootStack.Screen
                 name="DailyImpact"
                 component={DailyImpactScreen}

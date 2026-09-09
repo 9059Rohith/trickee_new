@@ -18,6 +18,7 @@ import type {
   DailyPlan,
   DailyPlanChatResponse,
   DailyPlanStop,
+  TripDayResponse,
   Vehicle,
   VehicleSpecUpdate,
 } from "./types";
@@ -340,6 +341,20 @@ export const api = {
       undefined,
       signal
     ),
+
+  driverTripDay: (
+    token: string,
+    driverId: string,
+    serviceDate: string,
+    timezone = "Asia/Kolkata",
+    signal?: AbortSignal
+  ) => request<TripDayResponse>(
+    "GET",
+    `/drivers/${driverId}/trip-days/${serviceDate}?timezone=${encodeURIComponent(timezone)}`,
+    token,
+    undefined,
+    signal
+  ),
 
   recommendChargers: (token: string, data: any, signal?: AbortSignal) =>
     request<any>("POST", "/chargers/recommend", token, data, signal),
