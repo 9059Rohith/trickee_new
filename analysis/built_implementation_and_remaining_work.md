@@ -627,3 +627,23 @@ Remaining pilot evidence:
 - The Play internal-release draft editor is open, but upload could not be
   completed because the attached Chrome debugging connection dropped at the
   file chooser. No Play release/publication claim is made yet.
+
+### Plan My Day relative-date repair — 2026-09-09
+
+- Root cause of the evening `google_routes_http_error` was temporal, not a
+  Google Maps outage: the phone submitted `2026-09-09` while the driver's
+  message explicitly said `tomorrow`, so the backend sent already-expired
+  departure timestamps for the 07:45 and 17:00 stops.
+- The deterministic parser now anchors explicit `today` and `tomorrow` wording
+  to the driver's `Asia/Kolkata` date, and the API persists that resolved date
+  instead of the stale date field supplied by the client.
+- The route orchestrator rejects expired stops before calling Google Routes and
+  clamps imminent-route provider queries to a future timestamp. This prevents
+  provider HTTP errors from being used as schedule validation.
+- Regression tests were observed failing before the fix. The complete backend
+  suite passes `165/165` after the change.
+- Immutable image digest
+  `sha256:8cea97072b0114f2dc9d0576b89b5c51a244c39e88a9fd7ce8e925df00ed26a8`
+  is deployed as `trickee-pilot-api-00015-n9s` with 100% traffic; `/health`
+  returns `status=ok`. Existing incorrectly confirmed plans are immutable and
+  must be recreated from the corrected message.

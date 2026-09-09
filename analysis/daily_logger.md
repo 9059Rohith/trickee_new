@@ -469,3 +469,20 @@
   `F1FF3E1CBEC1EFD1E2E7607BBA3CA76EF2FB6DA4178F879872A68F764016FAF8`.
 - Play release preparation reached the upload form. Browser debugging detached
   during the file chooser, so version 14 is not yet uploaded or published.
+
+## 2026-09-09 - Plan My Day past-route incident repaired
+
+- Reproduced the tester's evening failure from screenshots: the message said
+  `tomorrow`, but the submitted and persisted service date remained
+  `2026-09-09`; Google Routes consequently received expired departure times.
+- Added deterministic relative-day resolution, persisted the resolved date,
+  rejected genuinely expired schedules before provider calls, and prevented
+  imminent routes from sending a past departure timestamp.
+- Red-green coverage added for all three behaviors. Full backend result:
+  `165 passed`.
+- Built the exact Git commit `c8d6625ef001ce9121eb13812249aca0ae13f086`
+  through Cloud Build `1ea6063a-cda7-486b-a4d6-307ec2be9f8f` and deployed
+  immutable digest
+  `sha256:8cea97072b0114f2dc9d0576b89b5c51a244c39e88a9fd7ce8e925df00ed26a8`.
+- Cloud Run revision `trickee-pilot-api-00015-n9s` is healthy and serves 100%
+  of API traffic.
