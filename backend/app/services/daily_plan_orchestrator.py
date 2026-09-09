@@ -22,7 +22,15 @@ def build_plan_result(
     wh_per_km: float | None,
     tools: DailyPlanTools,
     energy_rate_source: str = "vehicle_spec_range_implied",
+    now: datetime | None = None,
 ) -> dict:
+    timezone = ZoneInfo(timezone_name)
+    if now is None:
+        local_now = datetime.now(timezone)
+    elif now.tzinfo is None or now.utcoffset() is None:
+        local_now = now.replace(tzinfo=timezone)
+    else:
+        local_now = now.astimezone(timezone)
     current_origin = origin
     current_soc: float | None = starting_soc_pct
     legs: list[dict] = []
@@ -54,7 +62,22 @@ def build_plan_result(
             current_soc = None
             continue
         requested_arrival = _local_datetime(service_date, stop["requested_arrival_local"], timezone_name)
-        route = tools.plan_route_leg(current_origin, coordinates, requested_arrival - timedelta(minutes=30))
+        if requested_arrival <= local_now:
+            legs.append({
+                "index": index, "origin": current_origin, "destination": resolved,
+                "requested_arrival_local": stop["requested_arrival_local"],
+                "planned_departure_at": None, "estimated_arrival_at": None,
+                "distance_m": None, "duration_s": None, "traffic_delay_s": None,
+                "starting_soc_pct": current_soc, "energy_wh": None, "arrival_soc_pct": None,
+                "chargers": [], "route_source": "unavailable", "energy_source": "unavailable",
+                "confidence": 0.0, "degraded_reason": "schedule_time_in_past",
+            })
+            continue
+        route_query_departure = max(
+            requested_arrival - timedelta(minutes=30),
+            local_now + timedelta(minutes=1),
+        )
+        route = tools.plan_route_leg(current_origin, coordinates, route_query_departure)
         energy = estimate_leg_energy(distance_m=route.get("distance_m"), starting_soc_pct=current_soc, usable_kwh=usable_kwh, wh_per_km=wh_per_km, rate_source=energy_rate_source)
         duration_s = route.get("duration_s")
         departure = requested_arrival - timedelta(seconds=duration_s) if duration_s is not None else None

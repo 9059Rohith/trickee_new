@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
@@ -98,6 +98,7 @@ def parse_daily_plan(
     message: str,
     service_date: date,
     timezone_name: str,
+    reference_date: date | None = None,
 ) -> ParsedDailyPlan:
     value = message.strip()
     if not value:
@@ -105,9 +106,15 @@ def parse_daily_plan(
     if len(value) < 3 or len(value) > 2000:
         raise ValueError("message length must be between 3 and 2000 characters")
     try:
-        ZoneInfo(timezone_name)
+        timezone = ZoneInfo(timezone_name)
     except (ZoneInfoNotFoundError, ValueError) as exc:
         raise ValueError("timezone must be a valid IANA timezone") from exc
+
+    local_reference_date = reference_date or datetime.now(timezone).date()
+    if re.search(r"\btomorrow\b", value, re.IGNORECASE):
+        service_date = local_reference_date + timedelta(days=1)
+    elif re.search(r"\btoday\b", value, re.IGNORECASE):
+        service_date = local_reference_date
 
     stops = tuple(
         stop

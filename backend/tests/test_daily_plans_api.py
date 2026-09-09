@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,6 +13,7 @@ from app.main import app
 from app.models.entities import DailyPlan, Driver, Fleet, NotificationOutbox, TripPrediction, User, Vehicle
 from app.routers import daily_plans
 from app.services.auth import create_access_token
+from app.services.daily_plan_parser import ParsedDailyPlan, ParsedStop
 
 
 engine = create_engine("sqlite:///./test_daily_plans.db", connect_args={"check_same_thread": False})
@@ -76,7 +78,7 @@ def test_chat_persists_driver_scoped_draft_and_confirm_schedules_high_priority_o
     (user_id, driver_id, vehicle_id), headers = seed_driver()
     chat = client.post("/api/v1/daily-plans/chat", headers=headers, json={
         "message": "Office at 9 am, home at 7 pm",
-        "service_date": "2026-09-09", "timezone": "Asia/Kolkata", "starting_soc_pct": 80,
+        "service_date": "2099-09-09", "timezone": "Asia/Kolkata", "starting_soc_pct": 80,
     })
     assert chat.status_code == 200
     plan_id = chat.json()["data"]["plan"]["id"]
@@ -146,4 +148,37 @@ def test_confirmation_does_not_enqueue_expired_departure_notifications():
     assert response.status_code == 200
     db = TestSession()
     assert db.query(NotificationOutbox).count() == 0
+    db.close()
+
+
+def test_chat_persists_the_date_resolved_from_the_driver_message(monkeypatch):
+    _, headers = seed_driver()
+
+    class TomorrowConversation:
+        def handle(self, **_kwargs):
+            return SimpleNamespace(
+                plan=ParsedDailyPlan(
+                    service_date=datetime(2026, 9, 10).date(),
+                    timezone="Asia/Kolkata",
+                    stops=(ParsedStop("Office", "09:00", "unresolved"),),
+                    parser_source="deterministic_schedule_parser",
+                    warnings=[],
+                ),
+                reply="Office tomorrow at 09:00. Please confirm this schedule.",
+                tool_calls=["parse_day_schedule"],
+                llm_fallback_used=False,
+                model_name="test-model",
+                error_code=None,
+            )
+
+    monkeypatch.setattr(daily_plans, "daily_plan_conversation", TomorrowConversation())
+    response = client.post("/api/v1/daily-plans/chat", headers=headers, json={
+        "message": "Office at 9 am tomorrow",
+        "service_date": "2026-09-09", "timezone": "Asia/Kolkata", "starting_soc_pct": 80,
+    })
+
+    assert response.status_code == 200
+    assert response.json()["data"]["plan"]["service_date"] == "2026-09-10"
+    db = TestSession()
+    assert db.query(DailyPlan).one().service_date.isoformat() == "2026-09-10"
     db.close()

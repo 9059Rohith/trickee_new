@@ -101,7 +101,7 @@ def chat_daily_plan(
     draft = conversation.plan.to_dict()
     plan = DailyPlan(
         user_id=current_user.id, driver_id=driver.id, vehicle_id=vehicle.id,
-        service_date=body.service_date, timezone=body.timezone,
+        service_date=conversation.plan.service_date, timezone=conversation.plan.timezone,
         starting_soc_pct=body.starting_soc_pct, source_message=body.message,
         parser_source=conversation.plan.parser_source, draft_payload=draft, status="draft",
     )

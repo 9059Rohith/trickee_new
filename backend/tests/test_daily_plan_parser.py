@@ -46,3 +46,14 @@ def test_parser_rejects_unbounded_or_empty_messages():
         parse_daily_plan("x" * 2001, date(2026, 9, 9), "Asia/Kolkata")
     with pytest.raises(ValueError, match="at least one stop"):
         parse_daily_plan("   ", date(2026, 9, 9), "Asia/Kolkata")
+
+
+def test_parser_anchors_explicit_tomorrow_to_the_local_reference_date():
+    parsed = parse_daily_plan(
+        "Adani International School by 7:45 am tomorrow, home by 5 pm",
+        service_date=date(2026, 9, 9),
+        timezone_name="Asia/Kolkata",
+        reference_date=date(2026, 9, 9),
+    )
+
+    assert parsed.service_date == date(2026, 9, 10)
