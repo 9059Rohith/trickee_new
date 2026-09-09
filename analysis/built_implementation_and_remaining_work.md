@@ -609,3 +609,21 @@ Remaining pilot evidence:
   `rhythm@trickee.co.in` must add Firebase to that existing project and register
   Android package `com.trickee.gpsdriverapp`. A physical background push/tap
   trace is still required before remote notifications can be called verified.
+
+### Explicit non-FCM interim artifact — 2026-09-09
+
+- Added an opt-in `TRICKEE_ALLOW_RELEASE_WITHOUT_FCM=true` release switch so
+  the real-map, route-action, monitoring, charger, SOC and assistant repairs can
+  ship while administrator Firebase activation is pending. The normal release
+  path still fails closed when Firebase identity is absent.
+- Built and independently checked `1.0.13 (14)` with target SDK 36 and the
+  registered Play upload certificate SHA-1
+  `1F:B5:89:39:0D:03:53:49:80:A2:90:B1:80:CE:13:B0:8F:48:07:9A`.
+  AAB SHA-256 is
+  `87431335B777E5FADA0A23B3FA22FC1E59B2AEF5D344284AEDED6D20A562060F`;
+  APK SHA-256 is
+  `F1FF3E1CBEC1EFD1E2E7607BBA3CA76EF2FB6DA4178F879872A68F764016FAF8`.
+  Metadata explicitly records `RemoteFcmConfigured=false`.
+- The Play internal-release draft editor is open, but upload could not be
+  completed because the attached Chrome debugging connection dropped at the
+  file chooser. No Play release/publication claim is made yet.

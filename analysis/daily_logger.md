@@ -457,3 +457,15 @@
   Firebase on `trickee-jaswanth-pilot` and register
   `com.trickee.gpsdriverapp`; then the notification worker, signed bundle and
   physical high-priority background-delivery canary can be completed.
+
+## 2026-09-09 - Signed interim release artifact
+
+- Added an explicit non-FCM release override while keeping the default Firebase
+  release gate fail-closed.
+- Signed and verified `1.0.13 (14)` with the registered upload certificate.
+  AAB SHA-256:
+  `87431335B777E5FADA0A23B3FA22FC1E59B2AEF5D344284AEDED6D20A562060F`.
+  APK SHA-256:
+  `F1FF3E1CBEC1EFD1E2E7607BBA3CA76EF2FB6DA4178F879872A68F764016FAF8`.
+- Play release preparation reached the upload form. Browser debugging detached
+  during the file chooser, so version 14 is not yet uploaded or published.
