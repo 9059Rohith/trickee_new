@@ -2,20 +2,44 @@
 from __future__ import annotations
 
 import math
+from collections import Counter
+from datetime import date, datetime, time, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.entities import Driver, MobileTripSession, TripFeature, TripPrediction, User, Vehicle
+from app.models.entities import (
+    Driver,
+    MobileTripSession,
+    TelemetryEvent,
+    TelemetryWindow,
+    TripEnergyLabel,
+    TripFeature,
+    TripFinalization,
+    TripPrediction,
+    User,
+    Vehicle,
+)
 from app.schemas.api import ok, utc_iso
 from app.services.auth import get_current_user
 from app.services.daily_plan_tools import daily_plan_tools
 from app.services.gps_prediction_service import get_vehicle_gps_summary
+from app.services.trip_history import downsample_route_points, telemetry_quality, valid_route_points
 from app.services.vehicle_assistant import vehicle_assistant
 
 router = APIRouter(tags=["driver-experience"])
+
+
+def _require_trip_history_access(current_user: User, driver_id: str) -> None:
+    if current_user.driver_id != driver_id and current_user.role not in {"admin", "fleet_admin"}:
+        raise HTTPException(403, "Not allowed to view this driver")
+
+
+def _iso_or_none(value: datetime | None) -> str | None:
+    return utc_iso(value) if value else None
 
 
 @router.get("/drivers/{driver_id}/trips")
@@ -25,8 +49,7 @@ def driver_trips(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.driver_id != driver_id and current_user.role not in {"admin", "fleet_admin"}:
-        raise HTTPException(403, "Not allowed to view this driver")
+    _require_trip_history_access(current_user, driver_id)
     trips = (
         db.query(MobileTripSession)
         .filter(MobileTripSession.driver_id == driver_id)
@@ -72,6 +95,137 @@ def driver_trips(
             }
         )
     return ok(result)
+
+
+@router.get("/drivers/{driver_id}/trip-days/{service_date}")
+def driver_trip_day(
+    driver_id: str,
+    service_date: date,
+    timezone_name: str = Query("Asia/Kolkata", alias="timezone", min_length=3, max_length=64),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_trip_history_access(current_user, driver_id)
+    try:
+        local_zone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError as exc:
+        raise HTTPException(422, "Invalid IANA timezone") from exc
+
+    local_start = datetime.combine(service_date, time.min, tzinfo=local_zone)
+    local_end = datetime.combine(service_date, time.max, tzinfo=local_zone)
+    utc_start = local_start.astimezone(timezone.utc).replace(tzinfo=None)
+    utc_end = local_end.astimezone(timezone.utc).replace(tzinfo=None)
+    trips = (
+        db.query(MobileTripSession)
+        .filter(
+            MobileTripSession.driver_id == driver_id,
+            MobileTripSession.started_at >= utc_start,
+            MobileTripSession.started_at <= utc_end,
+        )
+        .order_by(MobileTripSession.started_at.asc())
+        .limit(100)
+        .all()
+    )
+
+    details = []
+    for trip in trips:
+        windows = (
+            db.query(TelemetryWindow)
+            .filter(TelemetryWindow.trip_id == trip.id)
+            .order_by(TelemetryWindow.sequence_no.asc())
+            .all()
+        )
+        route_points = downsample_route_points(valid_route_points(windows))
+        feature = db.query(TripFeature).filter(TripFeature.trip_id == trip.id).first()
+        finalization = db.query(TripFinalization).filter(TripFinalization.trip_id == trip.id).first()
+        label = db.query(TripEnergyLabel).filter(TripEnergyLabel.trip_id == trip.id).first()
+        prediction = (
+            db.query(TripPrediction)
+            .filter(TripPrediction.trip_id == trip.id)
+            .order_by(TripPrediction.created_at.desc())
+            .first()
+        )
+        events = (
+            db.query(TelemetryEvent)
+            .filter(TelemetryEvent.trip_id == trip.id)
+            .order_by(TelemetryEvent.created_at.desc())
+            .limit(20)
+            .all()
+        )
+        severity_counts = Counter(event.severity for event in events)
+        type_counts = Counter(event.event_type for event in events)
+        details.append({
+            "id": trip.id,
+            "vehicle_id": trip.vehicle_id,
+            "driver_id": trip.driver_id,
+            "status": trip.status,
+            "started_at": _iso_or_none(trip.started_at),
+            "ended_at": _iso_or_none(trip.ended_at),
+            "origin": {"lat": trip.origin_lat, "lng": trip.origin_lng},
+            "destination": {
+                "label": trip.destination_text,
+                "lat": trip.destination_lat,
+                "lng": trip.destination_lng,
+            },
+            "route_points": route_points,
+            "route_trace_available": bool(route_points),
+            "route_trace_unavailable_reason": None if route_points else "recorded_gps_unavailable_or_expired",
+            "features": None if not feature else {
+                "distance_km": feature.distance_km,
+                "duration_minutes": feature.duration_minutes,
+                "avg_speed_kmh": feature.avg_speed_kmh,
+                "max_speed_kmh": feature.max_speed_kmh,
+                "stops_count": feature.stops_count,
+                "total_dwell_minutes": feature.total_dwell_minutes,
+            },
+            "telemetry_quality": telemetry_quality(
+                stored_windows=len(windows), final_sequence_no=trip.final_sequence_no
+            ),
+            "finalization": None if not finalization else {
+                "state": finalization.state,
+                "processed_sequence_no": finalization.processed_sequence_no,
+                "summary": finalization.summary,
+                "completed_at": _iso_or_none(finalization.completed_at),
+            },
+            "energy_label": None if not label else {
+                "starting_soc_pct": label.starting_soc_pct,
+                "ending_soc_pct": label.ending_soc_pct,
+                "soc_delta_pct": label.soc_delta_pct,
+                "actual_energy_consumed_wh": label.actual_energy_consumed_wh,
+                "actual_wh_per_km": label.actual_wh_per_km,
+                "usable_kwh_snapshot": label.usable_kwh_snapshot,
+                "source": label.label_source,
+                "confidence": label.label_confidence,
+                "is_training_eligible": label.is_training_eligible,
+                "eligibility_reason": label.eligibility_reason,
+            },
+            "prediction": None if not prediction else {
+                "route_energy_wh": prediction.route_energy_wh,
+                "wh_per_km": prediction.wh_per_km,
+                "soc_consumed_pct": prediction.soc_consumed_pct,
+                "source": prediction.source,
+                "confidence": prediction.confidence,
+                "estimated": bool(prediction.estimated),
+            },
+            "events": {
+                "by_severity": dict(severity_counts),
+                "by_type": dict(type_counts),
+                "latest": [
+                    {
+                        "type": event.event_type,
+                        "severity": event.severity,
+                        "confidence": event.confidence,
+                        "created_at": _iso_or_none(event.created_at),
+                    }
+                    for event in events
+                ],
+            },
+        })
+    return ok({
+        "service_date": service_date.isoformat(),
+        "timezone": timezone_name,
+        "trips": details,
+    })
 
 
 class ChargerRequest(BaseModel):
