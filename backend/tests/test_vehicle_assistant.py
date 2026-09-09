@@ -82,3 +82,24 @@ def test_llm_can_only_answer_after_calling_authoritative_status_tool():
     assert "verified SOC" in result["answer"]
     assert requests[1]["messages"][-1]["role"] == "tool"
     assert '"value": 18.0' in requests[1]["messages"][-1]["content"]
+
+
+def test_unconfigured_fallback_reports_verified_location_and_charger_context():
+    result = VehicleAssistant(api_key="").answer(
+        message="Where is the nearest charger?",
+        summary={"vehicle_code": "EV-1", "latest_prediction": None, "soc": {}},
+        location_context={"lat": 21.17, "lng": 72.83, "source": "phone_gps"},
+        nearby_chargers=[{
+            "name": "Verified EV Point", "formatted_address": "Ring Road, Surat",
+            "source": "google_places", "availability_confirmed": False,
+        }],
+    )
+
+    assert result["location_used"] is True
+    assert result["charger_context_used"] is True
+    assert result["tools_called"] == [
+        "gps_vehicle_summary", "current_location_context", "nearby_chargers"
+    ]
+    assert "21.17000, 72.83000" in result["answer"]
+    assert "Verified EV Point" in result["answer"]
+    assert "live availability is not confirmed" in result["answer"]

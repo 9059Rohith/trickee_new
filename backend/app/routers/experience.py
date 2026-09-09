@@ -339,12 +339,17 @@ def recommend_chargers(
     })
 
 
+class AssistantLocation(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+
+
 class AssistantRequest(BaseModel):
     driver_id: str
     vehicle_id: str
     message: str = Field(min_length=1, max_length=1000)
     channel: str = "app"
-    location: dict | None = None
+    location: AssistantLocation | None = None
 
 
 @router.post("/assistant/message")
@@ -358,7 +363,25 @@ def assistant_message(
     summary = get_vehicle_gps_summary(db, body.vehicle_id)
     if "error" in summary:
         raise HTTPException(404, "Vehicle not found")
-    result = vehicle_assistant.answer(message=body.message, summary=summary)
+    location_context = None
+    nearby_chargers = []
+    if body.location:
+        location_context = {
+            **body.location.model_dump(),
+            "source": "phone_gps",
+            "confidence": 0.9,
+        }
+        normalized = body.message.casefold()
+        if any(word in normalized for word in ("charge", "charger", "nearby", "nearest")):
+            nearby_chargers = daily_plan_tools.find_route_chargers(
+                body.location.model_dump(), radius_m=5000
+            )[:10]
+    result = vehicle_assistant.answer(
+        message=body.message,
+        summary=summary,
+        location_context=location_context,
+        nearby_chargers=nearby_chargers,
+    )
     return ok({
         "intent": "gps_vehicle_summary",
         **result,

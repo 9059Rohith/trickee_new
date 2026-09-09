@@ -61,15 +61,22 @@ class FakeMobilityTools:
 
 
 class FakeAssistant:
-    def answer(self, *, message, summary):
+    def answer(self, *, message, summary, location_context=None, nearby_chargers=None):
         assert message == "Should I charge now?"
         assert summary["vehicle_code"] == "LIVE-EV"
+        tools = ["gps_vehicle_summary"]
+        if location_context:
+            tools.append("current_location_context")
+        if nearby_chargers:
+            tools.append("nearby_chargers")
         return {
             "answer": "Charge before the next long leg because the verified SOC is low.",
-            "tools_called": ["gps_vehicle_summary"],
+            "tools_called": tools,
             "llm_used": True,
             "model_name": "test-model",
             "error_code": None,
+            "location_used": location_context is not None,
+            "charger_context_used": bool(nearby_chargers),
         }
 
 
@@ -164,6 +171,29 @@ def test_assistant_uses_llm_boundary_with_authoritative_vehicle_summary():
     assert data["llm_used"] is True
     assert data["tools_called"] == ["gps_vehicle_summary"]
     assert "Charge before" in data["answer"]
+
+
+def test_assistant_uses_phone_location_and_verified_chargers_for_location_question():
+    (driver_id, vehicle_id), headers = seed_driver()
+
+    response = client.post(
+        "/api/v1/assistant/message",
+        headers=headers,
+        json={
+            "driver_id": driver_id,
+            "vehicle_id": vehicle_id,
+            "message": "Should I charge now?",
+            "location": {"lat": 21.17, "lng": 72.83},
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["location_used"] is True
+    assert data["charger_context_used"] is True
+    assert data["tools_called"] == [
+        "gps_vehicle_summary", "current_location_context", "nearby_chargers"
+    ]
 
 
 def test_trip_day_returns_recorded_route_and_separates_actual_from_estimated_evidence():

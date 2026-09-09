@@ -15,6 +15,8 @@ import BackgroundLogo from "../../components/BackgroundLogo";
 import { useAuth } from "../../context/AuthContext";
 import { useLiveData } from "../../context/LiveDataContext";
 import { api } from "../../services/api";
+import { assistantEvidenceLabel, buildAssistantRequest } from "../../services/assistantContext";
+import { currentPlannerLocation } from "../../services/telemetryNative";
 
 type Message = {
   role: "user" | "assistant";
@@ -43,19 +45,17 @@ const AIAssistantScreen: React.FC = () => {
     setMessages((items) => [...items, { role: "user", text }]);
     setSending(true);
     try {
-      const reply = await api.assistantMessage(token, {
-        driver_id: driver.id,
-        vehicle_id: vehicle.id,
-        message: text,
-      });
+      const location = await currentPlannerLocation().catch(() => null);
+      const reply = await api.assistantMessage(
+        token,
+        buildAssistantRequest(driver.id, vehicle.id, text, location)
+      );
       setMessages((items) => [
         ...items,
         {
           role: "assistant",
           text: reply.answer,
-          evidence: reply.llm_used
-            ? `LLM response · authoritative tool: ${(reply.tools_called || []).join(", ") || "vehicle summary"}`
-            : "Deterministic fallback · authoritative vehicle summary",
+          evidence: assistantEvidenceLabel(reply),
         },
       ]);
     } catch {

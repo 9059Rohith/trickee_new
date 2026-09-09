@@ -35,7 +35,11 @@ class VehicleAssistant:
         )
 
     @staticmethod
-    def _fallback(summary: dict) -> str:
+    def _fallback(
+        summary: dict,
+        location_context: dict | None = None,
+        nearby_chargers: list[dict] | None = None,
+    ) -> str:
         prediction = summary.get("latest_prediction") or {}
         soc = summary.get("soc") or {}
         parts = ["I can only report verified or explicitly estimated GPS-first data."]
@@ -54,16 +58,45 @@ class VehicleAssistant:
             parts.append(
                 f"Estimated remaining range is {summary['estimated_range_km']:.1f} km."
             )
+        if location_context:
+            parts.append(
+                "Current phone location is "
+                f"{location_context['lat']:.5f}, {location_context['lng']:.5f}."
+            )
+        if nearby_chargers:
+            charger = nearby_chargers[0]
+            name = charger.get("name") or "the nearest verified charger listing"
+            address = charger.get("formatted_address")
+            where = f" at {address}" if address else ""
+            parts.append(
+                f"The nearest Google Places result is {name}{where}; "
+                "live availability is not confirmed."
+            )
         return " ".join(parts)[:1000]
 
-    def answer(self, *, message: str, summary: dict) -> dict:
-        fallback = self._fallback(summary)
+    def answer(
+        self,
+        *,
+        message: str,
+        summary: dict,
+        location_context: dict | None = None,
+        nearby_chargers: list[dict] | None = None,
+    ) -> dict:
+        nearby_chargers = nearby_chargers or []
+        fallback = self._fallback(summary, location_context, nearby_chargers)
+        tools_called = [self.tool_name]
+        if location_context:
+            tools_called.append("current_location_context")
+        if nearby_chargers:
+            tools_called.append("nearby_chargers")
         base = {
             "answer": fallback,
-            "tools_called": [self.tool_name],
+            "tools_called": tools_called,
             "llm_used": False,
             "model_name": self.model if self.api_key else None,
             "error_code": "llm_not_configured" if not self.api_key else None,
+            "location_used": location_context is not None,
+            "charger_context_used": bool(nearby_chargers),
         }
         if not self.api_key:
             return base
@@ -132,7 +165,15 @@ class VehicleAssistant:
                         "role": "tool",
                         "tool_call_id": call.get("id"),
                         "name": self.tool_name,
-                        "content": json.dumps(summary, default=str, sort_keys=True),
+                        "content": json.dumps(
+                            {
+                                "vehicle_summary": summary,
+                                "current_location": location_context,
+                                "nearby_chargers": nearby_chargers,
+                            },
+                            default=str,
+                            sort_keys=True,
+                        ),
                     },
                 ]
                 final_response = client.post(
@@ -158,10 +199,12 @@ class VehicleAssistant:
                 return {**base, "error_code": "llm_answer_missing"}
             return {
                 "answer": answer.strip()[:1000],
-                "tools_called": [self.tool_name],
+                "tools_called": tools_called,
                 "llm_used": True,
                 "model_name": self.model,
                 "error_code": None,
+                "location_used": location_context is not None,
+                "charger_context_used": bool(nearby_chargers),
             }
         except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError):
             return {**base, "error_code": "llm_unavailable"}
