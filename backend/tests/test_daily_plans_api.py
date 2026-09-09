@@ -182,3 +182,69 @@ def test_chat_persists_the_date_resolved_from_the_driver_message(monkeypatch):
     db = TestSession()
     assert db.query(DailyPlan).one().service_date.isoformat() == "2026-09-10"
     db.close()
+
+
+def test_chat_enriches_each_stop_with_provider_location_evidence():
+    _, headers = seed_driver()
+
+    response = client.post("/api/v1/daily-plans/chat", headers=headers, json={
+        "message": "Office at 9 am", "service_date": "2099-09-09",
+        "timezone": "Asia/Kolkata", "starting_soc_pct": 80,
+    })
+
+    assert response.status_code == 200
+    stop = response.json()["data"]["plan"]["draft"]["stops"][0]
+    assert stop["coordinates"] == {"lat": 21.17, "lng": 72.83}
+    assert stop["resolved_location"]["name"] == "Office"
+    assert stop["resolved_location"]["source"] == "test_places"
+    assert stop["status"] == "resolved"
+
+
+def test_confirmation_accepts_edited_stops_and_map_coordinates_take_precedence():
+    _, headers = seed_driver()
+    chat = client.post("/api/v1/daily-plans/chat", headers=headers, json={
+        "message": "Office at 9 am", "service_date": "2099-09-09",
+        "timezone": "Asia/Kolkata", "starting_soc_pct": 80,
+    })
+    plan_id = chat.json()["data"]["plan"]["id"]
+
+    response = client.post(f"/api/v1/daily-plans/{plan_id}/confirm", headers=headers, json={
+        "confirmation_key": "edited-map-stop",
+        "origin": {"lat": 21.15, "lng": 72.80},
+        "stops": [{
+            "label": "Pinned office entrance",
+            "requested_arrival_local": "09:15",
+            "coordinates": {"lat": 23.0123, "lng": 72.5012},
+        }],
+    })
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["draft"]["stops"][0]["label"] == "Pinned office entrance"
+    assert data["result"]["legs"][0]["destination"]["coordinates"] == {
+        "lat": 23.0123, "lng": 72.5012,
+    }
+    assert data["result"]["legs"][0]["destination"]["source"] == "user_map_pin"
+
+
+def test_confirmation_rejects_too_many_stops_and_client_computed_facts():
+    _, headers = seed_driver()
+    chat = client.post("/api/v1/daily-plans/chat", headers=headers, json={
+        "message": "Office at 9 am", "service_date": "2099-09-09",
+        "timezone": "Asia/Kolkata", "starting_soc_pct": 80,
+    })
+    plan_id = chat.json()["data"]["plan"]["id"]
+    origin = {"lat": 21.15, "lng": 72.80}
+    too_many = [{"label": f"Stop {index}", "requested_arrival_local": "09:00"} for index in range(11)]
+
+    assert client.post(f"/api/v1/daily-plans/{plan_id}/confirm", headers=headers, json={
+        "confirmation_key": "too-many-stops", "origin": origin, "stops": too_many,
+    }).status_code == 422
+    assert client.post(f"/api/v1/daily-plans/{plan_id}/confirm", headers=headers, json={
+        "confirmation_key": "invented-energy", "origin": origin,
+        "stops": [{
+            "label": "Office", "requested_arrival_local": "09:00",
+            "coordinates": {"lat": 21.17, "lng": 72.83},
+            "route_energy_wh": 1,
+        }],
+    }).status_code == 422

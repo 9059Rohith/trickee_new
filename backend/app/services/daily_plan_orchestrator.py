@@ -35,7 +35,7 @@ def build_plan_result(
     current_soc: float | None = starting_soc_pct
     legs: list[dict] = []
     for index, stop in enumerate(stops):
-        resolved = tools.resolve_destination(stop["label"])
+        resolved = stop.get("resolved_location") or tools.resolve_destination(stop["label"])
         coordinates = resolved.get("coordinates")
         if not coordinates:
             legs.append({

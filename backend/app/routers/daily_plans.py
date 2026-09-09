@@ -36,11 +36,28 @@ class Coordinates(BaseModel):
     lng: float = Field(ge=-180, le=180)
 
 
+class ConfirmStop(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(min_length=1, max_length=160)
+    requested_arrival_local: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    coordinates: Coordinates | None = None
+
+    @field_validator("label")
+    @classmethod
+    def clean_label(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("Stop label is required")
+        return cleaned
+
+
 class ConfirmRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     confirmation_key: str = Field(min_length=8, max_length=255)
     origin: Coordinates
+    stops: list[ConfirmStop] | None = Field(default=None, min_length=1, max_length=10)
 
 
 def _require_driver(db: Session, user: User) -> Driver:
@@ -82,6 +99,59 @@ def _owned_plan(db: Session, plan_id: str, user: User, driver: Driver) -> DailyP
     return plan
 
 
+def _enrich_stops(stops: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    enriched = []
+    for stop in stops[:10]:
+        resolved = daily_plan_tools.resolve_destination(stop["label"])
+        coordinates = resolved.get("coordinates")
+        enriched.append({
+            **stop,
+            "status": "resolved" if coordinates else "needs_confirmation",
+            "coordinates": coordinates,
+            "resolved_location": resolved,
+        })
+    return enriched
+
+
+def _confirmed_stops(plan: DailyPlan, overrides: list[ConfirmStop] | None) -> list[dict[str, Any]]:
+    existing = list((plan.draft_payload or {}).get("stops") or [])
+    if overrides is None:
+        return existing
+    confirmed = []
+    for index, override in enumerate(overrides):
+        row = override.model_dump()
+        coordinates = row.get("coordinates")
+        if coordinates:
+            original = existing[index] if index < len(existing) else {}
+            original_coordinates = original.get("coordinates")
+            preserve_provider = (
+                original.get("label") == row["label"]
+                and original_coordinates == coordinates
+                and original.get("resolved_location")
+            )
+            resolved = original["resolved_location"] if preserve_provider else {
+                "query": row["label"],
+                "name": row["label"],
+                "formatted_address": None,
+                "coordinates": coordinates,
+                "source": "user_map_pin",
+                "confidence": 1.0,
+                "degraded_reason": None,
+            }
+            confirmed.append({
+                **row, "status": "resolved", "resolved_location": resolved,
+            })
+        else:
+            resolved = daily_plan_tools.resolve_destination(row["label"])
+            confirmed.append({
+                **row,
+                "coordinates": resolved.get("coordinates"),
+                "status": "resolved" if resolved.get("coordinates") else "needs_confirmation",
+                "resolved_location": resolved,
+            })
+    return confirmed
+
+
 @router.post("/chat")
 def chat_daily_plan(
     body: ChatRequest,
@@ -99,6 +169,7 @@ def chat_daily_plan(
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     draft = conversation.plan.to_dict()
+    draft["stops"] = _enrich_stops(draft.get("stops") or [])
     plan = DailyPlan(
         user_id=current_user.id, driver_id=driver.id, vehicle_id=vehicle.id,
         service_date=conversation.plan.service_date, timezone=conversation.plan.timezone,
@@ -161,8 +232,15 @@ def confirm_daily_plan(
     elif usable_kwh and vehicle.certified_range and vehicle.certified_range > 0:
         wh_per_km = usable_kwh * 1000.0 / vehicle.certified_range
         energy_rate_source = "vehicle_spec_range_implied"
+    stops = _confirmed_stops(plan, body.stops)
+    if body.stops is not None:
+        plan.draft_payload = {
+            **(plan.draft_payload or {}),
+            "stops": stops,
+            "warnings": [],
+        }
     result = build_plan_result(
-        stops=(plan.draft_payload or {}).get("stops") or [],
+        stops=stops,
         service_date=plan.service_date, timezone_name=plan.timezone,
         origin=body.origin.model_dump(), starting_soc_pct=plan.starting_soc_pct,
         usable_kwh=usable_kwh, wh_per_km=wh_per_km,
