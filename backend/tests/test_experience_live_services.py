@@ -246,11 +246,14 @@ def test_trip_day_returns_recorded_route_and_separates_actual_from_estimated_evi
         wh_per_km=30.59, source="gps_model", estimated=True,
         confidence="medium",
     ))
-    db.add(TelemetryEvent(
-        vehicle_id=vehicle_id, trip_id=trip.id, source_sample_id="trip-day-2",
-        processor_name="quality", event_type="gps_accuracy_low",
-        severity="warning", confidence=0.8, payload={"accuracy_m": 42},
-    ))
+    for event_no in range(25):
+        db.add(TelemetryEvent(
+            vehicle_id=vehicle_id, trip_id=trip.id,
+            source_sample_id=f"trip-day-event-{event_no}",
+            processor_name="quality", event_type="gps_accuracy_low",
+            severity="warning", confidence=0.8, payload={"accuracy_m": 42},
+            created_at=datetime(2026, 9, 10, 3, 1, event_no),
+        ))
     db.commit()
     db.close()
 
@@ -273,7 +276,9 @@ def test_trip_day_returns_recorded_route_and_separates_actual_from_estimated_evi
     }
     assert detail["energy_label"]["actual_energy_consumed_wh"] == 240
     assert detail["prediction"]["route_energy_wh"] == 260
-    assert detail["events"]["by_severity"] == {"warning": 1}
+    assert detail["events"]["by_severity"] == {"warning": 25}
+    assert detail["events"]["by_type"] == {"gps_accuracy_low": 25}
+    assert len(detail["events"]["latest"]) == 20
     assert detail["events"]["latest"][0]["type"] == "gps_accuracy_low"
 
 

@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import math
-from collections import Counter
 from datetime import date, datetime, time, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -152,8 +152,18 @@ def driver_trip_day(
             .limit(20)
             .all()
         )
-        severity_counts = Counter(event.severity for event in events)
-        type_counts = Counter(event.event_type for event in events)
+        severity_counts = dict(
+            db.query(TelemetryEvent.severity, func.count(TelemetryEvent.id))
+            .filter(TelemetryEvent.trip_id == trip.id)
+            .group_by(TelemetryEvent.severity)
+            .all()
+        )
+        type_counts = dict(
+            db.query(TelemetryEvent.event_type, func.count(TelemetryEvent.id))
+            .filter(TelemetryEvent.trip_id == trip.id)
+            .group_by(TelemetryEvent.event_type)
+            .all()
+        )
         details.append({
             "id": trip.id,
             "vehicle_id": trip.vehicle_id,
