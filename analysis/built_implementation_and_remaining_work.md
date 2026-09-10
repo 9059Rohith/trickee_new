@@ -700,3 +700,20 @@ Remaining pilot evidence:
   Past Trips routes and local reminders. Remote FCM delivery remains
   intentionally unclaimed until Firebase configuration and a physical push
   canary exist.
+
+### Google Credential Manager recovery patch — 2026-09-10
+
+- Live Cloud Run evidence separates the failure from OAuth and backend health:
+  Google login returned 200, session refresh returned 200, mobile bootstrap
+  returned 200, and telemetry continued uploading. After explicit logout, the
+  next failed sign-in did not reach the backend.
+- Android now clears credential-provider state on logout, uses the dedicated
+  Sign in with Google button option, and makes one bounded clear-and-retry
+  attempt for recoverable provider failures.
+- Login errors retain safe native error codes and bounded messages so future
+  provider, device-support and cancellation cases are distinguishable without
+  exposing tokens.
+- Release identity is advanced to `1.0.15 (16)` for an update-in-place patch.
+  Publishing remains unclaimed until the signed build gates and Play action
+  complete; runtime resolution remains unclaimed until a physical sign-out and
+  sign-in canary succeeds.

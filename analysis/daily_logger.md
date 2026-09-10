@@ -522,3 +522,21 @@
   ESLint, Android JVM tests and signed release build pass. Metadata explicitly
   records `RemoteFcmConfigured=false`; physical handset UX/reminder checks and
   any remote FCM claim remain outstanding.
+
+## 2026-09-10 - Google sign-in-after-logout repair
+
+- Production request logs proved that Google token exchange, backend audience
+  validation, session refresh, trip start and telemetry upload were healthy.
+  The failing retry produced no `/api/v2/auth/google` request after an explicit
+  logout, locating the incident inside Android Credential Manager.
+- The Android logout implementation had cleared Trickee's encrypted session
+  but not the credential provider's active state. It now calls
+  `clearCredentialState()` as required by the Android Sign in with Google
+  contract.
+- The visible Google button now uses `GetSignInWithGoogleOption`. A recoverable
+  provider failure clears stale state and retries once; cancellation,
+  unsupported-device and provider-configuration failures remain distinct.
+- Native failure codes and bounded messages are now visible on the login screen
+  instead of being collapsed into `Unable to sign in with Google`.
+- Patch identity is `1.0.15 (16)`. Source tests and signed artifacts are tracked
+  separately below; Play publication and physical handset proof remain pending.

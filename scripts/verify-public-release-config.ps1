@@ -20,8 +20,8 @@ $expectations = [ordered]@{
     'target SDK 36' = $rootGradle -match 'targetSdkVersion\s*=\s*36'
     'build tools 36.0.0' = $rootGradle -match 'buildToolsVersion\s*=\s*"36\.0\.0"'
     'public package' = $appGradle -match 'applicationId\s+"com\.trickee\.gpsdriverapp"'
-    'version code 15' = $appGradle -match 'versionCode\s+15(?:\s|$)'
-    'version name 1.0.14' = $appGradle -match 'versionName\s+"1\.0\.14"'
+    'version code 16' = $appGradle -match 'versionCode\s+16(?:\s|$)'
+    'version name 1.0.15' = $appGradle -match 'versionName\s+"1\.0\.15"'
     'wrapper timeout 120 seconds' = $wrapperProperties -match '(?m)^networkTimeout=120000\s*$'
     'release fails closed without signing' = $appGradle -match 'GPS Driver release builds require the registered upload key'
     'release fails closed without Firebase unless explicitly waived' = $appGradle -match 'GPS Driver release builds require all TRICKEE_FIREBASE'
@@ -45,4 +45,4 @@ if ($failed.Count -gt 0) {
     throw "GPS Driver public release configuration is incomplete: $names"
 }
 
-Write-Output 'GPS Driver release configuration verified: com.trickee.gpsdriverapp, 1.0.14 (15), target SDK 36.'
+Write-Output 'GPS Driver release configuration verified: com.trickee.gpsdriverapp, 1.0.15 (16), target SDK 36.'

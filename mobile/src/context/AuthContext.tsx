@@ -10,6 +10,7 @@ import React, {
 import { api, ApiError } from "../services/api";
 import type { User } from "../services/types";
 import { nativeAuth } from "../services/authNative";
+import { googleAuthErrorMessage } from "../services/googleAuthError";
 import { SessionRestorer } from "../services/sessionRecovery";
 
 type AuthContextValue = {
@@ -78,7 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const message =
         err instanceof ApiError
           ? err.message
-          : "Unable to sign in with Google.";
+          : googleAuthErrorMessage(err);
       setError(message);
       throw err;
     } finally {
