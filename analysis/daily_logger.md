@@ -502,3 +502,23 @@
   tests`; TypeScript, ESLint and Android JVM tests pass. Prepared Android
   `1.0.14 (15)` release checks; signing, Cloud Run and Play remain separate
   verification steps.
+
+## 2026-09-10 - GPS Driver 1.0.14 deployed and published
+
+- Signed and verified `com.trickee.gpsdriverapp` `1.0.14 (15)`, target SDK 36.
+  AAB SHA-256:
+  `5CFCB1CC1182CEF179644CD474A1164EFE7BE4672DA545D65ED63F1FB5FA894A`.
+  APK SHA-256:
+  `854CDF63021BBF4858D050EC6C67A914742495B564B10EF0A707FFC822F46456`.
+- Cloud Build `00513c06-4b2b-4bca-8757-b93a4a666665` built commit `f76a7af`.
+  Cloud Run revision `trickee-pilot-api-00016-vzp` serves 100% traffic from
+  immutable digest
+  `sha256:4114853256ab3172fa616d0d63a1f8e0613d20f922ed3d1f5443ddd8392673b2`;
+  health and required OpenAPI paths pass with no revision error logs.
+- Play Internal testing is `Active`; release `15 (1.0.14)` is `Available to
+  internal testers`, released 10 Sept at 09:30. Only the non-blocking optional
+  deobfuscation warning was shown.
+- Final local gates: backend `175 passed`, mobile Jest `40 passed`, TypeScript,
+  ESLint, Android JVM tests and signed release build pass. Metadata explicitly
+  records `RemoteFcmConfigured=false`; physical handset UX/reminder checks and
+  any remote FCM claim remain outstanding.

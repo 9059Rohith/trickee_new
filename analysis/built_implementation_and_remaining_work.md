@@ -671,3 +671,32 @@ Remaining pilot evidence:
   Signed artifacts, backend deployment and Play publication are recorded only
   after their independent gates complete. Remote FCM remains a separate,
   unclaimed capability.
+
+### GPS Driver 1.0.14 release and deployment — 2026-09-10
+
+- The signed `com.trickee.gpsdriverapp` release is `1.0.14 (15)`, target SDK
+  36, with the registered upload certificate. AAB SHA-256 is
+  `5CFCB1CC1182CEF179644CD474A1164EFE7BE4672DA545D65ED63F1FB5FA894A`;
+  APK SHA-256 is
+  `854CDF63021BBF4858D050EC6C67A914742495B564B10EF0A707FFC822F46456`.
+  Build metadata reports `SignatureVerified=true` and
+  `RemoteFcmConfigured=false`.
+- Cloud Build `00513c06-4b2b-4bca-8757-b93a4a666665` built exact source commit
+  `f76a7afd58e6e46e6c9ff0c0768e7fe0e6b225b6`. Immutable image digest
+  `sha256:4114853256ab3172fa616d0d63a1f8e0613d20f922ed3d1f5443ddd8392673b2`
+  is deployed as Cloud Run revision `trickee-pilot-api-00016-vzp` with 100%
+  traffic. `/health` returns `status=ok`, the trip-day, daily-plan confirm and
+  assistant-message OpenAPI paths are live, and no revision error logs were
+  found in the verification window.
+- Google Play Internal testing reports the track `Active`, latest release
+  `15 (1.0.14)`, and `Available to internal testers`, released on 10 Sept at
+  09:30. The sole Play warning is the optional missing deobfuscation file;
+  this release does not enable code obfuscation.
+- Fresh final evidence is backend `175 passed`, mobile Jest `15 suites / 40
+  tests`, TypeScript, ESLint, Android JVM tests, release lint/compilation,
+  signature verification and exact post-copy hashes.
+- Remaining external evidence is a physical handset update-in-place check for
+  calendar/map stop editing, location-grounded assistant answers, recorded
+  Past Trips routes and local reminders. Remote FCM delivery remains
+  intentionally unclaimed until Firebase configuration and a physical push
+  canary exist.
