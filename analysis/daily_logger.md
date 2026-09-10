@@ -549,3 +549,15 @@
   `EFDE5EFF990F27837B765F91F8899293DAAA7F40571851F328BE1E028CE8B111`.
 - The artifacts are prepared locally only. Google Play publication and the
   physical sign-out/sign-in canary are not yet claimed.
+
+## 2026-09-10 - GPS Driver 1.0.15 published to Internal testing
+
+- Google Play accepted the signed `com.trickee.gpsdriverapp` bundle as version
+  `16 (1.0.15)`, target SDK 36, with no supported-device regressions.
+- Internal testing is `Active`; release `16 (1.0.15)` is `Available to internal
+  testers`, released on 10 Sept at 17:31 IST.
+- The only Play validation message was the optional missing deobfuscation-file
+  warning. This artifact does not enable code obfuscation, so it is non-blocking.
+- Physical handset proof remains outstanding: update in place, open the app,
+  sign out, and sign in again with the approved tester account. Do not uninstall
+  or clear app data because retained Room telemetry may still matter.

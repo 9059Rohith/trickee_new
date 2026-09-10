@@ -727,3 +727,16 @@ Remaining pilot evidence:
   `EFDE5EFF990F27837B765F91F8899293DAAA7F40571851F328BE1E028CE8B111`.
   `RemoteFcmConfigured=false` remains explicit and unrelated to this Google
   human-authentication repair.
+
+### GPS Driver 1.0.15 Play publication - 2026-09-10
+
+- Google Play accepted the signed bundle as `16 (1.0.15)` for package
+  `com.trickee.gpsdriverapp`, target SDK 36, without reducing supported devices.
+- The Internal testing track is `Active`, and Play reports release
+  `16 (1.0.15)` as `Available to internal testers`, released on 10 Sept at
+  17:31 IST.
+- The only Play validation message was the optional missing deobfuscation-file
+  warning; code obfuscation is not enabled in this artifact.
+- Publication is verified independently from runtime behavior. A physical
+  update-in-place sign-out/sign-in canary is still required before the original
+  handset incident can be marked resolved. Do not uninstall or clear app data.
