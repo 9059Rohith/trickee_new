@@ -717,3 +717,13 @@ Remaining pilot evidence:
   Publishing remains unclaimed until the signed build gates and Play action
   complete; runtime resolution remains unclaimed until a physical sign-out and
   sign-in canary succeeds.
+- Source commit `69c6dd1` passes mobile Jest `43/43`, TypeScript, ESLint and
+  Android JVM `61/61`. The release build verifies package
+  `com.trickee.gpsdriverapp`, version `1.0.15 (16)`, target SDK 36, the expected
+  OAuth audience and registered upload SHA-1.
+- Prepared AAB SHA-256:
+  `AB2687D0E8FBCE0C2389AF543E6EA72EDE5757EB503737866A78039469C07186`.
+  Prepared APK SHA-256:
+  `EFDE5EFF990F27837B765F91F8899293DAAA7F40571851F328BE1E028CE8B111`.
+  `RemoteFcmConfigured=false` remains explicit and unrelated to this Google
+  human-authentication repair.

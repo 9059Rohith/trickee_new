@@ -540,3 +540,12 @@
   instead of being collapsed into `Unable to sign in with Google`.
 - Patch identity is `1.0.15 (16)`. Source tests and signed artifacts are tracked
   separately below; Play publication and physical handset proof remain pending.
+- Commit `69c6dd1` passed mobile Jest `16 suites / 43 tests`, TypeScript,
+  ESLint and Android JVM `61/61`. The signed target-SDK-36 artifacts passed
+  manifest, OAuth audience, permission and upload-certificate verification.
+  AAB SHA-256 is
+  `AB2687D0E8FBCE0C2389AF543E6EA72EDE5757EB503737866A78039469C07186`;
+  APK SHA-256 is
+  `EFDE5EFF990F27837B765F91F8899293DAAA7F40571851F328BE1E028CE8B111`.
+- The artifacts are prepared locally only. Google Play publication and the
+  physical sign-out/sign-in canary are not yet claimed.
