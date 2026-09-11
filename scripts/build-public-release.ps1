@@ -116,8 +116,8 @@ if ($actualApplicationId -ne $publicApplicationId) {
 if ($targetSdk -ne '36') {
     throw "Wrong target SDK in release manifest. Expected 36, found $targetSdk."
 }
-if ($versionCode -ne '17' -or $versionName -ne '1.0.16') {
-    throw "Wrong release version. Expected 1.0.16 (17), found $versionName ($versionCode)."
+if ($versionCode -ne '18' -or $versionName -ne '1.0.16') {
+    throw "Wrong release version. Expected 1.0.16 (18), found $versionName ($versionCode)."
 }
 $requiredPermissions = @(
     'android.permission.INTERNET',
@@ -140,6 +140,12 @@ $forbiddenPermissions = @(
 $presentForbiddenPermissions = @($forbiddenPermissions | Where-Object { $permissions -contains $_ })
 if ($presentForbiddenPermissions.Count -gt 0) {
     throw "GPS Driver release unexpectedly requests forbidden permissions: $($presentForbiddenPermissions -join ', ')."
+}
+$microphoneFeature = @($manifest.manifest.'uses-feature' | Where-Object {
+    $_.GetAttribute('name', $androidNamespace) -eq 'android.hardware.microphone'
+}) | Select-Object -First 1
+if (-not $microphoneFeature -or $microphoneFeature.GetAttribute('required', $androidNamespace) -ne 'false') {
+    throw 'Voice entry must keep microphone hardware optional so typing-only devices remain supported.'
 }
 
 $buildConfigText = Get-Content -LiteralPath $buildConfig -Raw

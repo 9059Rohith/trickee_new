@@ -14,7 +14,7 @@ class AppIdentityTest {
 
     @Test
     fun appVersionMatchesUxHardeningRelease() {
-        assertEquals(17, BuildConfig.VERSION_CODE)
+        assertEquals(18, BuildConfig.VERSION_CODE)
         assertEquals("1.0.16", BuildConfig.VERSION_NAME)
     }
 
