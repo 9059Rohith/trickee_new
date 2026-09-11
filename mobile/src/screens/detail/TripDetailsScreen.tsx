@@ -16,25 +16,38 @@ const time = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString([], 
 const EvidenceRow: React.FC<{ label: string; value: string; accent?: boolean }> = ({ label, value, accent }) => <View style={styles.evidenceRow}><Text style={styles.evidenceLabel}>{label}</Text><Text style={[styles.evidenceValue, accent && styles.accent]}>{value}</Text></View>;
 
 const TripSummary: React.FC<{ trip: TripDayDetail; number: number }> = ({ trip, number }) => {
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const label = trip.energy_label;
   const prediction = trip.prediction;
   const eventTotal = Object.values(trip.events.by_type).reduce((sum, count) => sum + count, 0);
   return <View style={styles.summaryCard}>
     <Text style={styles.summaryTitle}>Trip {number} · {time(trip.started_at)}–{time(trip.ended_at)}</Text>
-    <EvidenceRow label="Status" value={trip.status} />
     <EvidenceRow label="Duration" value={tripDurationLabel(trip.started_at, trip.ended_at)} />
     <EvidenceRow label="Distance" value={`${fmt(trip.features?.distance_km)} km`} />
-    <EvidenceRow label="Average / max speed" value={`${fmt(trip.features?.avg_speed_kmh)} / ${fmt(trip.features?.max_speed_kmh)} km/h`} />
-    <EvidenceRow label="Stops / dwell" value={`${trip.features?.stops_count ?? "Unavailable"} / ${fmt(trip.features?.total_dwell_minutes)} min`} />
     <EvidenceRow label="SOC start → end" value={label ? `${fmt(label.starting_soc_pct)}% → ${fmt(label.ending_soc_pct)}%` : "Unavailable"} />
     <EvidenceRow label="SOC used" value={socUsedLabel(label?.starting_soc_pct, label?.ending_soc_pct)} />
     <EvidenceRow label="Actual energy" value={label?.actual_energy_consumed_wh == null ? "Unavailable" : `${fmt(label.actual_energy_consumed_wh, 0)} Wh · ${fmt(label.actual_wh_per_km, 2)} Wh/km`} accent={!!label} />
     <EvidenceRow label="Estimated energy" value={prediction?.route_energy_wh == null ? "Unavailable" : `${fmt(prediction.route_energy_wh, 0)} Wh · ${prediction.source || "unknown source"}`} />
-    <EvidenceRow label="GPS stored / final" value={`${trip.telemetry_quality.stored_windows} / ${trip.telemetry_quality.final_windows ?? "Unknown"}`} />
-    <EvidenceRow label="GPS missing / complete" value={`${trip.telemetry_quality.actual_missing_windows ?? "Unknown"} / ${fmt(trip.telemetry_quality.completeness_pct, 2)}%`} />
-    <EvidenceRow label="Finalization" value={trip.finalization?.state || "Not finalized"} />
-    <EvidenceRow label="Training label" value={label ? `${label.is_training_eligible ? "Eligible" : "Not eligible"} · ${label.eligibility_reason}` : "Pending or unavailable"} accent={label?.is_training_eligible} />
-    <EvidenceRow label="Recorded events" value={`${eventTotal} · ${Object.entries(trip.events.by_severity).map(([key, value]) => `${key} ${value}`).join(", ") || "none"}`} />
+    <TouchableOpacity
+      testID={`trip-${trip.id}-evidence-toggle`}
+      accessibilityRole="button"
+      accessibilityLabel={evidenceOpen ? "Hide trip data quality" : "Show trip data quality"}
+      accessibilityState={{ expanded: evidenceOpen }}
+      style={styles.evidenceToggle}
+      onPress={() => setEvidenceOpen(open => !open)}
+    >
+      <Text style={styles.evidenceToggleText}>{evidenceOpen ? "Hide data quality" : "Show data quality"}</Text>
+    </TouchableOpacity>
+    {evidenceOpen ? <View style={styles.technicalSection}>
+      <EvidenceRow label="Status" value={trip.status} />
+      <EvidenceRow label="Average / max speed" value={`${fmt(trip.features?.avg_speed_kmh)} / ${fmt(trip.features?.max_speed_kmh)} km/h`} />
+      <EvidenceRow label="Stops / dwell" value={`${trip.features?.stops_count ?? "Unavailable"} / ${fmt(trip.features?.total_dwell_minutes)} min`} />
+      <EvidenceRow label="GPS stored / final" value={`${trip.telemetry_quality.stored_windows} / ${trip.telemetry_quality.final_windows ?? "Unknown"}`} />
+      <EvidenceRow label="GPS missing / complete" value={`${trip.telemetry_quality.actual_missing_windows ?? "Unknown"} / ${fmt(trip.telemetry_quality.completeness_pct, 2)}%`} />
+      <EvidenceRow label="Finalization" value={trip.finalization?.state || "Not finalized"} />
+      <EvidenceRow label="Training label" value={label ? `${label.is_training_eligible ? "Eligible" : "Not eligible"} · ${label.eligibility_reason}` : "Pending or unavailable"} accent={label?.is_training_eligible} />
+      <EvidenceRow label="Recorded events" value={`${eventTotal} · ${Object.entries(trip.events.by_severity).map(([key, value]) => `${key} ${value}`).join(", ") || "none"}`} />
+    </View> : null}
     {!trip.route_trace_available ? <Text style={styles.warning}>Route trace is no longer available. The summary remains authoritative.</Text> : null}
   </View>;
 };
@@ -77,7 +90,7 @@ const TripDetailsScreen: React.FC<{ route: any }> = ({ route }) => {
         <TouchableOpacity style={[styles.chip, selectedTripId === null && styles.chipActive]} onPress={() => setSelectedTripId(null)}><Text style={[styles.chipText, selectedTripId === null && styles.chipTextActive]}>All day</Text></TouchableOpacity>
         {day?.trips.map((trip, index) => <TouchableOpacity key={trip.id} style={[styles.chip, selectedTripId === trip.id && styles.chipActive]} onPress={() => setSelectedTripId(trip.id)}><Text style={[styles.chipText, selectedTripId === trip.id && styles.chipTextActive]}>Trip {index + 1}</Text></TouchableOpacity>)}
       </ScrollView>
-      {polylines.length ? <OpenStreetMap initialLatitude={center.latitude} initialLongitude={center.longitude} initialZoom={13} markers={markers} polylines={polylines} height={330} /> : <View style={styles.noMap}><Text style={styles.warning}>Route trace is no longer available for this selection.</Text></View>}
+      {polylines.length ? <OpenStreetMap initialLatitude={center.latitude} initialLongitude={center.longitude} initialZoom={13} markers={markers} polylines={polylines} fitBoundsOnUpdate height={330} /> : <View style={styles.noMap}><Text style={styles.warning}>Route trace is no longer available for this selection.</Text></View>}
       {visibleTrips.map(trip => <TripSummary key={trip.id} trip={trip} number={(day?.trips.findIndex(item => item.id === trip.id) ?? 0) + 1} />)}
       {!day?.trips.length ? <View style={styles.noMap}><Text style={styles.warning}>No trips were recorded on this day.</Text></View> : null}
     </ScrollView>
@@ -89,6 +102,7 @@ const styles = StyleSheet.create({
   chip: { paddingHorizontal: 15, paddingVertical: 9, borderRadius: 18, borderWidth: 1, borderColor: Colors.premiumCardBorder, backgroundColor: Colors.premiumCardBg }, chipActive: { backgroundColor: Colors.trickeeYellow }, chipText: { color: Colors.white, fontWeight: "800" }, chipTextActive: { color: Colors.darkText },
   noMap: { minHeight: 120, borderRadius: 16, borderWidth: 1, borderColor: Colors.premiumCardBorder, backgroundColor: Colors.premiumCardBg, alignItems: "center", justifyContent: "center", padding: 20 },
   summaryCard: { backgroundColor: Colors.premiumCardBg, borderColor: Colors.premiumCardBorder, borderWidth: 1, borderRadius: 16, padding: 15, gap: 9 }, summaryTitle: { color: Colors.white, fontWeight: "900", fontSize: 16, marginBottom: 4 },
+  evidenceToggle: { minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 12, borderWidth: 1, borderColor: Colors.premiumCardBorder, marginTop: 4 }, evidenceToggleText: { color: Colors.neonBlue, fontSize: 14, fontWeight: "900" }, technicalSection: { gap: 9, borderTopWidth: 1, borderTopColor: Colors.premiumCardBorder, paddingTop: 11 },
   evidenceRow: { flexDirection: "row", gap: 12 }, evidenceLabel: { flex: 1, color: Colors.secondaryText, fontSize: 12 }, evidenceValue: { flex: 1.4, color: Colors.white, fontSize: 12, fontWeight: "700", textAlign: "right" }, accent: { color: Colors.greenAccent }, warning: { color: Colors.trickeeYellow, lineHeight: 18, textAlign: "center" },
 });
 

@@ -561,3 +561,56 @@
 - Physical handset proof remains outstanding: update in place, open the app,
   sign out, and sign in again with the approved tester account. Do not uninstall
   or clear app data because retained Room telemetry may still matter.
+
+## 2026-09-11 - Android UX hardening requirements approved
+
+- Completed a source-level UX audit across authentication, role navigation,
+  trip controls, Plan My Day, AI Intelligence, maps, routing, nudges,
+  monitoring, history and vehicle onboarding.
+- Approved a backward-compatible redesign recorded in
+  `docs/superpowers/specs/2026-09-11-driver-ux-hardening-design.md`.
+- Clarified multi-stop scheduling: one spoken or typed paragraph may create 1 to
+  10 ordered stop cards with independent times. One reusable picker edits the
+  selected card's `requested_arrival_local`; it is not one time shared by the
+  complete schedule.
+- The specification freezes telemetry, Room/outbox, authentication, trip,
+  routing/SOC tool and notification semantics. UX work is delivered in
+  independently testable slices and must pass the complete existing regression
+  suite plus in-place physical-handset checks before Play publication.
+- Voice is explicit push-to-talk, prefers on-device recognition when available,
+  stores no raw audio in the app/backend, retains typed entry as fallback and
+  requires microphone disclosure review before release.
+
+## 2026-09-11 - Android UX hardening source candidate
+
+- Implemented independent per-stop arrival-time selection with stable local
+  identities, a reusable 12-hour clock picker and unchanged API `HH:MM`
+  serialization. Reordering or deleting stops no longer risks moving a time to
+  a different destination.
+- Added Today/Tomorrow/calendar date entry, debounced versioned local planner
+  drafts, save/discard status, field labels and staged confirmation feedback.
+  Existing confirmed-plan storage and backend request meanings remain intact.
+- Added explicit push-to-talk transcript entry to Plan My Day and AI
+  Intelligence. Android requests microphone permission only on tap, prefers an
+  on-device recognizer when supported, destroys the recognizer on cleanup and
+  sends transcript text only; no Trickee raw-audio persistence was added.
+- Simplified Start/End Trip to the existing SOC sheet and kept the action fixed
+  below Home. The native prepare/start/stop/finalize calls remain unchanged.
+  Replaced the blocking stationary dialog with an in-app Continue/End/Remind in
+  5 minutes card without modifying the native collector state machine.
+- Kept the map WebView mounted and updates markers/routes incrementally. The
+  Leaflet runtime is packaged in the APK; remote OSM tile failure now leaves
+  recorded overlays visible with an explicit degraded banner. Route-provider
+  refresh is bounded by movement, SOC, destination and elapsed-time policy.
+- Monitoring, Daily Impact, nudges, history, AI and vehicle details now separate
+  user summaries from technical evidence, preserve stale data on refresh
+  failures, avoid presenting unavailable values as zero and expose accessible
+  actions. Driver vehicle specs are read-only; advanced editing is limited in
+  the UI to owner/admin roles.
+- Fresh verification: mobile Jest `21 suites / 74 tests`, TypeScript and ESLint
+  pass; Android debug JVM `63/63`, lint and APK assembly pass; the APK contains
+  `assets/leaflet/leaflet.js` and `leaflet.css`; backend regression suite
+  `175/175` passes. No Android device was attached, so update-in-place, Google
+  sign-in, microphone, notification, map interaction, TalkBack/large-font and
+  retained Room telemetry remain physical-handset gates. No version bump,
+  signed AAB, Play upload or cloud deployment was performed.

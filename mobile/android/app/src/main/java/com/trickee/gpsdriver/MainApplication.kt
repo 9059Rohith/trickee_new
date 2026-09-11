@@ -11,6 +11,7 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.trickee.gpsdriver.telemetry.bridge.TelemetryPackage
 import com.trickee.gpsdriver.telemetry.notifications.FirebaseBootstrap
+import com.trickee.gpsdriver.voice.VoiceRecognitionPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -19,6 +20,7 @@ class MainApplication : Application(), ReactApplication {
             override fun getPackages(): List<ReactPackage> =
                 PackageList(this).packages.apply {
                     add(TelemetryPackage())
+                    add(VoiceRecognitionPackage())
                 }
 
             override fun getJSMainModuleName(): String = "index"

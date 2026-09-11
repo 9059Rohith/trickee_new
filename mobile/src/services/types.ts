@@ -149,6 +149,8 @@ export type RouteNudge = {
 };
 
 export type DailyPlanStop = {
+  /** Local-only identity used by the planner UI. Stripped before API submission. */
+  local_id?: string;
   label: string;
   requested_arrival_local: string | null;
   status: "unresolved" | "needs_confirmation" | string;

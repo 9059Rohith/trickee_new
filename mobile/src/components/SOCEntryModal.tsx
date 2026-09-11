@@ -28,6 +28,7 @@ type Props = {
   subtitle?: string;
   submitLabel?: string;
   onSubmit?: (soc: number) => Promise<void>;
+  showSourceSelector?: boolean;
 };
 
 const SOCEntryModal: React.FC<Props> = ({
@@ -39,6 +40,7 @@ const SOCEntryModal: React.FC<Props> = ({
   subtitle = "Enter the current battery percentage from the vehicle dashboard.",
   submitLabel = "Save Reading",
   onSubmit,
+  showSourceSelector = true,
 }) => {
   const { token } = useAuth();
   const [socValue, setSocValue] = useState("");
@@ -92,7 +94,10 @@ const SOCEntryModal: React.FC<Props> = ({
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
 
+          <Text style={styles.fieldLabel}>Battery shown on vehicle dashboard <Text style={styles.required}>Required</Text></Text>
           <TextInput
+            testID="soc-entry-input"
+            accessibilityLabel="Battery state of charge percentage"
             style={styles.input}
             value={socValue}
             onChangeText={setSocValue}
@@ -104,7 +109,7 @@ const SOCEntryModal: React.FC<Props> = ({
           />
           <Text style={styles.unit}>%</Text>
 
-          <View style={styles.sourceRow}>
+          {showSourceSelector ? <View style={styles.sourceRow}>
             <TouchableOpacity
               style={[
                 styles.sourceBtn,
@@ -137,15 +142,19 @@ const SOCEntryModal: React.FC<Props> = ({
                 Dashboard Read
               </Text>
             </TouchableOpacity>
-          </View>
+          </View> : <Text style={styles.sourceEvidence}>Source: vehicle dashboard confirmed by driver</Text>}
 
           {error && <Text style={styles.error}>{error}</Text>}
 
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cancel SOC entry" style={styles.cancelBtn} onPress={onClose}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              testID="soc-entry-submit"
+              accessibilityRole="button"
+              accessibilityLabel={submitLabel}
+              accessibilityState={{ disabled: saving }}
               style={styles.saveBtn}
               onPress={handleSave}
               disabled={saving}
@@ -188,6 +197,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     lineHeight: 18,
   },
+  fieldLabel: { color: Colors.primaryText, fontSize: 14, fontWeight: "800", marginBottom: 8 },
+  required: { color: Colors.trickeeYellow, fontSize: 12, fontWeight: "700" },
   input: {
     backgroundColor: Colors.appBackground,
     borderWidth: 1,
@@ -207,6 +218,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sourceRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  sourceEvidence: { color: Colors.secondaryText, fontSize: 13, lineHeight: 18, marginBottom: 16, textAlign: "center" },
   sourceBtn: {
     flex: 1,
     paddingVertical: 10,

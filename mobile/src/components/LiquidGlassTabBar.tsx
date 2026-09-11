@@ -259,6 +259,7 @@ const LiquidGlassTab: React.FC<LiquidGlassTabProps> = ({
       onPress={handlePress}
       onLongPress={onLongPress}
       accessibilityRole="button"
+      accessibilityLabel={config.label}
       accessibilityState={isFocused ? { selected: true } : {}}
     >
       <Animated.View

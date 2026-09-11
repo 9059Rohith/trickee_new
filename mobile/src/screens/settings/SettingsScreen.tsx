@@ -33,6 +33,10 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
       {vehicle && (
         <TouchableOpacity
+          testID="settings-vehicle-details"
+          accessibilityRole="button"
+          accessibilityLabel={`View vehicle details for ${vehicle.make} ${vehicle.model}`}
+          accessibilityHint="Opens fleet-managed vehicle specifications"
           onPress={() => navigation.navigate("VehicleOnboarding", { vehicle })}
         >
           <GlassCard style={styles.card} cornerRadius={16}>
@@ -61,7 +65,13 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         </View>
       </GlassCard>
 
-      <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+      <TouchableOpacity
+        testID="settings-sign-out"
+        accessibilityRole="button"
+        accessibilityLabel="Sign out"
+        style={styles.logoutBtn}
+        onPress={logout}
+      >
         <Text style={styles.logoutText}>Sign Out</Text>
       </TouchableOpacity>
     </ScrollView>

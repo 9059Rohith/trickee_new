@@ -13,6 +13,9 @@ import {
 import BackgroundLogo from "../../components/BackgroundLogo";
 import CalendarPickerModal from "../../components/CalendarPickerModal";
 import DailyPlanStopEditor from "../../components/DailyPlanStopEditor";
+import StopTimePickerModal from "../../components/StopTimePickerModal";
+import VoiceInputButton from "../../components/VoiceInputButton";
+import PlanConfirmationProgress from "../../components/PlanConfirmationProgress";
 import LocationPickerModal from "../../components/LocationPickerModal";
 import DailyPlanLegCard from "../../components/DailyPlanLegCard";
 import DetailHeader from "../../components/DetailHeader";
@@ -21,17 +24,37 @@ import { useAuth } from "../../context/AuthContext";
 import { useLiveData } from "../../context/LiveDataContext";
 import { api } from "../../services/api";
 import { schedulePlanReminders } from "../../services/dailyPlanNotifications";
-import { loadDailyPlan, saveDailyPlan, validateDailyPlanDraft } from "../../services/dailyPlans";
-import { updatePlannerStop } from "../../services/plannerForm";
+import {
+  discardPlannerLocalDraft,
+  loadDailyPlan,
+  loadPlannerLocalDraft,
+  saveDailyPlan,
+  savePlannerLocalDraft,
+  validateDailyPlanDraft,
+} from "../../services/dailyPlans";
+import {
+  addPlannerDays,
+  ensurePlannerStopIds,
+  plannerDateHeading,
+  setPlannerStopTime,
+  updatePlannerStop,
+  type PlannerStop,
+} from "../../services/plannerForm";
 import { currentPlannerLocation } from "../../services/telemetryNative";
 import { showTestHighPriorityNotification } from "../../services/telemetryNative";
 import type { DailyPlan } from "../../services/types";
+import type { PlanConfirmationStage } from "../../services/planConfirmationState";
 
 const localDate = () => {
   const date = new Date();
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 };
+
+const withStopIds = (value: DailyPlan): DailyPlan => ({
+  ...value,
+  draft: { ...value.draft, stops: ensurePlannerStopIds(value.draft.stops) },
+});
 
 const DailyPlannerScreen: React.FC = () => {
   const { token } = useAuth();
@@ -47,12 +70,16 @@ const DailyPlannerScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [reminderStatus, setReminderStatus] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [mapStopIndex, setMapStopIndex] = useState<number | null>(null);
+  const [mapStopId, setMapStopId] = useState<string | null>(null);
+  const [timeStopId, setTimeStopId] = useState<string | null>(null);
   const [mapInitial, setMapInitial] = useState({ lat: 21.1702, lng: 72.8311 });
   const [mapFallbackUsed, setMapFallbackUsed] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [confirmationStage, setConfirmationStage] = useState<PlanConfirmationStage | null>(null);
 
-  const openStopMap = async (index: number) => {
-    const existing = plan?.draft.stops[index]?.coordinates;
+  const openStopMap = async (stopId: string) => {
+    const existing = plan?.draft.stops.find(stop => stop.local_id === stopId)?.coordinates;
     if (existing) {
       setMapInitial(existing);
       setMapFallbackUsed(false);
@@ -61,19 +88,21 @@ const DailyPlannerScreen: React.FC = () => {
       setMapInitial(current || { lat: 21.1702, lng: 72.8311 });
       setMapFallbackUsed(!current);
     }
-    setMapStopIndex(index);
+    setMapStopId(stopId);
   };
 
   const confirmStopMap = (coordinates: { lat: number; lng: number }) => {
-    if (mapStopIndex == null) return;
+    if (!mapStopId) return;
     setPlan(current => {
       if (!current) return current;
-      const stop = current.draft.stops[mapStopIndex];
-      const stops = updatePlannerStop(current.draft.stops, mapStopIndex, {
+      const index = current.draft.stops.findIndex(stop => stop.local_id === mapStopId);
+      if (index < 0) return current;
+      const stop = current.draft.stops[index];
+      const stops = updatePlannerStop(current.draft.stops, index, {
         coordinates,
         status: "resolved",
         resolved_location: {
-          name: stop.label || `Stop ${mapStopIndex + 1}`,
+          name: stop.label || `Stop ${index + 1}`,
           coordinates,
           source: "user_map_pin",
           confidence: 1,
@@ -82,7 +111,7 @@ const DailyPlannerScreen: React.FC = () => {
       });
       return { ...current, draft: { ...current.draft, stops, warnings: [] } };
     });
-    setMapStopIndex(null);
+    setMapStopId(null);
   };
 
   const testNotification = async () => {
@@ -96,8 +125,40 @@ const DailyPlannerScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    loadDailyPlan().then(setPlan).catch(() => undefined);
+    Promise.all([loadPlannerLocalDraft(), loadDailyPlan()])
+      .then(([localDraft, latestPlan]) => {
+        if (localDraft) {
+          setMessage(localDraft.message);
+          setServiceDate(localDraft.service_date);
+          setStartingSoc(localDraft.starting_soc);
+          setPlan(localDraft.plan ? withStopIds(localDraft.plan) : null);
+        } else if (latestPlan) {
+          setPlan(withStopIds(latestPlan));
+        }
+      })
+      .finally(() => setHydrated(true));
   }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    setSaveState("saving");
+    const timer = setTimeout(() => {
+      savePlannerLocalDraft({
+        version: 2,
+        message,
+        service_date: serviceDate,
+        starting_soc: startingSoc,
+        plan,
+        saved_at: new Date().toISOString(),
+      })
+        .then(async () => {
+          if (plan) await saveDailyPlan(plan);
+          setSaveState("saved");
+        })
+        .catch(() => setSaveState("failed"));
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [hydrated, message, plan, serviceDate, startingSoc]);
 
   const validation = useMemo(
     () => (plan ? validateDailyPlanDraft(plan.draft) : null),
@@ -121,8 +182,9 @@ const DailyPlannerScreen: React.FC = () => {
         starting_soc_pct: soc,
       });
       setReply(response.conversation.reply);
-      setPlan(response.plan);
-      await saveDailyPlan(response.plan);
+      const nextPlan = withStopIds(response.plan);
+      setPlan(nextPlan);
+      await saveDailyPlan(nextPlan);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not create the daily plan.");
     } finally {
@@ -136,7 +198,9 @@ const DailyPlannerScreen: React.FC = () => {
     setError(null);
     setReminderStatus(null);
     try {
+      setConfirmationStage("location");
       const origin = await currentPlannerLocation();
+      setConfirmationStage("route_soc");
       const confirmed = await api.confirmDailyPlan(token, plan.id, {
         confirmation_key: `daily-plan-confirm-${plan.id}`,
         origin,
@@ -146,12 +210,16 @@ const DailyPlannerScreen: React.FC = () => {
           coordinates: stop.coordinates,
         })),
       });
-      setPlan(confirmed);
-      await saveDailyPlan(confirmed);
+      setConfirmationStage("saving");
+      const nextPlan = withStopIds(confirmed);
+      setPlan(nextPlan);
+      await saveDailyPlan(nextPlan);
+      setConfirmationStage("reminders");
       await scheduleReminders(confirmed);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not confirm the daily plan.");
     } finally {
+      setConfirmationStage(null);
       setBusy(false);
     }
   };
@@ -173,6 +241,18 @@ const DailyPlannerScreen: React.FC = () => {
     }
   };
 
+  const discardDraft = async () => {
+    await discardPlannerLocalDraft();
+    setMessage("");
+    setServiceDate(localDate());
+    setStartingSoc(latestSoc == null ? "" : String(latestSoc));
+    if (plan?.status !== "confirmed") setPlan(null);
+    setReply(null);
+    setError(null);
+    setReminderStatus(null);
+    setSaveState("idle");
+  };
+
   return (
     <View style={styles.container}>
       <BackgroundLogo />
@@ -184,21 +264,36 @@ const DailyPlannerScreen: React.FC = () => {
               Tell me every stop and arrival time for the day. Example: Office at 9 am, client at 12:30 pm, warehouse at 4 pm, home by 7 pm.
             </Text>
           </View>
+          <Text style={styles.fieldLabel}>Daily schedule <Text style={styles.required}>Required</Text></Text>
           <TextInput
+            testID="planner-schedule-input"
+            accessibilityLabel="Daily schedule"
             style={[styles.input, styles.messageInput]}
             value={message}
             onChangeText={setMessage}
-            placeholder="Enter today's full schedule"
+            placeholder="Example: Office at 9, client at 12:30, home by 7"
             placeholderTextColor={Colors.secondaryText}
             multiline
             maxLength={2000}
           />
+          <VoiceInputButton value={message} onChangeText={setMessage} label="Speak my complete schedule" />
+          <View style={styles.dateShortcuts}>
+            <TouchableOpacity testID="planner-date-today" accessibilityRole="button" accessibilityLabel="Plan for today" style={[styles.dateChip, serviceDate === localDate() && styles.dateChipActive]} onPress={() => setServiceDate(localDate())}><Text style={styles.dateChipText}>Today</Text></TouchableOpacity>
+            <TouchableOpacity testID="planner-date-tomorrow" accessibilityRole="button" accessibilityLabel="Plan for tomorrow" style={[styles.dateChip, serviceDate === addPlannerDays(localDate(), 1) && styles.dateChipActive]} onPress={() => setServiceDate(addPlannerDays(localDate(), 1))}><Text style={styles.dateChipText}>Tomorrow</Text></TouchableOpacity>
+          </View>
           <View style={styles.inputRow}>
-            <TouchableOpacity style={[styles.input, styles.half, styles.dateButton]} onPress={() => setCalendarOpen(true)}>
+            <TouchableOpacity testID="planner-date-picker" accessibilityRole="button" accessibilityLabel="Choose plan date" style={[styles.input, styles.half, styles.dateButton]} onPress={() => setCalendarOpen(true)}>
               <Text style={styles.dateLabel}>Plan date</Text>
               <Text style={styles.dateValue}>{serviceDate}</Text>
             </TouchableOpacity>
-            <TextInput style={[styles.input, styles.half]} value={startingSoc} onChangeText={setStartingSoc} placeholder="Current SOC %" placeholderTextColor={Colors.secondaryText} keyboardType="decimal-pad" />
+            <View style={styles.half}>
+              <Text style={styles.fieldLabel}>Current SOC <Text style={styles.required}>Required</Text></Text>
+              <TextInput testID="planner-starting-soc" accessibilityLabel="Current battery state of charge percentage" style={styles.input} value={startingSoc} onChangeText={setStartingSoc} placeholder="0 to 100%" placeholderTextColor={Colors.secondaryText} keyboardType="decimal-pad" />
+            </View>
+          </View>
+          <View style={styles.saveRow}>
+            <Text accessibilityLiveRegion="polite" style={[styles.saveText, saveState === "failed" && styles.saveError]}>{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved on this phone" : saveState === "failed" ? "Draft save failed" : ""}</Text>
+            {(message || plan) ? <TouchableOpacity accessibilityRole="button" accessibilityLabel="Discard planner draft" onPress={discardDraft}><Text style={styles.discardText}>Discard draft</Text></TouchableOpacity> : null}
           </View>
           <TouchableOpacity style={styles.primaryButton} disabled={busy} onPress={createDraft}>
             {busy ? <ActivityIndicator color={Colors.darkText} /> : <Text style={styles.primaryText}>Ask AI to structure my day</Text>}
@@ -207,24 +302,26 @@ const DailyPlannerScreen: React.FC = () => {
             <Text style={styles.testButtonText}>Send a test notification now</Text>
           </TouchableOpacity>
           {error ? <Text style={styles.error}>{error}</Text> : null}
+          {confirmationStage ? <PlanConfirmationProgress stage={confirmationStage} /> : null}
           {reply ? <View style={styles.assistantBubble}><Text style={styles.assistantText}>{reply}</Text></View> : null}
           {plan ? (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{plan.status === "confirmed" ? "Today's prediction" : "Confirm these stops"}</Text>
+              <Text style={styles.sectionTitle}>{plan.status === "confirmed" ? plannerDateHeading(plan.service_date || serviceDate, localDate()) : "Confirm these stops"}</Text>
               {plan.status === "confirmed" ? plan.draft.stops.map((stop, index) => (
                 <View key={`${stop.label}-${index}`} style={styles.stopRow}>
                   <Text style={styles.stopName}>{index + 1}. {stop.label}</Text>
                   <Text style={styles.stopTime}>{stop.requested_arrival_local || "Time needed"}</Text>
                 </View>
               )) : <DailyPlanStopEditor
-                stops={plan.draft.stops}
+                stops={plan.draft.stops as PlannerStop[]}
                 onChange={stops => setPlan(current => current ? ({
                   ...current,
                   draft: { ...current.draft, stops, warnings: [] },
                 }) : current)}
                 onSelectMap={openStopMap}
+                onSelectTime={setTimeStopId}
               />}
-              {validation?.reason ? <Text style={styles.warning}>{validation.reason} Edit the message and ask again.</Text> : null}
+              {validation?.reason ? <Text style={styles.warning}>{validation.reason} Correct the affected stop above.</Text> : null}
               {plan.status !== "confirmed" && validation?.valid ? (
                 <TouchableOpacity style={styles.confirmButton} disabled={busy} onPress={confirm}>
                   <Text style={styles.confirmText}>Confirm, predict SOC and schedule alerts</Text>
@@ -243,7 +340,25 @@ const DailyPlannerScreen: React.FC = () => {
         </ScrollView>
       </KeyboardAvoidingView>
       <CalendarPickerModal visible={calendarOpen} value={serviceDate} today={localDate()} onSelect={setServiceDate} onClose={() => setCalendarOpen(false)} />
-      <LocationPickerModal visible={mapStopIndex != null} initialCoordinates={mapInitial} fallbackUsed={mapFallbackUsed} onConfirm={confirmStopMap} onClose={() => setMapStopIndex(null)} />
+      <StopTimePickerModal
+        visible={timeStopId != null}
+        stopId={timeStopId}
+        stopLabel={plan?.draft.stops.find(stop => stop.local_id === timeStopId)?.label || "Selected stop"}
+        value={plan?.draft.stops.find(stop => stop.local_id === timeStopId)?.requested_arrival_local || null}
+        onSelect={(stopId, value) => setPlan(current => {
+          if (!current) return current;
+          return {
+            ...current,
+            draft: {
+              ...current.draft,
+              stops: setPlannerStopTime(current.draft.stops as PlannerStop[], stopId, value),
+              warnings: [],
+            },
+          };
+        })}
+        onClose={() => setTimeStopId(null)}
+      />
+      <LocationPickerModal visible={mapStopId != null} initialCoordinates={mapInitial} fallbackUsed={mapFallbackUsed} onConfirm={confirmStopMap} onClose={() => setMapStopId(null)} />
     </View>
   );
 };
@@ -256,15 +371,25 @@ const styles = StyleSheet.create({
   assistantText: { color: Colors.primaryText, lineHeight: 20, fontSize: 14 },
   input: { backgroundColor: Colors.premiumCardBg, color: Colors.white, borderWidth: 1, borderColor: Colors.premiumCardBorder, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 12 },
   messageInput: { minHeight: 100, textAlignVertical: "top" },
+  fieldLabel: { color: Colors.primaryText, fontSize: 14, fontWeight: "800" },
+  required: { color: Colors.trickeeYellow, fontSize: 12, fontWeight: "700" },
+  dateShortcuts: { flexDirection: "row", gap: 8 },
+  dateChip: { minHeight: 44, paddingHorizontal: 18, borderRadius: 22, borderWidth: 1, borderColor: Colors.premiumCardBorder, alignItems: "center", justifyContent: "center" },
+  dateChipActive: { borderColor: Colors.trickeeYellow, backgroundColor: "rgba(255,196,0,0.12)" },
+  dateChipText: { color: Colors.primaryText, fontSize: 14, fontWeight: "800" },
   inputRow: { flexDirection: "row", gap: 10 },
   half: { flex: 1 },
   dateButton: { justifyContent: "center" },
-  dateLabel: { color: Colors.secondaryText, fontSize: 10 },
+  dateLabel: { color: Colors.primaryText, fontSize: 14, fontWeight: "800" },
   dateValue: { color: Colors.white, fontWeight: "800", marginTop: 2 },
   primaryButton: { minHeight: 50, borderRadius: 14, backgroundColor: Colors.trickeeYellow, alignItems: "center", justifyContent: "center", padding: 10 },
   primaryText: { color: Colors.darkText, fontWeight: "900" },
   testButton: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: Colors.neonBlue, alignItems: "center", justifyContent: "center", padding: 10 },
   testButtonText: { color: Colors.neonBlue, fontWeight: "800" },
+  saveRow: { minHeight: 30, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  saveText: { color: Colors.greenAccent, fontSize: 13 },
+  saveError: { color: Colors.redSoft },
+  discardText: { color: Colors.redSoft, fontSize: 13, fontWeight: "800", paddingVertical: 8 },
   section: { gap: 11, marginTop: 8 },
   sectionTitle: { color: Colors.white, fontSize: 20, fontWeight: "900" },
   stopRow: { flexDirection: "row", padding: 13, borderRadius: 12, backgroundColor: Colors.premiumCardBg },

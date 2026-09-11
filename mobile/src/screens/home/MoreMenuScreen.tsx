@@ -126,13 +126,15 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Fleet Controls</Text>
+          <Text style={styles.headerTitle}>More</Text>
         </View>
 
         <View style={styles.menuList}>
           {menuItems.map((item) => (
             <TouchableOpacity
               key={item.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${item.label}`}
               onPress={() => onNavigate(item.id)}
               activeOpacity={0.7}
             >
@@ -209,7 +211,7 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
 
         {/* Fleet Statistics */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionLabel}>FLEET STATISTICS</Text>
+          <Text style={styles.sectionLabel}>DRIVER SUMMARY</Text>
         </View>
 
         <View style={styles.statsRow}>
@@ -228,7 +230,7 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
             <View style={styles.statContent}>
               <Icon name="head-cog" size={18} color="rgba(255,255,255,0.6)" />
               <Text style={styles.statValue}>
-                {driver?.style_label || "--"}
+                {driver?.style_label || "Unavailable"}
               </Text>
               <Text style={styles.statLabel}>Driver Archetype</Text>
             </View>
@@ -301,6 +303,9 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
             ) : null}
 
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Export local telemetry diagnostics"
+              accessibilityState={{ disabled: exportingDiagnostics || retryingTelemetry }}
               style={styles.diagnosticPrimaryButton}
               onPress={handleDiagnosticExport}
               disabled={exportingDiagnostics || retryingTelemetry}
@@ -316,6 +321,9 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
             </TouchableOpacity>
 
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Retry pending telemetry upload"
+              accessibilityState={{ disabled: exportingDiagnostics || retryingTelemetry }}
               style={styles.diagnosticSecondaryButton}
               onPress={confirmTelemetryRetry}
               disabled={exportingDiagnostics || retryingTelemetry}
@@ -333,7 +341,12 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
         </GlassCard>
 
         {/* Logout */}
-        <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Log out"
+          style={styles.logoutButton}
+          onPress={onLogout}
+        >
           <Icon name="power" size={18} color={Colors.buttonText} />
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>

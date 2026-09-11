@@ -14,22 +14,15 @@ import { useAuth } from "../context/AuthContext";
 import { useLiveData } from "../context/LiveDataContext";
 
 const ITEMS = [
-  ["Home", "home-outline", "Home"],
-  ["Live Map", "map-outline", "Live Map"],
-  ["Monitoring", "gauge", "Monitoring"],
-  ["AI Intelligence", "head-cog-outline", "AIAssistant"],
-  ["Route Intelligence", "routes", "RouteIntel"],
   ["Plan My Day", "calendar-clock", "DailyPlanner"],
   ["Route Updates", "bell-outline", "RouteNudges"],
-  ["Past Trips", "history", "PastTrips"],
-  ["Daily Impact", "leaf", "DailyImpact"],
-  ["Vehicle Specs", "motorbike-electric", "VehicleOnboarding"],
+  ["Vehicle Details", "motorbike-electric", "VehicleOnboarding"],
 ] as const;
 
 const SideDrawer: React.FC<{
   visible: boolean;
   onClose: () => void;
-  onNavigate: (route: string) => void;
+  onNavigate: (route: string, params?: Record<string, unknown>) => void;
 }> = ({ visible, onClose, onNavigate }) => {
   const x = useRef(new Animated.Value(-330)).current;
   const { logout, user } = useAuth();
@@ -63,7 +56,12 @@ const SideDrawer: React.FC<{
                 {vehicle?.vehicle_code || "No vehicle"}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Close navigation menu"
+              style={styles.closeButton}
+              onPress={onClose}
+            >
               <Icon name="close" size={24} color={Colors.white} />
             </TouchableOpacity>
           </View>
@@ -71,10 +69,12 @@ const SideDrawer: React.FC<{
           {ITEMS.map(([label, icon, route]) => (
             <TouchableOpacity
               key={route}
+              accessibilityRole="button"
+              accessibilityLabel={label}
               style={styles.item}
               onPress={() => {
                 onClose();
-                onNavigate(route);
+                onNavigate(route, route === "VehicleOnboarding" ? { vehicle } : undefined);
               }}
             >
               <Icon name={icon} size={21} color={Colors.trickeeYellow} />
@@ -88,6 +88,8 @@ const SideDrawer: React.FC<{
           ))}
           <View style={styles.spacer} />
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Log out"
             style={styles.logout}
             onPress={() => {
               onClose();
@@ -131,6 +133,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.trickeeYellow,
   },
   profileText: { flex: 1 },
+  closeButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   name: { color: Colors.white, fontSize: 16, fontWeight: "800" },
   vehicle: { color: Colors.secondaryText, fontSize: 12, marginTop: 2 },
   section: {

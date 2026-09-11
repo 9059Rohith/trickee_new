@@ -15,6 +15,9 @@ const DetailHeader: React.FC<{ title: string; subtitle?: string }> = ({
   return (
     <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
       <TouchableOpacity
+        testID="detail-back"
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
         style={styles.backButton}
         onPress={() => navigation.goBack()}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

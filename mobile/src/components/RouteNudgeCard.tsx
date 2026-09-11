@@ -4,6 +4,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../constants/Colors";
 import { nudgeActionState } from "../services/mapNavigation";
 import type { RouteNudge, RouteNudgeEvent } from "../services/types";
+import { nudgeAcceptanceLabel } from "../services/presentation";
 
 const formatLeaveTime = (value?: string | null) => {
   if (!value) return null;
@@ -62,26 +63,30 @@ const RouteNudgeCard: React.FC<{
         {!actionState.terminal ? (
           <TouchableOpacity
             accessibilityRole="button"
+            accessibilityLabel="Mark this route recommendation as accepted"
+            accessibilityHint="Records your choice but does not start navigation"
             style={styles.primaryButton}
             disabled={busy}
             onPress={() => onAction("accepted")}
           >
-            <Text style={styles.primaryText}>{busy ? "Saving…" : "Accept"}</Text>
+            <Text style={styles.primaryText}>{busy ? "Saving…" : nudgeAcceptanceLabel(false)}</Text>
           </TouchableOpacity>
         ) : null}
         <TouchableOpacity
           accessibilityRole="button"
+          accessibilityLabel={mapAvailable ? "Open route in Google Maps" : "Route map unavailable"}
           style={[styles.secondaryButton, !mapAvailable && styles.disabledButton]}
           disabled={busy || !mapAvailable}
           onPress={() => onAction("opened")}
         >
           <Text style={styles.secondaryText}>
-            {mapAvailable ? "Open map" : "Map unavailable"}
+            {mapAvailable ? "Open navigation" : "Map unavailable"}
           </Text>
         </TouchableOpacity>
         {!actionState.terminal ? (
           <TouchableOpacity
             accessibilityRole="button"
+            accessibilityLabel="Dismiss this route recommendation"
             style={styles.textButton}
             disabled={busy}
             onPress={() => onAction("dismissed")}
@@ -120,6 +125,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
+    minHeight: 44,
+    justifyContent: "center",
   },
   primaryText: { color: Colors.buttonText, fontWeight: "800" },
   secondaryButton: {
@@ -128,9 +135,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    minHeight: 44,
+    justifyContent: "center",
   },
   secondaryText: { color: Colors.white, fontWeight: "700" },
-  textButton: { paddingHorizontal: 9, paddingVertical: 10 },
+  textButton: { minHeight: 44, paddingHorizontal: 9, paddingVertical: 10, justifyContent: "center" },
   dismissText: { color: Colors.secondaryText, fontWeight: "700" },
   disabledButton: { opacity: 0.45 },
   terminalBadge: {

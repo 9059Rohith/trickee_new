@@ -68,6 +68,13 @@ def hasFirebaseConfig = firebasePropertyNames.every {
 def allowReleaseWithoutFirebase = providers.gradleProperty("TRICKEE_ALLOW_RELEASE_WITHOUT_FCM")
     .orNull
     ?.toBoolean() ?: false
+def leafletGeneratedAssetsDir = layout.buildDirectory.dir("generated/leafletAssets")
+def syncLeafletAssets = tasks.register("syncLeafletAssets", Copy) {
+    from("$rootDir/../node_modules/leaflet/dist") {
+        include "leaflet.js", "leaflet.css"
+    }
+    into(leafletGeneratedAssetsDir.map { it.dir("leaflet") })
+}
 if (releaseTaskRequested && !hasReleaseSigning) {
     throw new GradleException(
         "GPS Driver release builds require the registered upload key through all TRICKEE_RELEASE_* properties or TRICKEE_RELEASE_PROPERTIES_FILE."
@@ -87,6 +94,7 @@ android {
     namespace "com.trickee.gpsdriver"
     sourceSets {
         androidTest.assets.srcDir("$projectDir/schemas")
+        main.assets.srcDir(leafletGeneratedAssetsDir)
     }
     defaultConfig {
         applicationId "com.trickee.gpsdriverapp"
@@ -178,8 +186,11 @@ dependencies {
 apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
 tasks.configureEach { task ->
     def lowerTaskName = task.name.toLowerCase(Locale.ROOT)
-    def consumesPackagedVectorFonts = lowerTaskName.contains("lint") && lowerTaskName.contains("release")
-    if (consumesPackagedVectorFonts) {
+    def consumesPackagedAssets = lowerTaskName.contains("lint")
+    if (consumesPackagedAssets) {
         task.dependsOn("copyReactNativeVectorIconFonts")
+        task.dependsOn(syncLeafletAssets)
+    } else if (lowerTaskName.startsWith("merge") && lowerTaskName.endsWith("assets")) {
+        task.dependsOn(syncLeafletAssets)
     }
 }

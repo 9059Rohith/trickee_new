@@ -5,8 +5,8 @@
  * - Confidence indicator next to energy metrics
  * - "Estimated" / "Live" badge
  */
-import React from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { Colors } from "../../constants/Colors";
 import GlassCard from "../../components/GlassCard";
 import EstimatedBadge from "../../components/EstimatedBadge";
@@ -14,12 +14,14 @@ import ConfidenceIndicator from "../../components/ConfidenceIndicator";
 import { LoadingState, ErrorState } from "../../components/StateViews";
 import { useLiveData } from "../../context/LiveDataContext";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { freshnessPresentation, metricText } from "../../services/presentation";
 
 const fmt = (val: number | null | undefined, d = 1) =>
   typeof val === "number" && Number.isFinite(val) ? val.toFixed(d) : "--";
 
 const MonitoringScreen: React.FC = () => {
   const { me, vehicle, gpsSummary, liveState, loading, error, refresh } = useLiveData();
+  const [technicalOpen, setTechnicalOpen] = useState(false);
 
   if (loading && !me) {
     return <LoadingState />;
@@ -30,6 +32,8 @@ const MonitoringScreen: React.FC = () => {
 
   const pred = gpsSummary?.latest_prediction;
   const soc = gpsSummary?.soc;
+  const freshness = freshnessPresentation(liveState?.event_time);
+  const freshnessColor = freshness.state === "live" ? Colors.neonGreen : freshness.state === "offline" ? Colors.red : Colors.trickeeYellow;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -45,30 +49,28 @@ const MonitoringScreen: React.FC = () => {
       <GlassCard style={styles.card} cornerRadius={16}>
         <View style={styles.cardInner}>
           <View style={styles.row}>
-            <Text style={styles.cardLabel}>LIVE GPS PIPELINE</Text>
+            <Text style={styles.cardLabel}>TRACKING STATUS</Text>
             <View style={styles.liveBadge}>
               <Icon
-                name={liveState?.freshness === "LIVE" ? "access-point" : "clock-outline"}
+                name={freshness.state === "live" ? "access-point" : freshness.state === "offline" ? "access-point-off" : "clock-outline"}
                 size={13}
-                color={liveState?.freshness === "LIVE" ? Colors.neonGreen : Colors.trickeeYellow}
+                color={freshnessColor}
               />
-              <Text style={styles.liveBadgeText}>{liveState?.freshness || "WAITING"}</Text>
+              <Text style={[styles.liveBadgeText, { color: freshnessColor }]}>{freshness.state.toUpperCase()}</Text>
             </View>
           </View>
           <View style={styles.grid}>
             <View style={styles.gridItem}>
-              <Text style={styles.gridLabel}>Sequence</Text>
-              <Text style={styles.gridValue}>{liveState?.sequence_no ?? "--"}</Text>
+              <Text style={styles.gridLabel}>GPS updates</Text>
+              <Text style={styles.gridValue}>{freshness.state === "live" ? "Working" : freshness.state === "waiting" ? "Waiting" : "Needs attention"}</Text>
             </View>
             <View style={styles.gridItem}>
               <Text style={styles.gridLabel}>Trip distance</Text>
-              <Text style={styles.gridValue}>{fmt(liveState?.distance_km, 2)} km</Text>
+              <Text style={styles.gridValue}>{metricText(liveState?.distance_km, 2, "km")}</Text>
             </View>
           </View>
           <Text style={styles.evidenceText}>
-            {liveState?.event_time
-              ? `Last committed GPS event: ${new Date(liveState.event_time).toLocaleString()}`
-              : "No committed live GPS packet is available yet."}
+            {freshness.label}
           </Text>
         </View>
       </GlassCard>
@@ -77,7 +79,7 @@ const MonitoringScreen: React.FC = () => {
       <GlassCard style={styles.card} cornerRadius={16}>
         <View style={styles.cardInner}>
           <View style={styles.row}>
-            <Text style={styles.cardLabel}>LATEST STORED MODEL PREDICTION</Text>
+            <Text style={styles.cardLabel}>BATTERY AND TRIP ESTIMATE</Text>
             <ConfidenceIndicator confidence={pred?.confidence} />
           </View>
 
@@ -137,7 +139,7 @@ const MonitoringScreen: React.FC = () => {
       {/* Vehicle Specs */}
       <GlassCard style={styles.card} cornerRadius={16}>
         <View style={styles.cardInner}>
-          <Text style={styles.cardLabel}>VEHICLE SPECS</Text>
+          <Text style={styles.cardLabel}>VEHICLE DETAILS</Text>
           {vehicle?.spec_incomplete ? (
             <Text style={styles.specWarning}>
               ⚠ Specs incomplete — update for predictions
@@ -152,7 +154,7 @@ const MonitoringScreen: React.FC = () => {
                 Category: {vehicle?.category || "--"}
               </Text>
               <Text style={styles.specItem}>
-                Battery: {vehicle?.battery_capacity_kwh || "--"} kWh
+                Usable battery: {vehicle?.usable_kwh ?? vehicle?.battery_capacity_kwh ?? "Unavailable"} kWh
               </Text>
               <Text style={styles.specItem}>
                 Motor: {vehicle?.motor_kw || "--"} kW
@@ -164,6 +166,17 @@ const MonitoringScreen: React.FC = () => {
           )}
         </View>
       </GlassCard>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${technicalOpen ? "Hide" : "Show"} technical monitoring details`} accessibilityState={{ expanded: technicalOpen }} style={styles.technicalToggle} onPress={() => setTechnicalOpen(value => !value)}>
+        <Text style={styles.technicalToggleText}>{technicalOpen ? "Hide technical details" : "Show technical details"}</Text>
+        <Icon name={technicalOpen ? "chevron-up" : "chevron-down"} size={20} color={Colors.neonBlue} />
+      </TouchableOpacity>
+      {technicalOpen ? <GlassCard style={styles.card} cornerRadius={16}><View style={styles.cardInner}>
+        <Text style={styles.cardLabel}>TECHNICAL DETAILS</Text>
+        <Text style={styles.specItem}>Sequence: {liveState?.sequence_no ?? "Unavailable"}</Text>
+        <Text style={styles.specItem}>Stored event: {liveState?.event_time ? new Date(liveState.event_time).toLocaleString() : "Unavailable"}</Text>
+        <Text style={styles.specItem}>Model source: {pred?.source || "Unavailable"}</Text>
+        <Text style={styles.specItem}>Confidence: {pred?.confidence != null ? `${fmt(Number(pred.confidence) * 100, 0)}%` : "Unavailable"}</Text>
+      </View></GlassCard> : null}
     </ScrollView>
   );
 };
@@ -210,6 +223,8 @@ const styles = StyleSheet.create({
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 5 },
   liveBadgeText: { color: Colors.primaryText, fontSize: 10, fontWeight: "800" },
   evidenceText: { color: Colors.secondaryText, fontSize: 11, lineHeight: 17, marginTop: 10 },
+  technicalToggle: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderWidth: 1, borderColor: Colors.premiumCardBorder, borderRadius: 13, marginBottom: 12 },
+  technicalToggleText: { color: Colors.neonBlue, fontSize: 14, fontWeight: "800" },
 });
 
 export default MonitoringScreen;

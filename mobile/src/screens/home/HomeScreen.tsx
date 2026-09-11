@@ -7,9 +7,8 @@
  * - TripActiveBanner when GPS tracking is running
  * - Shows estimated_wh_per_km and soc_consumed when SOC absent
  */
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  Alert,
   View,
   Text,
   StyleSheet,
@@ -50,7 +49,8 @@ const HomeScreen: React.FC = () => {
   } = useLiveData();
   const [actionsOpen, setActionsOpen] = useState(false);
   const [socModalVisible, setSocModalVisible] = useState(false);
-  const stationaryPromptVisible = useRef(false);
+  const [stationaryNudgeVisible, setStationaryNudgeVisible] = useState(false);
+  const [stationarySnoozedUntil, setStationarySnoozedUntil] = useState(0);
 
   const activeTrip = me?.active_trip ?? null;
   const activeTripId = activeTrip?.id ?? null;
@@ -61,7 +61,8 @@ const HomeScreen: React.FC = () => {
 
   useEffect(() => {
     if (!activeTripId) {
-      stationaryPromptVisible.current = false;
+      setStationaryNudgeVisible(false);
+      setStationarySnoozedUntil(0);
       return;
     }
     let cancelled = false;
@@ -69,32 +70,11 @@ const HomeScreen: React.FC = () => {
       const status = await telemetryStatus().catch(() => null);
       if (cancelled || !status) return;
       if (!status.stationaryNudgePending) {
-        stationaryPromptVisible.current = false;
+        setStationaryNudgeVisible(false);
         return;
       }
-      if (stationaryPromptVisible.current) return;
-      stationaryPromptVisible.current = true;
-      Alert.alert(
-        "Are you waiting?",
-        "The vehicle has been stationary for 7 minutes. Is this a temporary stop, or has the trip ended?",
-        [
-          {
-            text: "I'm waiting",
-            onPress: () => {
-              acknowledgeStationaryNudge().catch(() => {});
-            },
-          },
-          {
-            text: "End trip",
-            style: "destructive",
-            onPress: () => {
-              acknowledgeStationaryNudge().catch(() => {});
-              setActionsOpen(true);
-            },
-          },
-        ],
-        { cancelable: false }
-      );
+      if (Date.now() < stationarySnoozedUntil) return;
+      setStationaryNudgeVisible(true);
     };
     checkStationaryNudge();
     const interval = setInterval(checkStationaryNudge, 5_000);
@@ -102,7 +82,7 @@ const HomeScreen: React.FC = () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [activeTripId]);
+  }, [activeTripId, stationarySnoozedUntil]);
 
   if (loading && !me) {
     return <LoadingState label="Loading your fleet…" />;
@@ -145,6 +125,43 @@ const HomeScreen: React.FC = () => {
         {activeTrip && (
           <TripActiveBanner tripStartedAt={activeTrip.started_at} />
         )}
+
+        {stationaryNudgeVisible ? (
+          <View accessibilityLiveRegion="assertive" style={styles.stationaryCard}>
+            <Text style={styles.stationaryTitle}>Are you waiting?</Text>
+            <Text style={styles.stationaryCopy}>The vehicle has been stationary for 7 minutes. Continue the trip, end it, or ask again in 5 minutes.</Text>
+            <View style={styles.stationaryActions}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Continue current trip"
+                style={styles.stationarySecondary}
+                onPress={() => {
+                  setStationaryNudgeVisible(false);
+                  acknowledgeStationaryNudge().catch(() => setStationaryNudgeVisible(true));
+                }}
+              ><Text style={styles.stationarySecondaryText}>Continue trip</Text></TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Remind me about the stationary trip in 5 minutes"
+                style={styles.stationarySecondary}
+                onPress={() => {
+                  setStationarySnoozedUntil(Date.now() + 5 * 60_000);
+                  setStationaryNudgeVisible(false);
+                }}
+              ><Text style={styles.stationarySecondaryText}>Remind in 5 min</Text></TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="End current trip"
+                style={styles.stationaryEnd}
+                onPress={() => {
+                  setStationaryNudgeVisible(false);
+                  acknowledgeStationaryNudge().catch(() => {});
+                  setActionsOpen(true);
+                }}
+              ><Text style={styles.stationaryEndText}>End trip</Text></TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
 
         {/* ACTIVE ORDER CARD */}
         <GlassCard style={styles.orderCard} cornerRadius={20}>
@@ -247,29 +264,32 @@ const HomeScreen: React.FC = () => {
             <View style={styles.cardInner}>
               <Text style={styles.cardLabel}>ALERTS ({unresolved.length})</Text>
               {unresolved.slice(0, 3).map((a) => (
-                <TouchableOpacity
-                  key={a.id}
-                  style={styles.alertItem}
-                  onPress={() => ackAlert(a.id)}
-                >
+                <View key={a.id} style={styles.alertItem}>
                   <Text style={styles.alertMsg}>{a.message}</Text>
-                  <Text style={styles.alertDismiss}>Dismiss</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Dismiss alert: ${a.message}`} style={styles.alertAction} onPress={() => ackAlert(a.id)}>
+                    <Text style={styles.alertDismiss}>Dismiss</Text>
+                  </TouchableOpacity>
+                </View>
               ))}
             </View>
           </GlassCard>
         )}
 
-        {/* ACTION BUTTON */}
+      </ScrollView>
+
+      <View style={styles.stickyAction}>
         <TouchableOpacity
-          style={styles.actionBtn}
+          testID={activeTrip ? "end-trip-button" : "start-trip-button"}
+          accessibilityRole="button"
+          accessibilityLabel={activeTrip ? "End current trip" : "Start a new trip"}
+          style={[styles.actionBtn, activeTrip && styles.endTripBtn]}
           onPress={() => setActionsOpen(true)}
         >
-          <Text style={styles.actionBtnText}>
-            {activeTrip ? "⏹  End Trip" : "▶  Start Trip"}
+          <Text style={[styles.actionBtnText, activeTrip && styles.endTripText]}>
+            {activeTrip ? "End Trip" : "Start Trip"}
           </Text>
         </TouchableOpacity>
-      </ScrollView>
+      </View>
 
       <DriverActionSheet
         visible={actionsOpen}
@@ -291,7 +311,7 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.appBackground },
   scroll: { flex: 1 },
-  scrollContent: { padding: 16, paddingTop: 56, paddingBottom: 100 },
+  scrollContent: { padding: 16, paddingTop: 56, paddingBottom: 130 },
   orderCard: { marginBottom: 12 },
   metricsCard: { marginBottom: 12 },
   alertsCard: { marginBottom: 12 },
@@ -365,14 +385,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
+  alertAction: { minWidth: 64, minHeight: 44, alignItems: "flex-end", justifyContent: "center", paddingLeft: 10 },
+  stickyAction: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, backgroundColor: Colors.appBackground, borderTopWidth: 1, borderTopColor: Colors.borderSubtle },
   actionBtn: {
     backgroundColor: Colors.trickeeYellow,
     borderRadius: 16,
     paddingVertical: 18,
     alignItems: "center",
-    marginTop: 8,
   },
   actionBtnText: { color: Colors.darkText, fontWeight: "800", fontSize: 16 },
+  endTripBtn: { backgroundColor: Colors.red },
+  endTripText: { color: Colors.white },
+  stationaryCard: { borderRadius: 16, borderWidth: 1, borderColor: Colors.trickeeYellow, backgroundColor: "rgba(255,202,32,0.1)", padding: 14, gap: 9, marginBottom: 12 },
+  stationaryTitle: { color: Colors.white, fontSize: 17, fontWeight: "900" },
+  stationaryCopy: { color: Colors.primaryText, fontSize: 14, lineHeight: 20 },
+  stationaryActions: { gap: 8 },
+  stationarySecondary: { minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 12, borderWidth: 1, borderColor: Colors.premiumCardBorder },
+  stationarySecondaryText: { color: Colors.neonBlue, fontSize: 14, fontWeight: "800" },
+  stationaryEnd: { minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: Colors.red },
+  stationaryEndText: { color: Colors.white, fontSize: 14, fontWeight: "900" },
 });
 
 export default HomeScreen;

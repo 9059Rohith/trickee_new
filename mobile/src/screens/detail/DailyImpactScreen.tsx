@@ -11,7 +11,7 @@ import { Colors } from "../../constants/Colors";
 import DetailHeader from "../../components/DetailHeader";
 import GlassCard from "../../components/GlassCard";
 import BackgroundLogo from "../../components/BackgroundLogo";
-import { LoadingState } from "../../components/StateViews";
+import { ErrorState, LoadingState } from "../../components/StateViews";
 import { useAuth } from "../../context/AuthContext";
 import { useLiveData } from "../../context/LiveDataContext";
 import { api } from "../../services/api";
@@ -40,6 +40,7 @@ const DailyImpactScreen: React.FC = () => {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(
     async (mode: "initial" | "refresh", signal?: AbortSignal) => {
@@ -53,8 +54,9 @@ const DailyImpactScreen: React.FC = () => {
       try {
         const rows = await api.driverTrips(token, driver.id, 100, signal);
         setTrips(rows);
+        setLoadError(null);
       } catch {
-        // Keep prior data; impact is informational.
+        if (!signal?.aborted) setLoadError("Daily impact could not refresh. Previously loaded values remain visible.");
       } finally {
         if (!signal?.aborted) {
           setLoading(false);
@@ -91,6 +93,8 @@ const DailyImpactScreen: React.FC = () => {
       <DetailHeader title="Daily Impact" subtitle="Your contribution today" />
       {loading ? (
         <LoadingState label="Calculating impact…" />
+      ) : loadError && !trips.length ? (
+        <ErrorState message="Daily impact is unavailable. No zero values have been assumed." onRetry={() => load("initial")} />
       ) : (
         <ScrollView
           contentContainerStyle={styles.content}
@@ -104,6 +108,7 @@ const DailyImpactScreen: React.FC = () => {
             />
           }
         >
+          {loadError ? <Text accessibilityLiveRegion="polite" style={styles.loadWarning}>{loadError}</Text> : null}
           {/* Hero CO2 */}
           <GlassCard cornerRadius={20}>
             <View style={styles.hero}>
@@ -144,7 +149,7 @@ const DailyImpactScreen: React.FC = () => {
               icon="shield-check"
               color={Colors.neonGreen}
               value={`${resolvedToday}`}
-              label="Alerts cleared"
+              label="Resolved alerts (all time)"
             />
           </View>
 
@@ -225,6 +230,7 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.6)",
     lineHeight: 17,
   },
+  loadWarning: { color: Colors.trickeeYellow, fontSize: 13, lineHeight: 18, padding: 12, borderRadius: 12, backgroundColor: "rgba(255,202,32,0.08)" },
 });
 
 export default DailyImpactScreen;

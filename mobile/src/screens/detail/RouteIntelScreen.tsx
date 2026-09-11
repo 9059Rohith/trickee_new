@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../../constants/Colors";
@@ -12,6 +12,7 @@ import { api } from "../../services/api";
 import type { ChargerRecommendation } from "../../services/types";
 import { buildDirectionsUrl } from "../../services/mapNavigation";
 import { estimateLiveSoc } from "../../services/liveSoc";
+import { shouldRefreshRoute, type RouteRefreshSnapshot } from "../../services/routeRefreshPolicy";
 
 const haversineKm = (
   a: { lat: number; lng: number },
@@ -37,6 +38,7 @@ const RouteIntelScreen: React.FC = () => {
   const [rec, setRec] = useState<ChargerRecommendation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const lastRequest = useRef<RouteRefreshSnapshot | null>(null);
 
   const liveSoc = me?.active_trip
     ? estimateLiveSoc({
@@ -68,7 +70,17 @@ const RouteIntelScreen: React.FC = () => {
         setLoading(false);
         return;
       }
-      setLoading(true);
+      const now = Date.now();
+      const nextRequest: RouteRefreshSnapshot = {
+        latitude: telemetry.lat,
+        longitude: telemetry.lng,
+        soc,
+        destinationKey: destination ? `${destination.lat},${destination.lng}` : "none",
+        requestedAtMs: now,
+      };
+      if (!shouldRefreshRoute(lastRequest.current, nextRequest, now)) return;
+      lastRequest.current = nextRequest;
+      if (!rec) setLoading(true);
       setError(null);
       try {
         const result = await api.recommendChargers(
@@ -104,7 +116,7 @@ const RouteIntelScreen: React.FC = () => {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [token, driver?.id, vehicle?.id, telemetry?.lat, telemetry?.lng, soc, destination?.lat, destination?.lng]
+    [token, driver?.id, vehicle?.id, telemetry?.lat, telemetry?.lng, soc, destination?.lat, destination?.lng, rec]
   );
 
   useEffect(() => {

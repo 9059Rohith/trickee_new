@@ -35,6 +35,8 @@ const RouteNudgesScreen: React.FC = () => {
   const [pendingOutcomes, setPendingOutcomes] = useState(0);
   const [actingId, setActingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const activeNudges = nudges.filter(nudge => !nudgeActionState(nudge.outcome?.latest_event).terminal);
+  const historyNudges = nudges.filter(nudge => nudgeActionState(nudge.outcome?.latest_event).terminal);
 
   const sendOutcome = useCallback(
     (nudgeId: string, payload: Parameters<typeof api.recordRouteNudgeOutcome>[2]) => {
@@ -172,16 +174,26 @@ const RouteNudgesScreen: React.FC = () => {
               title="No route updates yet"
               subtitle="Saved trip schedules and important route changes will appear here."
             />
-          ) : (
-            nudges.map((nudge) => (
+          ) : <>
+            {activeNudges.length ? <Text style={styles.sectionTitle}>Needs your attention</Text> : <Text style={styles.sectionTitle}>No active route updates</Text>}
+            {activeNudges.map((nudge) => (
               <RouteNudgeCard
                 key={nudge.id}
                 nudge={nudge}
                 busy={actingId === nudge.id}
                 onAction={(event) => handleAction(nudge, event)}
               />
-            ))
-          )}
+            ))}
+            {historyNudges.length ? <Text style={styles.sectionTitle}>History</Text> : null}
+            {historyNudges.map((nudge) => (
+              <RouteNudgeCard
+                key={nudge.id}
+                nudge={nudge}
+                busy={actingId === nudge.id}
+                onAction={(event) => handleAction(nudge, event)}
+              />
+            ))}
+          </>}
         </ScrollView>
       )}
     </View>
@@ -205,6 +217,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     paddingHorizontal: 4,
   },
+  sectionTitle: { color: Colors.primaryText, fontSize: 16, fontWeight: "900", marginTop: 4 },
 });
 
 export default RouteNudgesScreen;

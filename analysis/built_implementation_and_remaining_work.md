@@ -740,3 +740,31 @@ Remaining pilot evidence:
 - Publication is verified independently from runtime behavior. A physical
   update-in-place sign-out/sign-in canary is still required before the original
   handset incident can be marked resolved. Do not uninstall or clear app data.
+
+### Driver UX hardening source candidate - 2026-09-11
+
+- The approved multi-stop requirement is implemented as 1-10 independently
+  editable stop cards. One reusable picker opens for the selected stable stop
+  ID and writes only that stop's `requested_arrival_local`; the backend still
+  receives ordered 24-hour `HH:MM` values.
+- Planner drafts now survive navigation/process restart, calendar entry has
+  Today/Tomorrow shortcuts, confirmation exposes its current stage, and map
+  fallback coordinates cannot be silently accepted.
+- Push-to-talk voice entry is available in Plan My Day and AI Intelligence with
+  just-in-time microphone permission, on-device preference, bounded lifecycle
+  cleanup and transcript-only app/backend handling.
+- Trip controls use the existing native boundaries through one SOC sheet;
+  monitoring/history/nudges/vehicle screens have driver-first summaries,
+  explicit unavailable states and expandable technical evidence. Stationary
+  trip decisions no longer block the whole app.
+- Map marker/route updates no longer replace the WebView, provider calls are
+  throttled and Leaflet JavaScript/CSS are packaged in the Android artifact.
+  OSM tiles still require network, but a tile failure retains overlays and is
+  labelled degraded instead of displaying an unexplained blank map.
+- Regression evidence: Jest `74/74`, Android JVM `63/63`, Android lint/debug APK
+  assembly, TypeScript, ESLint and backend pytest `175/175` pass. This proves
+  source and build compatibility, not physical runtime behavior. A handset
+  update-in-place canary remains required for retained Room data, OAuth, voice,
+  reminders, maps, background/resume and accessibility. Version remains
+  `1.0.15 (16)`; no release artifact or publication was produced from this
+  uncommitted candidate.

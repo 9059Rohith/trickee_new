@@ -1,4 +1,4 @@
-import { buildOpenStreetMapHtml } from "../openStreetMapHtml";
+import { buildOpenStreetMapHtml, buildOpenStreetMapUpdateScript } from "../openStreetMapHtml";
 
 describe("real OpenStreetMap renderer", () => {
   it("renders OSM tiles and markers at their real coordinates", () => {
@@ -22,6 +22,10 @@ describe("real OpenStreetMap renderer", () => {
     expect(html).toContain('"latitude":21.171');
     expect(html).toContain("L.marker([m.latitude,m.longitude]");
     expect(html).toContain("© OpenStreetMap contributors");
+    expect(html).toContain('href="leaflet/leaflet.css"');
+    expect(html).toContain('src="leaflet/leaflet.js"');
+    expect(html).not.toContain("unpkg.com");
+    expect(html).toContain("type:'tile-status'");
     expect(html).not.toContain("roadHorizontal");
   });
 
@@ -47,5 +51,24 @@ describe("real OpenStreetMap renderer", () => {
     expect(html).toContain("map.on('moveend'");
     expect(html).toContain("type:'map-center'");
     expect(html).toContain("21.18");
+  });
+
+  it("exposes an incremental update bridge so live GPS does not rebuild the WebView", () => {
+    const html = buildOpenStreetMapHtml({
+      latitude: 21.17,
+      longitude: 72.83,
+      zoom: 14,
+      markers: [],
+    });
+    const update = buildOpenStreetMapUpdateScript({
+      markers: [{ id: "vehicle", latitude: 21.18, longitude: 72.84, title: "Vehicle" }],
+      polylines: [],
+      fitBounds: false,
+    });
+
+    expect(html).toContain("window.__trickeeMapUpdate");
+    expect(update).toContain('"latitude":21.18');
+    expect(update).toContain('"fitBounds":false');
+    expect(update).toContain("window.__trickeeMapUpdate");
   });
 });

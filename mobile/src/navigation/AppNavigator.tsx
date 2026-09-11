@@ -25,6 +25,7 @@ import TripDetailsScreen from "../screens/detail/TripDetailsScreen";
 import AppHeader from "../components/AppHeader";
 import SideDrawer from "../components/SideDrawer";
 import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
+import { navigationForRole } from "../services/navigationPolicy";
 
 const RootStack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -49,11 +50,11 @@ function AuthNavigator() {
 }
 
 function MainTabBar({ props, drawerOpen, setDrawerOpen, rootNavigation }: any) {
-  const navigateFromDrawer = (route: string) => {
+  const navigateFromDrawer = (route: string, params?: Record<string, unknown>) => {
     if (["Home", "Live Map", "Monitoring"].includes(route)) {
       props.navigation.navigate(route);
     } else {
-      rootNavigation.navigate(route);
+      rootNavigation.navigate(route, params);
     }
   };
   return (
@@ -69,7 +70,8 @@ function MainTabBar({ props, drawerOpen, setDrawerOpen, rootNavigation }: any) {
 }
 
 function MainTabs({ navigation }: any) {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const roleNavigation = navigationForRole(user?.role);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const navigateFromMore = (item: string) => {
     const routes: Record<string, string> = {
@@ -100,7 +102,9 @@ function MainTabs({ navigation }: any) {
         tabBar={renderTabBar}
         screenOptions={{ headerShown: false }}
       >
-        <MainTab.Screen name="Home" component={HomeScreen} />
+        <MainTab.Screen name="Home">
+          {() => roleNavigation.home === "owner" ? <OwnerDashboardScreen /> : <HomeScreen />}
+        </MainTab.Screen>
         <MainTab.Screen name="Live Map" component={LiveMapScreen} />
         <MainTab.Screen name="Monitoring" component={MonitoringScreen} />
         <MainTab.Screen name="More">
@@ -117,7 +121,7 @@ function MainTabs({ navigation }: any) {
 }
 
 export default function AppNavigator() {
-  const { token, user, loading } = useAuth();
+  const { token, loading } = useAuth();
   if (loading) {
     return (
       <View style={styles.loading}>
@@ -125,10 +129,6 @@ export default function AppNavigator() {
       </View>
     );
   }
-  const isOwner =
-    user?.role === "owner" ||
-    user?.role === "fleet_admin" ||
-    user?.role === "admin";
   return (
     <NavigationContainer ref={navigationRef} linking={linking}>
       <RootStack.Navigator
@@ -141,7 +141,7 @@ export default function AppNavigator() {
           <>
             <RootStack.Screen
               name="Main"
-              component={isOwner ? OwnerDashboardScreen : MainTabs}
+              component={MainTabs}
             />
             <RootStack.Group screenOptions={{ animation: "slide_from_right" }}>
               <RootStack.Screen
