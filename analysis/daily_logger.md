@@ -614,3 +614,30 @@
   sign-in, microphone, notification, map interaction, TalkBack/large-font and
   retained Room telemetry remain physical-handset gates. No version bump,
   signed AAB, Play upload or cloud deployment was performed.
+
+## 2026-09-11 - GPS Driver 1.0.16 internal publication
+
+- Published the UX hardening candidate from source commit `ce3799c` with the
+  release/compatibility checkpoint at `438bb73`; branch
+  `feature/daily-planner-v1.0.12` is pushed to `origin`.
+- Release identity is `com.trickee.gpsdriverapp`, `1.0.16 (18)`, target SDK 36.
+  Play confirms the Internal testing track is `Active` and the release is
+  `Available to internal testers`, released on 11 Sept at 18:33 IST.
+- Play initially showed 21 devices lost because Android inferred microphone
+  hardware as mandatory. The unpublished version-code-17 artifact was removed
+  from the draft, microphone hardware was explicitly marked optional, and the
+  final review showed zero phones, tablets, TVs, cars, Chromebooks or Android
+  XR devices lost compared with 1.0.15.
+- Fresh release gates passed: Jest `74/74`, TypeScript, ESLint, Android JVM
+  `63/63`, Android lint, release lint-vital, package/version/SDK/OAuth checks,
+  registered upload-certificate verification and AAB/APK signature checks.
+- AAB SHA-256:
+  `37ACAFD64E42134E455374F4F14EE9BF34705F11091E0577E62BE9F8850A48A5`.
+  APK SHA-256:
+  `CCECB6889B03E27920AA32931C39B9D84E5B5E0920648944EFB3D29D05141594`.
+- Play's only remaining validation warning is the optional missing
+  deobfuscation mapping file. `RemoteFcmConfigured=false` remains explicit;
+  local reminders are included, but remote push delivery is not claimed.
+- Physical handset verification is still required: update in place, open once,
+  sign in, exercise one voice/typed multi-stop plan, receive a local reminder,
+  and complete a short start/end trip without uninstalling or clearing data.

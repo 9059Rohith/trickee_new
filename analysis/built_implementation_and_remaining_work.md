@@ -768,3 +768,32 @@ Remaining pilot evidence:
   reminders, maps, background/resume and accessibility. Version remains
   `1.0.15 (16)`; no release artifact or publication was produced from this
   uncommitted candidate.
+
+### GPS Driver 1.0.16 Play publication - 2026-09-11
+
+- The UX hardening source is committed at `ce3799c`; release and optional-
+  microphone compatibility changes are committed at `438bb73` on pushed branch
+  `feature/daily-planner-v1.0.12`.
+- Google Play accepted the signed bundle for package
+  `com.trickee.gpsdriverapp` as `1.0.16 (18)`, target SDK 36. Internal testing
+  is `Active`, and Play reports the release as `Available to internal testers`
+  from 11 Sept 18:33 IST.
+- Voice entry retains just-in-time `RECORD_AUDIO` permission, while
+  `android.hardware.microphone` is explicitly optional. Play's final comparison
+  reports zero supported-device losses across all listed form factors. The
+  earlier version-code-17 artifact that exposed the compatibility regression
+  was never published and was removed from the release draft.
+- Release verification passed the registered upload-key SHA-1, signed AAB/APK,
+  application ID, version, target SDK, HTTPS backend/OAuth configuration,
+  permission contract, Android release build and lint-vital gates.
+- Final AAB: `play-store-assets/Trickee-GPS-Driver-public-1.0.16-18.aab`,
+  SHA-256
+  `37ACAFD64E42134E455374F4F14EE9BF34705F11091E0577E62BE9F8850A48A5`.
+  Final APK: `play-store-assets/Trickee-GPS-Driver-public-1.0.16-18.apk`,
+  SHA-256
+  `CCECB6889B03E27920AA32931C39B9D84E5B5E0920648944EFB3D29D05141594`.
+- The only Play warning is a missing optional deobfuscation mapping file.
+  Remote FCM remains unconfigured in this artifact; remote push readiness is
+  not claimed. A physical update-in-place canary remains the acceptance gate
+  for voice recognition, local reminders, maps, OAuth, trip lifecycle,
+  background/resume behavior and retained Room telemetry.
