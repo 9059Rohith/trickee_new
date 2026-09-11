@@ -116,8 +116,8 @@ if ($actualApplicationId -ne $publicApplicationId) {
 if ($targetSdk -ne '36') {
     throw "Wrong target SDK in release manifest. Expected 36, found $targetSdk."
 }
-if ($versionCode -ne '16' -or $versionName -ne '1.0.15') {
-    throw "Wrong release version. Expected 1.0.15 (16), found $versionName ($versionCode)."
+if ($versionCode -ne '17' -or $versionName -ne '1.0.16') {
+    throw "Wrong release version. Expected 1.0.16 (17), found $versionName ($versionCode)."
 }
 $requiredPermissions = @(
     'android.permission.INTERNET',
@@ -126,7 +126,8 @@ $requiredPermissions = @(
     'android.permission.FOREGROUND_SERVICE',
     'android.permission.FOREGROUND_SERVICE_LOCATION',
     'android.permission.WAKE_LOCK',
-    'android.permission.POST_NOTIFICATIONS'
+    'android.permission.POST_NOTIFICATIONS',
+    'android.permission.RECORD_AUDIO'
 )
 $missingPermissions = @($requiredPermissions | Where-Object { $permissions -notcontains $_ })
 if ($missingPermissions.Count -gt 0) {
@@ -134,7 +135,6 @@ if ($missingPermissions.Count -gt 0) {
 }
 $forbiddenPermissions = @(
     'android.permission.ACCESS_BACKGROUND_LOCATION',
-    'android.permission.RECORD_AUDIO',
     'com.google.android.gms.permission.AD_ID'
 )
 $presentForbiddenPermissions = @($forbiddenPermissions | Where-Object { $permissions -contains $_ })

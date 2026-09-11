@@ -20,8 +20,8 @@ $expectations = [ordered]@{
     'target SDK 36' = $rootGradle -match 'targetSdkVersion\s*=\s*36'
     'build tools 36.0.0' = $rootGradle -match 'buildToolsVersion\s*=\s*"36\.0\.0"'
     'public package' = $appGradle -match 'applicationId\s+"com\.trickee\.gpsdriverapp"'
-    'version code 16' = $appGradle -match 'versionCode\s+16(?:\s|$)'
-    'version name 1.0.15' = $appGradle -match 'versionName\s+"1\.0\.15"'
+    'version code 17' = $appGradle -match 'versionCode\s+17(?:\s|$)'
+    'version name 1.0.16' = $appGradle -match 'versionName\s+"1\.0\.16"'
     'wrapper timeout 120 seconds' = $wrapperProperties -match '(?m)^networkTimeout=120000\s*$'
     'release fails closed without signing' = $appGradle -match 'GPS Driver release builds require the registered upload key'
     'release fails closed without Firebase unless explicitly waived' = $appGradle -match 'GPS Driver release builds require all TRICKEE_FIREBASE'
@@ -33,9 +33,9 @@ $expectations = [ordered]@{
     'foreground location service permission' = $manifest -match 'android\.permission\.FOREGROUND_SERVICE_LOCATION'
     'Internet permission' = $manifest -match 'android\.permission\.INTERNET'
     'notification permission' = $manifest -match 'android\.permission\.POST_NOTIFICATIONS'
+    'microphone permission for explicit voice entry' = $manifest -match 'android\.permission\.RECORD_AUDIO'
     'wake-lock permission' = $manifest -match 'android\.permission\.WAKE_LOCK'
     'no background location permission' = $manifest -notmatch 'android\.permission\.ACCESS_BACKGROUND_LOCATION'
-    'no microphone permission' = $manifest -notmatch 'android\.permission\.RECORD_AUDIO'
     'no advertising ID permission' = $manifest -notmatch 'com\.google\.android\.gms\.permission\.AD_ID'
 }
 
@@ -45,4 +45,4 @@ if ($failed.Count -gt 0) {
     throw "GPS Driver public release configuration is incomplete: $names"
 }
 
-Write-Output 'GPS Driver release configuration verified: com.trickee.gpsdriverapp, 1.0.15 (16), target SDK 36.'
+Write-Output 'GPS Driver release configuration verified: com.trickee.gpsdriverapp, 1.0.16 (17), target SDK 36.'
