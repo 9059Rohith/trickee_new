@@ -641,3 +641,26 @@
 - Physical handset verification is still required: update in place, open once,
   sign in, exercise one voice/typed multi-stop plan, receive a local reminder,
   and complete a short start/end trip without uninstalling or clearing data.
+
+## 2026-09-14 — charging-stop release candidate
+
+- Source commit `606f9c9d954c507a43adfcd88acce5aba8c88812` is pushed to
+  `feature/daily-planner-v1.0.12`. Backend `185/185`, mobile Jest `87/87`,
+  TypeScript, ESLint, Android JVM tests, full release lint, and signed AAB/APK
+  build passed. Package `com.trickee.gpsdriverapp`, version `1.0.17 (19)`,
+  target SDK 36 and the registered upload certificate were verified.
+- AAB SHA-256 is
+  `02B1CAB13E595AFEF6FD6403DD65BDAA1729F0C632364130C20E5315DBBD6ECB`.
+  The verified AAB is in `play-store-assets/Trickee-GPS-Driver-public-1.0.17-19.aab`.
+  Remote FCM configuration remains absent; local alerts are not remote push.
+- Cloud Build `e9a5bc7e-7860-477b-9c17-241c16b03772` built pinned source
+  commit `606f9c9` into immutable backend image digest
+  `sha256:9b973660fca1ed04f178fb7320436ff092d681bc0e00090ff8f7cc1da2cad118`.
+  API revision `trickee-pilot-api-00017-joz` and finalizer revision
+  `trickee-pilot-trip-finalizer-00009-nih` serve 100% traffic. Public API health
+  is `ok`, wait/resume routes are exposed, and no revision errors were found in
+  the initial log window. No schema migration was required.
+- Google Play Internal testing publication is still pending console owner
+  sign-in. Do not call 1.0.17 available to testers until Play confirms it.
+  On-device update-in-place and online/offline charging-stop canaries remain.
+  Reconcile these direct Cloud Run digest changes in the next Terraform plan.
