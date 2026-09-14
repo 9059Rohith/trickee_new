@@ -642,7 +642,7 @@
   sign in, exercise one voice/typed multi-stop plan, receive a local reminder,
   and complete a short start/end trip without uninstalling or clearing data.
 
-## 2026-09-14 — charging-stop release candidate
+## 2026-09-14 — charging-stop release published
 
 - Source commit `606f9c9d954c507a43adfcd88acce5aba8c88812` is pushed to
   `feature/daily-planner-v1.0.12`. Backend `185/185`, mobile Jest `87/87`,
@@ -660,7 +660,10 @@
   `trickee-pilot-trip-finalizer-00009-nih` serve 100% traffic. Public API health
   is `ok`, wait/resume routes are exposed, and no revision errors were found in
   the initial log window. No schema migration was required.
-- Google Play Internal testing publication is still pending console owner
-  sign-in. Do not call 1.0.17 available to testers until Play confirms it.
-  On-device update-in-place and online/offline charging-stop canaries remain.
-  Reconcile these direct Cloud Run digest changes in the next Terraform plan.
+- Google Play Internal testing shows `Active`, `Latest release: 19 (1.0.17)`,
+  and `Available to internal testers`, released 14 Sept 22:34 IST. The
+  release preview showed no device-support loss and one non-blocking warning
+  about a missing deobfuscation file; ProGuard/R8 is disabled in this build.
+  Tester must update in place, not uninstall or clear data. Online/offline
+  charging-stop physical canaries remain. Reconcile the direct Cloud Run
+  image changes in the next reviewed Terraform plan.
