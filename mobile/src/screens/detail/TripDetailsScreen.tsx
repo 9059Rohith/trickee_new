@@ -25,7 +25,7 @@ const TripSummary: React.FC<{ trip: TripDayDetail; number: number }> = ({ trip, 
     <EvidenceRow label="Duration" value={tripDurationLabel(trip.started_at, trip.ended_at)} />
     <EvidenceRow label="Distance" value={`${fmt(trip.features?.distance_km)} km`} />
     <EvidenceRow label="SOC start → end" value={label ? `${fmt(label.starting_soc_pct)}% → ${fmt(label.ending_soc_pct)}%` : "Unavailable"} />
-    <EvidenceRow label="SOC used" value={socUsedLabel(label?.starting_soc_pct, label?.ending_soc_pct)} />
+    <EvidenceRow label="SOC used" value={socUsedLabel(label?.starting_soc_pct, label?.ending_soc_pct, label?.eligibility_reason)} />
     <EvidenceRow label="Actual energy" value={label?.actual_energy_consumed_wh == null ? "Unavailable" : `${fmt(label.actual_energy_consumed_wh, 0)} Wh · ${fmt(label.actual_wh_per_km, 2)} Wh/km`} accent={!!label} />
     <EvidenceRow label="Estimated energy" value={prediction?.route_energy_wh == null ? "Unavailable" : `${fmt(prediction.route_energy_wh, 0)} Wh · ${prediction.source || "unknown source"}`} />
     <TouchableOpacity

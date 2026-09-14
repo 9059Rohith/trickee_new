@@ -44,13 +44,15 @@ def build_trip_energy_label(
     soc_delta = starting_soc - ending_soc if starting_soc is not None and ending_soc is not None else None
     energy_wh = (
         soc_delta / 100.0 * usable_kwh * 1000.0
-        if soc_delta is not None and usable_kwh is not None
+        if soc_delta is not None and usable_kwh is not None and not charging_observed
         else None
     )
     wh_per_km = energy_wh / distance if energy_wh is not None and distance is not None and distance > 0 else None
 
     if starting_soc is None or ending_soc is None:
         reason = "missing_soc"
+    elif charging_observed:
+        reason = "charging_observed"
     elif soc_delta is not None and soc_delta < 0:
         reason = "soc_increase"
     elif soc_delta is not None and soc_delta < MIN_SOC_DELTA_PCT:
@@ -59,8 +61,6 @@ def build_trip_energy_label(
         reason = "distance_below_10_km"
     elif gps_completeness is None or gps_completeness < MIN_GPS_COMPLETENESS_PCT:
         reason = "gps_completeness_below_90_pct"
-    elif charging_observed:
-        reason = "charging_observed"
     elif (
         usable_kwh is None
         or usable_kwh <= 0

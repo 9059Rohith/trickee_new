@@ -154,6 +154,42 @@ def test_finalizer_builds_physics_summary_from_contiguous_windows(tmp_path):
     assert label.eligibility_reason == "eligible_manual_dashboard"
 
 
+def test_phone_charging_does_not_mark_vehicle_charging(tmp_path):
+    db = _session(tmp_path)
+    trip, vehicle, _ = _seed_trip(db)
+    windows = [_window(trip, vehicle, sequence) for sequence in (1, 2, 3)]
+    for window in windows:
+        window.health_payload = {"charging": True}
+    db.add_all(windows)
+    db.commit()
+
+    finalize_trip(db, _event(trip))
+    db.flush()
+
+    label = db.query(TripEnergyLabel).filter_by(trip_id=trip.id).one()
+    assert label.is_training_eligible is True
+    assert label.actual_energy_consumed_wh == 149.0
+
+
+def test_recorded_vehicle_charge_keeps_route_but_removes_energy_target(tmp_path):
+    db = _session(tmp_path)
+    trip, vehicle, record = _seed_trip(db)
+    trip.context = {**trip.context, "vehicle_charging_observed": True}
+    db.add_all([_window(trip, vehicle, sequence) for sequence in (1, 2, 3)])
+    db.commit()
+
+    finalize_trip(db, _event(trip))
+    db.flush()
+
+    label = db.query(TripEnergyLabel).filter_by(trip_id=trip.id).one()
+    assert record.summary["distance_km"] > 0
+    assert label.is_training_eligible is False
+    assert label.eligibility_reason == "charging_observed"
+    assert label.actual_energy_consumed_wh is None
+    assert label.actual_wh_per_km is None
+    assert record.summary["soc"]["measured_delta_pct"] is None
+
+
 def test_finalizer_creates_only_one_energy_label_when_event_is_replayed(tmp_path):
     db = _session(tmp_path)
     trip, vehicle, _ = _seed_trip(db)

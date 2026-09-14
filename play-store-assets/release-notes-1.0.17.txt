@@ -1,0 +1,4 @@
+Waiting and charging now stay within the same GPS trip.
+Drivers can mark a stop, say whether the vehicle is charging, and enter the new dashboard SOC before resuming.
+Stop details are retained for retry when the phone is offline.
+Trips that include charging remain visible but are excluded from start-to-end energy model training.

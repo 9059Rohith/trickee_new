@@ -15,6 +15,7 @@ import android.hardware.SensorManager
 import android.location.Location
 import android.location.LocationManager
 import android.net.ConnectivityManager
+import android.net.Uri
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
@@ -440,10 +441,11 @@ class TripCollectorService : Service(), SensorEventListener {
 
     private fun showStationaryNudge() {
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        val waitingIntent = PendingIntent.getService(
+        val waitingIntent = PendingIntent.getActivity(
             this,
             1,
-            Intent(this, TripCollectorService::class.java).setAction(ACTION_WAITING),
+            Intent(Intent.ACTION_VIEW, Uri.parse("trickeegps://home"), this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             flags,
         )
         val endTripIntent = PendingIntent.getActivity(
@@ -459,7 +461,7 @@ class TripCollectorService : Service(), SensorEventListener {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(false)
             .setContentIntent(endTripIntent)
-            .addAction(0, "I'm waiting", waitingIntent)
+            .addAction(0, "I'm waiting / charging", waitingIntent)
             .addAction(0, "End trip", endTripIntent)
             .build()
         getSystemService(NotificationManager::class.java).notify(STATIONARY_NOTIFICATION_ID, alert)

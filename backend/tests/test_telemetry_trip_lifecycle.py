@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
-from app.models.entities import DeviceTripUploadCursor, Driver, Fleet, MobileTripSession, TripFinalization, User, Vehicle
+from app.models.entities import DeviceTripUploadCursor, Driver, Fleet, MobileTripSession, SOCReading, TripFinalization, User, Vehicle
 from app.services.auth import create_access_token
 
 engine = create_engine("sqlite:///./test_trip_lifecycle.db", connect_args={"check_same_thread": False})
@@ -50,6 +50,106 @@ def test_start_replay_preserves_client_trip_identity(identity):
     assert first.status_code == second.status_code == 200
     assert first.json()["data"]["id"] == second.json()["data"]["id"]
     with Session() as db: assert db.query(MobileTripSession).count() == 1
+
+
+def test_charging_wait_resumes_same_trip_with_one_post_charge_soc(identity):
+    trip_id = start(identity).json()["data"]["id"]
+    wait = {"wait_id": "wait-1", "vehicle_charging": True}
+    first = client.post(f"/api/v2/trips/{trip_id}/wait", headers=identity["headers"], json=wait)
+    replay = client.post(f"/api/v2/trips/{trip_id}/wait", headers=identity["headers"], json=wait)
+    assert first.status_code == replay.status_code == 200
+    assert first.json()["data"]["id"] == "wait-1"
+    me = client.get("/api/v1/mobile/me", headers=identity["headers"]).json()["data"]
+    assert me["active_trip"]["id"] == trip_id
+    assert me["active_waiting"]["id"] == "wait-1"
+    assert me["active_charging"]["id"] == "wait-1"
+
+    resume = {"wait_id": "wait-1", "resume_soc": 68}
+    first_resume = client.post(f"/api/v2/trips/{trip_id}/resume", headers=identity["headers"], json=resume)
+    replay_resume = client.post(f"/api/v2/trips/{trip_id}/resume", headers=identity["headers"], json=resume)
+    assert first_resume.status_code == replay_resume.status_code == 200
+    with Session() as db:
+        trip = db.query(MobileTripSession).filter_by(id=trip_id).one()
+        assert trip.status == "active"
+        assert trip.context["vehicle_charging_observed"] is True
+        assert trip.context["waits"][0]["resume_soc"] == 68
+        assert db.query(SOCReading).filter_by(vehicle_id=identity["vehicle"]).count() == 2
+    assert client.get("/api/v1/mobile/me", headers=identity["headers"]).json()["data"]["active_waiting"] is None
+
+
+def test_offline_wait_preserves_device_reported_stop_times(identity):
+    trip_id = start(identity).json()["data"]["id"]
+    waiting = client.post(f"/api/v2/trips/{trip_id}/wait", headers=identity["headers"], json={
+        "wait_id": "wait-offline", "vehicle_charging": True,
+        "started_at": "2026-09-14T08:00:00Z",
+    })
+    resumed = client.post(f"/api/v2/trips/{trip_id}/resume", headers=identity["headers"], json={
+        "wait_id": "wait-offline", "resume_soc": 74,
+        "ended_at": "2026-09-14T08:45:00Z",
+    })
+    assert waiting.status_code == resumed.status_code == 200
+    assert resumed.json()["data"]["device_started_at"] == "2026-09-14T08:00:00Z"
+    assert resumed.json()["data"]["device_ended_at"] == "2026-09-14T08:45:00Z"
+    with Session() as db:
+        post_charge = db.query(SOCReading).filter_by(vehicle_id=identity["vehicle"], source="dashboard_confirmed").one()
+        assert post_charge.recorded_at == datetime(2026, 9, 14, 8, 45)
+
+
+def test_subsecond_wait_end_is_not_mistaken_for_time_before_start(identity):
+    trip_id = start(identity).json()["data"]["id"]
+    client.post(f"/api/v2/trips/{trip_id}/wait", headers=identity["headers"], json={
+        "wait_id": "wait-short", "vehicle_charging": False,
+        "started_at": "2026-09-14T08:00:00Z",
+    })
+    response = client.post(f"/api/v2/trips/{trip_id}/resume", headers=identity["headers"], json={
+        "wait_id": "wait-short", "ended_at": "2026-09-14T08:00:00.500Z",
+    })
+    assert response.status_code == 200
+
+
+def test_charging_wait_cannot_resume_without_new_soc(identity):
+    trip_id = start(identity).json()["data"]["id"]
+    client.post(f"/api/v2/trips/{trip_id}/wait", headers=identity["headers"], json={
+        "wait_id": "wait-charge", "vehicle_charging": True})
+    response = client.post(f"/api/v2/trips/{trip_id}/resume", headers=identity["headers"], json={
+        "wait_id": "wait-charge"})
+    assert response.status_code == 422
+    assert client.get("/api/v1/mobile/me", headers=identity["headers"]).json()["data"]["active_waiting"]["id"] == "wait-charge"
+
+
+def test_noncharging_wait_resumes_without_extra_soc(identity):
+    trip_id = start(identity).json()["data"]["id"]
+    client.post(f"/api/v2/trips/{trip_id}/wait", headers=identity["headers"], json={
+        "wait_id": "wait-rest", "vehicle_charging": False})
+    response = client.post(f"/api/v2/trips/{trip_id}/resume", headers=identity["headers"], json={
+        "wait_id": "wait-rest"})
+    assert response.status_code == 200
+    with Session() as db:
+        trip = db.query(MobileTripSession).filter_by(id=trip_id).one()
+        assert trip.context.get("vehicle_charging_observed") is not True
+        assert db.query(SOCReading).filter_by(vehicle_id=identity["vehicle"]).count() == 1
+
+
+def test_wait_commands_reject_overlap_and_completed_trip(identity):
+    trip_id = start(identity).json()["data"]["id"]
+    first = client.post(f"/api/v2/trips/{trip_id}/wait", headers=identity["headers"], json={
+        "wait_id": "wait-1", "vehicle_charging": False})
+    overlap = client.post(f"/api/v2/trips/{trip_id}/wait", headers=identity["headers"], json={
+        "wait_id": "wait-2", "vehicle_charging": True})
+    assert first.status_code == 200
+    assert overlap.status_code == 409
+    premature = client.post(f"/api/v2/trips/{trip_id}/complete", headers=identity["headers"], json={
+        "ending_soc": 80, "final_sequence_no": 0, "idempotency_key": "end-too-early"})
+    assert premature.status_code == 409
+    resumed = client.post(f"/api/v2/trips/{trip_id}/resume", headers=identity["headers"], json={
+        "wait_id": "wait-1"})
+    assert resumed.status_code == 200
+    completed = client.post(f"/api/v2/trips/{trip_id}/complete", headers=identity["headers"], json={
+        "ending_soc": 80, "final_sequence_no": 0, "idempotency_key": "end-wait"})
+    assert completed.status_code == 200
+    after_end = client.post(f"/api/v2/trips/{trip_id}/resume", headers=identity["headers"], json={
+        "wait_id": "wait-1"})
+    assert after_end.status_code == 409
 
 
 def test_completion_waits_for_gap_and_replay_is_idempotent(identity):

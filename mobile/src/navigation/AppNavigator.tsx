@@ -26,20 +26,12 @@ import AppHeader from "../components/AppHeader";
 import SideDrawer from "../components/SideDrawer";
 import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
 import { navigationForRole } from "../services/navigationPolicy";
+import { linking } from "./navigationLinking";
 
 const RootStack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
 const MainTab = createBottomTabNavigator();
 const navigationRef = createNavigationContainerRef<any>();
-const linking = {
-  prefixes: ["trickeegps://"],
-  config: {
-    screens: {
-      RouteNudges: "route-nudges",
-      DailyPlanner: "daily-planner",
-    },
-  },
-};
 
 function AuthNavigator() {
   return (

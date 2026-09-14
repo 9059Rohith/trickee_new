@@ -37,6 +37,7 @@ describe("trip history presentation", () => {
     expect(tripDurationLabel("2026-09-10T03:00:00Z", "2026-09-10T04:05:00Z")).toBe("1h 5m");
     expect(socUsedLabel(80, 72)).toBe("8.0%");
     expect(socUsedLabel(80, null)).toBe("Unavailable");
+    expect(socUsedLabel(90, 80, "charging_observed")).toBe("Not comparable after charging");
   });
 
   it("returns all recorded lines or one selected trip and omits unavailable traces", () => {

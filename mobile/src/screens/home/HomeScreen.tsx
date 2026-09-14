@@ -7,8 +7,9 @@
  * - TripActiveBanner when GPS tracking is running
  * - Shows estimated_wh_per_km and soc_consumed when SOC absent
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -26,6 +27,15 @@ import DriverActionSheet from "../../components/DriverActionSheet";
 import SOCEntryModal from "../../components/SOCEntryModal";
 import { LoadingState, ErrorState } from "../../components/StateViews";
 import { useLiveData } from "../../context/LiveDataContext";
+import { useAuth } from "../../context/AuthContext";
+import { resumeRequirement } from "../../services/tripWaitFlow";
+import {
+  adoptServerTripWait,
+  localTripWaitState,
+  type LocalTripWaitState,
+} from "../../services/tripWaitJournal";
+import { beginWaitLocally, finishWaitLocally } from "../../services/tripWaitActions";
+import { syncTripWaits } from "../../services/tripWaitSync";
 import {
   acknowledgeStationaryNudge,
   telemetryStatus,
@@ -35,6 +45,7 @@ const fmt = (val: number | null | undefined, digits = 1) =>
   typeof val === "number" && Number.isFinite(val) ? val.toFixed(digits) : "--";
 
 const HomeScreen: React.FC = () => {
+  const { token, restore } = useAuth();
   const {
     me,
     vehicle,
@@ -43,7 +54,8 @@ const HomeScreen: React.FC = () => {
     latestSoc,
     loading,
     refreshing,
-    error,
+    lastUpdated,
+    error: loadError,
     refresh,
     ackAlert,
   } = useLiveData();
@@ -51,9 +63,19 @@ const HomeScreen: React.FC = () => {
   const [socModalVisible, setSocModalVisible] = useState(false);
   const [stationaryNudgeVisible, setStationaryNudgeVisible] = useState(false);
   const [stationarySnoozedUntil, setStationarySnoozedUntil] = useState(0);
+  const [waitSubmitting, setWaitSubmitting] = useState(false);
+  const [resumeSocVisible, setResumeSocVisible] = useState(false);
+  const [savedWaitState, setSavedWaitState] = useState<{ tripId: string; data: LocalTripWaitState } | null>(null);
+  const pendingWaitId = useRef<string | null>(null);
+  const syncingWait = useRef(false);
 
   const activeTrip = me?.active_trip ?? null;
   const activeTripId = activeTrip?.id ?? null;
+  const localWait = savedWaitState?.tripId === activeTripId ? savedWaitState.data : null;
+  const serverWait = me?.active_waiting ?? null;
+  const activeWait = localWait?.active ?? (
+    serverWait && !localWait?.closedIds.includes(serverWait.id) ? serverWait : null
+  );
   const vehicleCode = vehicle?.vehicle_code || "No vehicle";
   const driverCode = driver?.driver_code || "--";
   const driverStyle = driver?.style_label || "Unknown";
@@ -84,11 +106,101 @@ const HomeScreen: React.FC = () => {
     };
   }, [activeTripId, stationarySnoozedUntil]);
 
+  useEffect(() => {
+    if (!activeTripId) {
+      setSavedWaitState(null);
+      return;
+    }
+    let cancelled = false;
+    const reconcileWaits = async () => {
+      try {
+        const saved = await localTripWaitState(activeTripId);
+        if (cancelled) return;
+        setSavedWaitState({ tripId: activeTripId, data: saved });
+        if (!saved.pendingCount || !token || syncingWait.current) return;
+        syncingWait.current = true;
+        try {
+          const result = await syncTripWaits(token, restore, activeTripId);
+          if (cancelled) return;
+          setSavedWaitState({ tripId: activeTripId, data: await localTripWaitState(activeTripId) });
+          if (result.pendingCount === 0) await refresh();
+        } finally {
+          syncingWait.current = false;
+        }
+      } catch (error) {
+        if (!cancelled) Alert.alert("Stop history unavailable", error instanceof Error ? error.message : "Could not read saved stops.");
+      }
+    };
+    reconcileWaits();
+    return () => { cancelled = true; };
+  }, [activeTripId, lastUpdated, token, restore, refresh]);
+
+  const beginWait = async (vehicleCharging: boolean) => {
+    if (!activeTripId || !token || waitSubmitting) return;
+    setWaitSubmitting(true);
+    try {
+      const waitId = pendingWaitId.current || `wait-${activeTripId}-${Date.now()}`;
+      pendingWaitId.current = waitId;
+      await beginWaitLocally(activeTripId, waitId, vehicleCharging, () => syncTripWaits(token, restore, activeTripId));
+      pendingWaitId.current = null;
+      setStationaryNudgeVisible(false);
+      setSavedWaitState({ tripId: activeTripId, data: await localTripWaitState(activeTripId) });
+      await acknowledgeStationaryNudge().catch(() => {});
+    } catch (error) {
+      await refresh().catch(() => {});
+      Alert.alert("Could not save the stop", error instanceof Error ? error.message : "Try again when connected.");
+    } finally {
+      setWaitSubmitting(false);
+    }
+  };
+
+  const resumeWait = async (resumeSoc?: number) => {
+    if (!activeTripId || !activeWait || !token || waitSubmitting) return;
+    setWaitSubmitting(true);
+    try {
+      if (localWait?.active?.id !== activeWait.id) {
+        await adoptServerTripWait(
+          activeTripId,
+          activeWait.id,
+          activeWait.vehicle_charging,
+          serverWait?.device_started_at || serverWait?.started_at || new Date().toISOString()
+        );
+      }
+      await finishWaitLocally(activeTripId, activeWait.id, resumeSoc, () => syncTripWaits(token, restore, activeTripId));
+      setSavedWaitState({ tripId: activeTripId, data: await localTripWaitState(activeTripId) });
+      setResumeSocVisible(false);
+    } catch (error) {
+      await refresh().catch(() => {});
+      throw error;
+    } finally {
+      setWaitSubmitting(false);
+    }
+  };
+
+  const confirmCharging = () => {
+    Alert.alert("Charging the vehicle?", "Your trip stays active during the stop.", [
+      { text: "Yes, charging", onPress: () => { beginWait(true); } },
+      { text: "No, just waiting", onPress: () => { beginWait(false); } },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  const continueWait = () => {
+    const requirement = resumeRequirement(activeWait);
+    if (requirement === "post_charge_soc") {
+      setResumeSocVisible(true);
+    } else if (requirement === "resume_without_soc") {
+      resumeWait().catch((error) =>
+        Alert.alert("Could not resume trip", error instanceof Error ? error.message : "Try again when connected.")
+      );
+    }
+  };
+
   if (loading && !me) {
     return <LoadingState label="Loading your fleet…" />;
   }
-  if (error && !me) {
-    return <ErrorState message={error} onRetry={refresh} />;
+  if (loadError && !me) {
+    return <ErrorState message={loadError} onRetry={refresh} />;
   }
 
   // GPS-first data
@@ -126,20 +238,37 @@ const HomeScreen: React.FC = () => {
           <TripActiveBanner tripStartedAt={activeTrip.started_at} />
         )}
 
-        {stationaryNudgeVisible ? (
+        {activeTrip && activeWait ? (
+          <View accessibilityLiveRegion="polite" style={styles.stationaryCard}>
+            <Text style={styles.stationaryTitle}>{activeWait.vehicle_charging ? "Charging stop" : "Waiting stop"}</Text>
+            <Text style={styles.stationaryCopy}>This is still the same trip. GPS recording continues.</Text>
+            {localWait?.pendingCount ? <Text style={styles.stationaryCopy}>Stop details will sync when connected.</Text> : null}
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={activeWait.vehicle_charging ? "Charging complete, enter new SOC and resume trip" : "Resume current trip"}
+              accessibilityState={{ disabled: waitSubmitting }}
+              style={styles.stationarySecondary}
+              onPress={continueWait}
+              disabled={waitSubmitting}
+            >
+              <Text style={styles.stationarySecondaryText}>
+                {activeWait.vehicle_charging ? "Charging complete · Resume" : "Resume trip"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : stationaryNudgeVisible ? (
           <View accessibilityLiveRegion="assertive" style={styles.stationaryCard}>
             <Text style={styles.stationaryTitle}>Are you waiting?</Text>
-            <Text style={styles.stationaryCopy}>The vehicle has been stationary for 7 minutes. Continue the trip, end it, or ask again in 5 minutes.</Text>
+            <Text style={styles.stationaryCopy}>The vehicle has been stationary for 7 minutes. Are you stopping here?</Text>
             <View style={styles.stationaryActions}>
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityLabel="Continue current trip"
+                accessibilityLabel="I am waiting, ask whether I am charging the vehicle"
+                accessibilityState={{ disabled: waitSubmitting }}
                 style={styles.stationarySecondary}
-                onPress={() => {
-                  setStationaryNudgeVisible(false);
-                  acknowledgeStationaryNudge().catch(() => setStationaryNudgeVisible(true));
-                }}
-              ><Text style={styles.stationarySecondaryText}>Continue trip</Text></TouchableOpacity>
+                onPress={confirmCharging}
+                disabled={waitSubmitting}
+              ><Text style={styles.stationarySecondaryText}>I'm waiting</Text></TouchableOpacity>
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Remind me about the stationary trip in 5 minutes"
@@ -161,6 +290,17 @@ const HomeScreen: React.FC = () => {
               ><Text style={styles.stationaryEndText}>End trip</Text></TouchableOpacity>
             </View>
           </View>
+        ) : activeTrip ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="I am waiting or charging the vehicle"
+            accessibilityState={{ disabled: waitSubmitting }}
+            style={styles.stationarySecondary}
+            onPress={confirmCharging}
+            disabled={waitSubmitting}
+          >
+            <Text style={styles.stationarySecondaryText}>I'm waiting or charging</Text>
+          </TouchableOpacity>
         ) : null}
 
         {/* ACTIVE ORDER CARD */}
@@ -302,6 +442,18 @@ const HomeScreen: React.FC = () => {
           onClose={() => setSocModalVisible(false)}
           vehicleId={vehicle.id}
           onRecorded={refresh}
+        />
+      )}
+      {vehicle && activeWait?.vehicle_charging && (
+        <SOCEntryModal
+          visible={resumeSocVisible}
+          onClose={() => setResumeSocVisible(false)}
+          vehicleId={vehicle.id}
+          title="SOC after charging"
+          subtitle="Enter the battery percentage shown on the vehicle dashboard before you ride again."
+          submitLabel="Resume same trip"
+          showSourceSelector={false}
+          onSubmit={resumeWait}
         />
       )}
     </View>

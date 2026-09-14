@@ -72,6 +72,24 @@ def test_prediction_values_can_never_be_substituted_for_missing_soc():
     assert label.label_confidence == 0.30
 
 
+def test_vehicle_charging_invalidates_start_to_end_energy_target():
+    label = _label(charging_observed=True)
+
+    assert label.starting_soc_pct == 90.0
+    assert label.ending_soc_pct == 80.0
+    assert label.actual_energy_consumed_wh is None
+    assert label.actual_wh_per_km is None
+    assert label.is_training_eligible is False
+    assert label.eligibility_reason == "charging_observed"
+
+
+def test_vehicle_charging_remains_the_exclusion_reason_on_a_short_trip():
+    label = _label(charging_observed=True, distance_km=2.0)
+
+    assert label.eligibility_reason == "charging_observed"
+    assert label.actual_energy_consumed_wh is None
+
+
 @pytest.mark.parametrize(
     ("overrides", "reason"),
     [

@@ -19,6 +19,7 @@ import type {
   DailyPlanChatResponse,
   DailyPlanStop,
   TripDayResponse,
+  TripWait,
   Vehicle,
   VehicleSpecUpdate,
 } from "./types";
@@ -158,6 +159,18 @@ export const api = {
       idempotency_key: string;
     }
   ) => request<any>("POST", `/api/v2/trips/${tripId}/complete`, token, data),
+
+  waitTelemetryTrip: (
+    token: string,
+    tripId: string,
+    data: { wait_id: string; vehicle_charging: boolean; started_at?: string }
+  ) => request<TripWait>("POST", `/api/v2/trips/${tripId}/wait`, token, data),
+
+  resumeTelemetryTrip: (
+    token: string,
+    tripId: string,
+    data: { wait_id: string; resume_soc?: number; ended_at?: string }
+  ) => request<TripWait>("POST", `/api/v2/trips/${tripId}/resume`, token, data),
 
   getTelemetryTripStatus: (token: string, tripId: string) =>
     request<any>("GET", `/api/v2/trips/${tripId}`, token),

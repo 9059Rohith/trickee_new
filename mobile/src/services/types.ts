@@ -246,6 +246,16 @@ export type TripSession = {
   starting_soc?: number | null;
 };
 
+export type TripWait = {
+  id: string;
+  started_at: string;
+  device_started_at?: string | null;
+  vehicle_charging: boolean;
+  ended_at: string | null;
+  device_ended_at?: string | null;
+  resume_soc: number | null;
+};
+
 export type Trip = {
   id: string;
   vehicle_id?: string | null;
@@ -472,8 +482,8 @@ export type MobileMe = {
   vehicle: Vehicle | null;
   gps_summary?: GPSVehicleSummary;
   active_trip: TripSession | null;
-  active_waiting: any;
-  active_charging: any;
+  active_waiting: TripWait | null;
+  active_charging: TripWait | null;
   alerts?: Alert[];
   latest_telemetry?: Telemetry;
 };

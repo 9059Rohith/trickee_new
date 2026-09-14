@@ -101,8 +101,8 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        versionCode 18
-        versionName "1.0.16"
+        versionCode 19
+        versionName "1.0.17"
         manifestPlaceholders = [usesCleartextTraffic: "false"]
         buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", "\"${project.findProperty('TRICKEE_GOOGLE_WEB_CLIENT_ID') ?: ''}\""
         buildConfigField "String", "API_ORIGIN", "\"${project.findProperty('TRICKEE_API_ORIGIN') ?: ''}\""

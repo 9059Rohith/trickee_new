@@ -190,8 +190,15 @@ def mobile_me(
         "vehicle": _vehicle_dict(vehicle) if vehicle else None,
         "gps_summary": gps_summary,
         "active_trip": _trip_dict(active_trip) if active_trip else None,
-        "active_waiting": None,
-        "active_charging": None,
+        "active_waiting": next(
+            (wait for wait in reversed((active_trip.context or {}).get("waits", [])) if wait.get("ended_at") is None),
+            None,
+        ) if active_trip else None,
+        "active_charging": next(
+            (wait for wait in reversed((active_trip.context or {}).get("waits", []))
+             if wait.get("ended_at") is None and wait.get("vehicle_charging")),
+            None,
+        ) if active_trip else None,
         "alerts": [_alert_dict(a) for a in alerts],
     })
 

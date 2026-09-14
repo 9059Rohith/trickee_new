@@ -19,6 +19,8 @@ import {
 } from "../services/telemetryNative";
 import { waitForTripFinalization } from "../services/tripFinalization";
 import { runWithSessionRecovery } from "../services/sessionRecovery";
+import { clearTripWaitJournal, localTripWaitState } from "../services/tripWaitJournal";
+import { syncTripWaits } from "../services/tripWaitSync";
 
 type Props = {
   visible: boolean;
@@ -59,6 +61,16 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
     if (!token) {
       return;
     }
+    if (activeTrip) {
+      const waitSync = await syncTripWaits(token, restore, activeTrip.id);
+      if (waitSync.pendingCount > 0) {
+        throw new Error("Stop and charging details are waiting to sync. Reconnect before ending this trip.");
+      }
+      const savedWait = await localTripWaitState(activeTrip.id);
+      if (savedWait.active || (me?.active_waiting && !savedWait.closedIds.includes(me.active_waiting.id))) {
+        throw new Error("Resume the waiting or charging stop before ending this trip.");
+      }
+    }
     onClose();
     setCalculationResult(undefined);
     setCalculationError(null);
@@ -85,6 +97,7 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
         setCalculationError(finalized.message);
       }
       await refresh();
+      await clearTripWaitJournal(telemetry.tripId).catch(() => {});
       onClose();
     } catch (err: any) {
       const message = err.message || "Failed to end trip";

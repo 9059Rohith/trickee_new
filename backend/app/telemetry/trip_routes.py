@@ -51,6 +51,18 @@ class CompleteTripBody(StrictBody):
     idempotency_key: str = Field(min_length=1, max_length=80)
 
 
+class WaitTripBody(StrictBody):
+    wait_id: str = Field(min_length=1, max_length=80)
+    vehicle_charging: bool
+    started_at: datetime | None = None
+
+
+class ResumeTripBody(StrictBody):
+    wait_id: str = Field(min_length=1, max_length=80)
+    resume_soc: float | None = Field(default=None, ge=0, le=100)
+    ended_at: datetime | None = None
+
+
 def _driver(db: Session, user: User) -> Driver:
     driver = db.query(Driver).filter(Driver.id == user.driver_id, Driver.fleet_id == user.fleet_id).first()
     if driver is None:
@@ -68,7 +80,108 @@ def _trip_data(trip: MobileTripSession, cursor: int = 0) -> dict:
         "final_sequence_no": trip.final_sequence_no,
         "started_at": utc_iso(trip.started_at),
         "ended_at": utc_iso(trip.ended_at),
+        "waits": (trip.context or {}).get("waits", []),
     }
+
+
+def _owned_active_trip(db: Session, trip_id: str, user: User) -> MobileTripSession:
+    trip = db.query(MobileTripSession).filter(
+        MobileTripSession.id == trip_id,
+        MobileTripSession.user_id == user.id,
+    ).with_for_update().first()
+    if trip is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Trip not found")
+    if trip.status != "active" or trip.completion_idempotency_key:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Trip is no longer active")
+    return trip
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+@router.post("/{trip_id}/wait")
+def wait_trip(
+    trip_id: str,
+    body: WaitTripBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    trip = _owned_active_trip(db, trip_id, user)
+    context = dict(trip.context or {})
+    waits = list(context.get("waits") or [])
+    prior = next((item for item in waits if item["id"] == body.wait_id), None)
+    if prior:
+        if prior["vehicle_charging"] != body.vehicle_charging or (
+            body.started_at is not None and prior.get("device_started_at") != utc_iso(body.started_at)
+        ):
+            raise HTTPException(status.HTTP_409_CONFLICT, "Wait command conflicts with an earlier response")
+        return ok(prior, "Wait already recorded")
+    if any(item.get("ended_at") is None for item in waits):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Trip is already waiting")
+    if len(waits) >= 512:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Trip has reached the wait event limit")
+    wait = {
+        "id": body.wait_id,
+        "started_at": utc_iso(datetime.utcnow()),
+        "device_started_at": utc_iso(body.started_at),
+        "vehicle_charging": body.vehicle_charging,
+        "ended_at": None,
+        "resume_soc": None,
+    }
+    waits.append(wait)
+    context["waits"] = waits
+    if body.vehicle_charging:
+        context["vehicle_charging_observed"] = True
+    trip.context = context
+    db.commit()
+    return ok(wait, "Wait recorded")
+
+
+@router.post("/{trip_id}/resume")
+def resume_trip(
+    trip_id: str,
+    body: ResumeTripBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    trip = _owned_active_trip(db, trip_id, user)
+    context = dict(trip.context or {})
+    waits = list(context.get("waits") or [])
+    index = next((i for i, item in enumerate(waits) if item["id"] == body.wait_id), None)
+    if index is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Wait not found")
+    wait = dict(waits[index])
+    if wait.get("ended_at") is not None:
+        if wait.get("resume_soc") != body.resume_soc or (
+            body.ended_at is not None and wait.get("device_ended_at") != utc_iso(body.ended_at)
+        ):
+            raise HTTPException(status.HTTP_409_CONFLICT, "Resume command conflicts with the saved SOC")
+        return ok(wait, "Trip already resumed")
+    if wait["vehicle_charging"] and body.resume_soc is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Post-charge SOC is required")
+    if not wait["vehicle_charging"] and body.resume_soc is not None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "SOC is only required after charging")
+    if body.ended_at is not None and wait.get("device_started_at") and _as_utc(body.ended_at) < datetime.fromisoformat(wait["device_started_at"].replace("Z", "+00:00")):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Stop end precedes its start")
+    wait["ended_at"] = utc_iso(datetime.utcnow())
+    wait["device_ended_at"] = utc_iso(body.ended_at)
+    wait["resume_soc"] = body.resume_soc
+    waits[index] = wait
+    context["waits"] = waits
+    trip.context = context
+    if body.resume_soc is not None:
+        db.add(SOCReading(
+            vehicle_id=trip.vehicle_id,
+            driver_id=trip.driver_id,
+            value=body.resume_soc,
+            source="dashboard_confirmed",
+            confidence=1.0,
+            recorded_at=min(_as_utc(body.ended_at), datetime.now(timezone.utc)).replace(tzinfo=None)
+            if body.ended_at is not None else datetime.utcnow(),
+        ))
+    db.commit()
+    return ok(wait, "Trip resumed")
 
 
 @router.post("/start")
@@ -171,6 +284,9 @@ def complete_trip(
             DeviceTripUploadCursor.trip_id == trip.id
         ).all()), default=0)
         return ok(_trip_data(trip, cursor), "Trip completion already accepted")
+
+    if any(wait.get("ended_at") is None for wait in (trip.context or {}).get("waits", [])):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Resume the waiting or charging stop before ending the trip")
 
     cursor = max((row[0] for row in db.query(DeviceTripUploadCursor.highest_contiguous_sequence).filter(
         DeviceTripUploadCursor.trip_id == trip.id

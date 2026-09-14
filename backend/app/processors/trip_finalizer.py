@@ -172,7 +172,7 @@ def finalize_trip(db: Session, event: dict) -> None:
         vehicle=vehicle,
         distance_km=energy["distance_km"] if energy else None,
         gps_completeness_pct=gps_completeness,
-        charging_observed=any(bool((window.health_payload or {}).get("charging")) for window in windows),
+        charging_observed=bool(context.get("vehicle_charging_observed")),
         captured_at=completed_at,
     )
     existing_label = db.query(TripEnergyLabel).filter_by(trip_id=trip.id).first()
@@ -237,7 +237,7 @@ def finalize_trip(db: Session, event: dict) -> None:
             "starting_pct": starting_soc,
             "ending_pct": ending_soc,
             "measured_delta_pct": round(float(starting_soc) - float(ending_soc), 2)
-            if starting_soc is not None and ending_soc is not None
+            if starting_soc is not None and ending_soc is not None and not context.get("vehicle_charging_observed")
             else None,
             "estimated_consumed_pct": estimated_soc_consumed,
             "source": "manual_dashboard",

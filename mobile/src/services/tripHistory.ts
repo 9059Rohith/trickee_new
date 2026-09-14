@@ -16,7 +16,8 @@ export function tripDurationLabel(start?: string | null, end?: string | null): s
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
 }
 
-export function socUsedLabel(start?: number | null, end?: number | null): string {
+export function socUsedLabel(start?: number | null, end?: number | null, eligibilityReason?: string | null): string {
+  if (eligibilityReason === "charging_observed") return "Not comparable after charging";
   return typeof start === "number" && typeof end === "number" ? `${(start - end).toFixed(1)}%` : "Unavailable";
 }
 
