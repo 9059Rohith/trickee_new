@@ -5,6 +5,7 @@ import {
   Animated,
   StyleSheet,
   Platform,
+  type LayoutChangeEvent,
 } from "react-native";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
@@ -361,13 +362,22 @@ const LiquidGlassTab: React.FC<LiquidGlassTabProps> = ({
 // ─────────────────────────────────────────
 // MAIN TAB BAR
 // ─────────────────────────────────────────
-const LiquidGlassTabBar: React.FC<BottomTabBarProps> = ({
+type LiquidGlassTabBarProps = BottomTabBarProps & {
+  onHeightChange?: (height: number) => void;
+};
+
+const LiquidGlassTabBar: React.FC<LiquidGlassTabBarProps> = ({
   state,
   navigation,
+  onHeightChange,
 }) => {
   // ── Animation 6: Nav Bar Entrance ──
   const entranceTranslateY = useRef(new Animated.Value(80)).current;
   const entranceOpacity = useRef(new Animated.Value(0)).current;
+  const reportHeight = useCallback(
+    (event: LayoutChangeEvent) => onHeightChange?.(event.nativeEvent.layout.height),
+    [onHeightChange]
+  );
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -390,6 +400,7 @@ const LiquidGlassTabBar: React.FC<BottomTabBarProps> = ({
 
   return (
     <Animated.View
+      onLayout={reportHeight}
       style={[
         barStyles.container,
         {

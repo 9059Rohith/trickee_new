@@ -36,6 +36,7 @@ import {
 } from "../../services/tripWaitJournal";
 import { beginWaitLocally, finishWaitLocally } from "../../services/tripWaitActions";
 import { syncTripWaits } from "../../services/tripWaitSync";
+import { resolveBottomNavigationClearance } from "../../services/homeLayout";
 import {
   acknowledgeStationaryNudge,
   telemetryStatus,
@@ -44,7 +45,11 @@ import {
 const fmt = (val: number | null | undefined, digits = 1) =>
   typeof val === "number" && Number.isFinite(val) ? val.toFixed(digits) : "--";
 
-const HomeScreen: React.FC = () => {
+type HomeScreenProps = {
+  bottomTabBarHeight?: number;
+};
+
+const HomeScreen: React.FC<HomeScreenProps> = ({ bottomTabBarHeight = 0 }) => {
   const { token, restore } = useAuth();
   const {
     me,
@@ -80,6 +85,9 @@ const HomeScreen: React.FC = () => {
   const driverCode = driver?.driver_code || "--";
   const driverStyle = driver?.style_label || "Unknown";
   const unresolved = (me?.alerts || []).filter((a) => !a.is_resolved);
+  const bottomNavigationClearance = resolveBottomNavigationClearance(
+    bottomTabBarHeight
+  );
 
   useEffect(() => {
     if (!activeTripId) {
@@ -417,7 +425,10 @@ const HomeScreen: React.FC = () => {
 
       </ScrollView>
 
-      <View style={styles.stickyAction}>
+      <View
+        testID="trip-action-container"
+        style={[styles.stickyAction, { marginBottom: bottomNavigationClearance }]}
+      >
         <TouchableOpacity
           testID={activeTrip ? "end-trip-button" : "start-trip-button"}
           accessibilityRole="button"

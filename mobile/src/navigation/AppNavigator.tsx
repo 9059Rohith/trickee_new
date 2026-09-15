@@ -9,6 +9,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useAuth } from "../context/AuthContext";
 import { Colors } from "../constants/Colors";
 import LiquidGlassTabBar from "../components/LiquidGlassTabBar";
+import { DEFAULT_BOTTOM_NAVIGATION_CLEARANCE } from "../services/homeLayout";
 import LoginScreen from "../screens/auth/LoginScreen";
 import HomeScreen from "../screens/home/HomeScreen";
 import LiveMapScreen from "../screens/home/LiveMapScreen";
@@ -41,7 +42,7 @@ function AuthNavigator() {
   );
 }
 
-function MainTabBar({ props, drawerOpen, setDrawerOpen, rootNavigation }: any) {
+function MainTabBar({ props, drawerOpen, setDrawerOpen, rootNavigation, onHeightChange }: any) {
   const navigateFromDrawer = (route: string, params?: Record<string, unknown>) => {
     if (["Home", "Live Map", "Monitoring"].includes(route)) {
       props.navigation.navigate(route);
@@ -51,7 +52,7 @@ function MainTabBar({ props, drawerOpen, setDrawerOpen, rootNavigation }: any) {
   };
   return (
     <>
-      <LiquidGlassTabBar {...props} />
+      <LiquidGlassTabBar {...props} onHeightChange={onHeightChange} />
       <SideDrawer
         visible={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -65,6 +66,12 @@ function MainTabs({ navigation }: any) {
   const { logout, user } = useAuth();
   const roleNavigation = navigationForRole(user?.role);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [bottomTabBarHeight, setBottomTabBarHeight] = useState(
+    DEFAULT_BOTTOM_NAVIGATION_CLEARANCE
+  );
+  const handleTabBarHeight = useCallback((height: number) => {
+    setBottomTabBarHeight((current) => current === height ? current : height);
+  }, []);
   const navigateFromMore = (item: string) => {
     const routes: Record<string, string> = {
       aiIntel: "AIAssistant",
@@ -83,9 +90,10 @@ function MainTabs({ navigation }: any) {
         drawerOpen={drawerOpen}
         setDrawerOpen={setDrawerOpen}
         rootNavigation={navigation}
+        onHeightChange={handleTabBarHeight}
       />
     ),
-    [drawerOpen, navigation]
+    [drawerOpen, handleTabBarHeight, navigation]
   );
   return (
     <View style={styles.container}>
@@ -95,7 +103,7 @@ function MainTabs({ navigation }: any) {
         screenOptions={{ headerShown: false }}
       >
         <MainTab.Screen name="Home">
-          {() => roleNavigation.home === "owner" ? <OwnerDashboardScreen /> : <HomeScreen />}
+          {() => roleNavigation.home === "owner" ? <OwnerDashboardScreen /> : <HomeScreen bottomTabBarHeight={bottomTabBarHeight} />}
         </MainTab.Screen>
         <MainTab.Screen name="Live Map" component={LiveMapScreen} />
         <MainTab.Screen name="Monitoring" component={MonitoringScreen} />
