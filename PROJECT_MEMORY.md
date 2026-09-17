@@ -1,6 +1,14 @@
 # GPS Driver project context
 
-Updated: 2026-09-14. Repository: `gpsdriver`, branch `feature/daily-planner-v1.0.12`.
+Updated: 2026-09-17. Repository: `gpsdriver`, branch `feature/daily-planner-v1.0.12`.
+
+## FCM pilot activation (2026-09-17)
+
+- Firebase was added to the existing Google Cloud project `trickee-jaswanth-pilot` (project number `397358873357`). Its Android app is registered only for `com.trickee.gpsdriverapp`, Firebase app ID `1:397358873357:android:f0248690c2053f96900e44`. Do not put tokens, API keys, signing passwords, or Terraform state in this repository.
+- The production migration job was updated to backend digest `sha256:9b973660fca1ed04f178fb7320436ff092d681bc0e00090ff8f7cc1da2cad118` and completed. A subsequent read-only Alembic check reported `0007_fcm_device_tokens (head)`.
+- Terraform added the Firebase/FCM API resources, the `trickee-pilot-notificationfcm` service account, Cloud SQL and FCM sender roles, and database-secret access. The `trickee-pilot-notification-fcm` Cloud Run service was deployed with that immutable image, internal ingress, one always-on instance, and imported into Terraform state. Ready revision `trickee-pilot-notification-fcm-00002-2fx` served 100% traffic and had no error logs at verification. The first revision failed because its CLI arguments were incorrectly joined; revision 00002 has the verified `python -m app.cli notification-fcm` argument array.
+- Signed Android `1.0.19 (21)` was built with Firebase fields populated, the registered upload certificate, and target SDK 36. Source commit `614897d`; AAB SHA-256 `933AC1CA0313599D7E695A801EE472EFFCF8998C276D7F7E2CA81132A8C7C8BD`; artifact: `play-store-assets/Trickee-GPS-Driver-public-1.0.19-21.aab`. Build metadata reports `RemoteFcmConfigured: true`. It is **not yet Play-published** or verified on a physical tester phone. Do not claim remote push delivery until an in-place update registers a real device token and a cloud-origin message is observed on the handset.
+- The focused FCM backend tests passed 3/3 and the Android push-token policy test passed before this configuration build. A full Terraform plan was intentionally not applied: without the private deployment inputs it proposed unrelated database, Redis, and database-secret changes. Reconcile the imported worker with the company deployment variables in a reviewed future full plan; never apply a placeholder-variable plan to shared resources.
 
 ## Current change: waiting and vehicle charging within one trip
 
@@ -13,7 +21,7 @@ Updated: 2026-09-14. Repository: `gpsdriver`, branch `feature/daily-planner-v1.0
 
 ## Verification and release boundary
 
-- Source commit `606f9c9d954c507a43adfcd88acce5aba8c88812` is pushed to the existing feature branch. Backend full pytest passed 185/185; mobile Jest 87/87, TypeScript, ESLint, Android JVM tests, full `lintRelease`, and signed release build passed. The registered upload certificate, package `com.trickee.gpsdriverapp`, target SDK 36, and version `1.0.17 (19)` were verified. AAB SHA-256: `02B1CAB13E595AFEF6FD6403DD65BDAA1729F0C632364130C20E5315DBBD6ECB`. Remote FCM remains unconfigured; do not claim remote push delivery.
+- Source commit `606f9c9d954c507a43adfcd88acce5aba8c88812` was pushed to the existing feature branch for the earlier `1.0.17 (19)` release. Backend full pytest passed 185/185; mobile Jest 87/87, TypeScript, ESLint, Android JVM tests, full `lintRelease`, and signed release build passed then. That artifact's AAB SHA-256 was `02B1CAB13E595AFEF6FD6403DD65BDAA1729F0C632364130C20E5315DBBD6ECB`; it did not contain remote Firebase configuration.
 - Cloud Build `e9a5bc7e-7860-477b-9c17-241c16b03772` built immutable digest `sha256:9b973660fca1ed04f178fb7320436ff092d681bc0e00090ff8f7cc1da2cad118` from the pinned source commit. Cloud Run API revision `trickee-pilot-api-00017-joz` and trip-finalizer revision `trickee-pilot-trip-finalizer-00009-nih` each serve 100% traffic. Public `/health` is `ok`; `/wait` and `/resume` are present in public OpenAPI; no revision error logs were found in the verification window. No database migration was required.
 - Google Play Internal testing now reports `Active`, latest release `19 (1.0.17)`, and `Available to internal testers` (released 14 Sept 22:34 IST). Play accepted the signed AAB with one non-blocking deobfuscation-file warning; this build has ProGuard/R8 disabled. Perform an in-place physical-handset wait/charge/resume test, including offline reconciliation. The two direct Cloud Run image updates should be incorporated into the next reviewed Terraform plan so an old pinned image cannot roll them back.
 - Do not uninstall or clear the tester's app data while its local telemetry or stop journal may be unsynced. A debug APK is not an installable Play release.
