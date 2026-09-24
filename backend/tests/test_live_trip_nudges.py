@@ -7,6 +7,7 @@ from app.database import Base
 from app.models.entities import (
     DailyPlan, Device, Driver, Fleet, LiveNudgeEvaluation, MobileTripSession,
     NotificationOutbox, SOCReading, User, Vehicle, VehicleLiveStateSnapshot,
+    TripPrediction,
 )
 from app.services.fcm_notifications import dispatch_due_notifications
 from app.services.live_trip_nudges import evaluate_active_trip_nudges
@@ -142,6 +143,32 @@ def test_stale_gps_or_finished_trip_never_queues_live_nudge():
     trip.status = "completed"
     db.commit()
     assert evaluate_active_trip_nudges(db, tools=tools, now=NOW)["queued"] == 0
+
+
+def test_unassigned_or_inactive_driver_cannot_receive_live_guidance():
+    db, _trip, _snapshot, user, vehicle = seed()
+    tools = FakeTools()
+    user.is_active = False
+    db.commit()
+    assert evaluate_active_trip_nudges(db, tools=tools, now=NOW)["queued"] == 0
+    user.is_active = True
+    driver = db.get(Driver, user.driver_id)
+    driver.assigned_vehicle_id = None
+    db.commit()
+    assert evaluate_active_trip_nudges(db, tools=tools, now=NOW)["queued"] == 0
+    assert tools.route_calls == 0
+
+
+def test_recent_confident_gps_prediction_is_preferred_over_vehicle_baseline():
+    db, trip, _snapshot, _user, vehicle = seed()
+    db.add(TripPrediction(
+        trip_id=trip.id, vehicle_id=vehicle.id, wh_per_km=60.0,
+        confidence_numeric=0.9, source="gps_model", created_at=NOW - timedelta(days=1),
+    ))
+    db.commit()
+    evaluate_active_trip_nudges(db, tools=FakeTools(), now=NOW)
+    soc = db.query(NotificationOutbox).filter(NotificationOutbox.nudge_type == "live_soc").one()
+    assert soc.payload["soc_source"] == "gps_prediction:gps_model"
 
 
 def test_missing_google_evidence_keeps_soc_alert_but_suppresses_route_and_charger():
