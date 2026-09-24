@@ -28,3 +28,9 @@ resource "google_project_iam_member" "fcm_sender" {
   role    = "roles/firebasecloudmessaging.admin"
   member  = "serviceAccount:${google_service_account.role["notification-fcm"].email}"
 }
+
+resource "google_secret_manager_secret_iam_member" "notification_maps_reader" {
+  secret_id = "projects/${var.project_id}/secrets/trickee-google-maps-api-key"
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.role["notification-fcm"].email}"
+}

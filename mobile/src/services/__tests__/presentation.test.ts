@@ -1,4 +1,4 @@
-import { freshnessPresentation, metricText, nudgeAcceptanceLabel } from "../presentation";
+import { freshnessPresentation, metricText, nudgeAcceptanceLabel, liveNudgePresentation } from "../presentation";
 
 describe("driver-facing presentation", () => {
   it("turns timestamps into actionable live, delayed and offline states", () => {
@@ -17,5 +17,17 @@ describe("driver-facing presentation", () => {
   it("names acceptance honestly when it only records an outcome", () => {
     expect(nudgeAcceptanceLabel(false)).toBe("Mark accepted");
     expect(nudgeAcceptanceLabel(true)).toBe("Use this route");
+  });
+
+  it("distinguishes live route, charger, and SOC alerts without claiming traffic for each", () => {
+    expect(liveNudgePresentation("live_route", "google_routes")).toMatchObject({
+      label: "TRAFFIC UPDATE", evidence: "Google live traffic used for this route", action: "Review route",
+    });
+    expect(liveNudgePresentation("live_charger", "google_places")).toMatchObject({
+      label: "CHARGING OPTION", evidence: "Charger listing from Google Places; availability unconfirmed", action: "Acknowledge", mapAction: "View charger",
+    });
+    expect(liveNudgePresentation("live_soc", "unavailable")).toMatchObject({
+      label: "BATTERY ALERT", action: "Acknowledge", mapAction: "Open map",
+    });
   });
 });

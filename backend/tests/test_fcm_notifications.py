@@ -1,11 +1,13 @@
 from datetime import datetime, timedelta
 
+import httpx
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models.entities import Device, Driver, Fleet, NotificationOutbox, User, Vehicle
-from app.services.fcm_notifications import FcmDeliveryError, dispatch_due_notifications
+from app.services.fcm_notifications import FcmDeliveryError, GoogleFcmSender, dispatch_due_notifications
 
 
 class FakeSender:
@@ -90,3 +92,57 @@ def test_unregistered_token_is_disabled_without_losing_nudge():
     db.refresh(nudge)
     assert device.fcm_registration_token is None
     assert nudge.status == "pending"
+
+
+def test_missing_token_waits_for_registration_without_busy_loop():
+    db, device, nudge = _db()
+    device.fcm_registration_token = None
+    db.commit()
+    now = datetime.utcnow()
+
+    first = dispatch_due_notifications(db, sender=FakeSender(), now=now)
+    immediate = dispatch_due_notifications(db, sender=FakeSender(), now=now + timedelta(seconds=1))
+
+    assert first["pending"] == 1
+    assert immediate["selected"] == 0
+    db.refresh(nudge)
+    assert nudge.status == "pending" and nudge.last_error_code == "NO_ACTIVE_PUSH_TOKEN"
+
+
+def test_sender_rejects_malformed_project_id_before_using_credentials():
+    with pytest.raises(ValueError, match="FCM project ID"):
+        GoogleFcmSender(project_id="trickee-jaswanth-pilot OTHER_SETTING=value")
+
+
+def test_fcm_transport_error_is_retryable(monkeypatch):
+    class Credentials:
+        valid = True
+        token = "test-access-token"
+
+    monkeypatch.setattr("app.services.fcm_notifications.google.auth.default", lambda scopes: (Credentials(), "test"))
+    monkeypatch.setattr("app.services.fcm_notifications.httpx.post", lambda *args, **kwargs: (_ for _ in ()).throw(httpx.ConnectError("offline")))
+    sender = GoogleFcmSender(project_id="trickee-jaswanth-pilot")
+
+    with pytest.raises(FcmDeliveryError) as error:
+        sender.send(token="device-token", title="Route", body="Traffic", data={}, channel_id="route-alerts")
+
+    assert error.value.code == "FCM_TRANSPORT"
+    assert error.value.permanent is False
+
+
+def test_fcm_success_without_message_id_is_not_marked_sent(monkeypatch):
+    class Credentials:
+        valid = True
+        token = "test-access-token"
+
+    class Response:
+        is_success = True
+        def json(self):
+            return {}
+
+    monkeypatch.setattr("app.services.fcm_notifications.google.auth.default", lambda scopes: (Credentials(), "test"))
+    monkeypatch.setattr("app.services.fcm_notifications.httpx.post", lambda *args, **kwargs: Response())
+    sender = GoogleFcmSender(project_id="trickee-jaswanth-pilot")
+
+    with pytest.raises(FcmDeliveryError, match="FCM_RESPONSE"):
+        sender.send(token="device-token", title="Route", body="Traffic", data={}, channel_id="route-alerts")

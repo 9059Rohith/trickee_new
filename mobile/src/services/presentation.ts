@@ -26,3 +26,24 @@ export function metricText(value: number | null | undefined, digits = 1, unit = 
 
 export const nudgeAcceptanceLabel = (activatesRoute: boolean) =>
   activatesRoute ? "Use this route" : "Mark accepted";
+
+export function liveNudgePresentation(nudgeType: string, providerSource?: string | null) {
+  if (nudgeType === "live_soc") return {
+    label: "BATTERY ALERT", icon: "battery-alert", evidence: "Battery level is estimated from confirmed SOC and trip distance; verify on your dashboard",
+    action: "Acknowledge", mapAction: "Open map",
+  };
+  if (nudgeType === "live_charger") return {
+    label: "CHARGING OPTION", icon: "ev-station", evidence: "Charger listing from Google Places; availability unconfirmed",
+    action: "Acknowledge", mapAction: "View charger",
+  };
+  if (nudgeType === "live_route") return {
+    label: "TRAFFIC UPDATE", icon: "routes",
+    evidence: providerSource === "google_routes" ? "Google live traffic used for this route" : "Live traffic unavailable",
+    action: "Review route", mapAction: "Open navigation",
+  };
+  return {
+    label: "ROUTE UPDATE", icon: "routes",
+    evidence: providerSource === "google_routes" ? "Google live traffic used for this route" : "Live traffic unavailable",
+    action: nudgeAcceptanceLabel(false), mapAction: "Open navigation",
+  };
+}

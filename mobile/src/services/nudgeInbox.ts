@@ -96,9 +96,9 @@ export function routeNudgeFromRemoteMessage(
   return {
     id: target.nudgeId,
     nudge_type: optionalString(data.nudge_type) || "departure",
-    title: message.notification?.title || "Route update",
+    title: message.notification?.title || optionalString(data.title) || "Route update",
     body:
-      message.notification?.body || "Open Trickee for your route update.",
+      message.notification?.body || optionalString(data.body) || "Open Trickee for your route update.",
     payload,
     delivery_status: "sent",
     attempts: 1,

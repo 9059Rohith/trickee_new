@@ -2,6 +2,8 @@ import os
 import subprocess
 import sys
 
+from sqlalchemy import create_engine, inspect
+
 
 def test_alembic_upgrade_downgrade_roundtrip_uses_an_isolated_database(tmp_path):
     database_url = f"sqlite:///{tmp_path / 'alembic-roundtrip.db'}"
@@ -16,3 +18,5 @@ def test_alembic_upgrade_downgrade_roundtrip_uses_an_isolated_database(tmp_path)
             text=True,
         )
         assert completed.returncode == 0, completed.stderr
+        tables = inspect(create_engine(database_url)).get_table_names()
+        assert ("live_nudge_evaluations" in tables) == (command[0] == "upgrade")

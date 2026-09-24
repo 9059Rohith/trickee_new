@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import re
 from typing import Any, Protocol
 
 import google.auth
@@ -36,31 +37,42 @@ class GoogleFcmSender:
         self.timeout = settings.fcm_timeout_seconds
         if not self.project_id:
             raise RuntimeError("TRICKEE_FCM_PROJECT_ID is not configured")
+        if not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", self.project_id):
+            raise ValueError("FCM project ID must be one valid Google Cloud project ID")
         self.credentials, _ = google.auth.default(scopes=[FCM_SCOPE])
 
     def send(self, *, token: str, title: str, body: str, data: dict[str, str], channel_id: str) -> str:
         if not self.credentials.valid:
             self.credentials.refresh(Request())
-        response = httpx.post(
-            f"https://fcm.googleapis.com/v1/projects/{self.project_id}/messages:send",
-            headers={"Authorization": f"Bearer {self.credentials.token}"},
-            json={
-                "message": {
-                    "token": token,
-                    # Data-only delivery ensures our FirebaseMessagingService
-                    # uses the same high-priority channel and deep link in both
-                    # foreground and background states.
-                    "data": {**data, "title": title, "body": body},
-                    "android": {
-                        "priority": "HIGH",
-                        "notification": {"channel_id": channel_id, "sound": "default"},
-                    },
-                }
-            },
-            timeout=self.timeout,
-        )
+        try:
+            response = httpx.post(
+                f"https://fcm.googleapis.com/v1/projects/{self.project_id}/messages:send",
+                headers={"Authorization": f"Bearer {self.credentials.token}"},
+                json={
+                    "message": {
+                        "token": token,
+                        # Data-only delivery ensures our FirebaseMessagingService
+                        # uses the same high-priority channel and deep link in both
+                        # foreground and background states.
+                        "data": {**data, "title": title, "body": body},
+                        "android": {
+                            "priority": "HIGH",
+                            "notification": {"channel_id": channel_id, "sound": "default"},
+                        },
+                    }
+                },
+                timeout=self.timeout,
+            )
+        except httpx.HTTPError as exc:
+            raise FcmDeliveryError("FCM_TRANSPORT", type(exc).__name__, permanent=False) from exc
         if response.is_success:
-            return str(response.json().get("name") or "sent")
+            try:
+                message_id = response.json().get("name")
+            except ValueError as exc:
+                raise FcmDeliveryError("FCM_RESPONSE", "Missing FCM message ID", permanent=False) from exc
+            if not isinstance(message_id, str) or not message_id.startswith(f"projects/{self.project_id}/messages/"):
+                raise FcmDeliveryError("FCM_RESPONSE", "Missing FCM message ID", permanent=False)
+            return message_id
         detail = response.text[:255]
         code = f"HTTP_{response.status_code}"
         try:
@@ -113,6 +125,9 @@ def dispatch_due_notifications(
         )
         .order_by(NotificationOutbox.due_at, NotificationOutbox.created_at)
         .limit(max(1, min(limit, 500)))
+        # Cloud Run revisions can overlap during rollout. PostgreSQL skips rows
+        # another worker has claimed until that worker commits the FCM result.
+        .with_for_update(skip_locked=True)
         .all()
     )
     stats = {"selected": len(rows), "sent": 0, "pending": 0, "failed": 0}
@@ -139,6 +154,7 @@ def dispatch_due_notifications(
         if not devices:
             nudge.last_error_code = "NO_ACTIVE_PUSH_TOKEN"
             nudge.last_error_detail = "Waiting for the signed-in handset to register FCM"
+            nudge.attempts += 1
             nudge.updated_at = now
             stats["pending"] += 1
             continue

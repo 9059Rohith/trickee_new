@@ -281,6 +281,18 @@ resource "google_cloud_run_v2_service" "role" {
           value = var.project_id
         }
       }
+      dynamic "env" {
+        for_each = each.key == "notification-fcm" ? [1] : []
+        content {
+          name = "TRICKEE_GOOGLE_MAPS_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = "trickee-google-maps-api-key"
+              version = "latest"
+            }
+          }
+        }
+      }
       env {
         name = "TRICKEE_DATABASE_URL"
         value_source {

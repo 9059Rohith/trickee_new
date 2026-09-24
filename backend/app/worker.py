@@ -18,6 +18,22 @@ from app.streams.outbox_relay import relay_once
 from app.streams.redis_client import RedisStreamClient
 
 
+def run_notification_cycle(db, *, sender, tools, now=None) -> dict:
+    """Evaluate live guidance without allowing provider failures to stop delivery."""
+    from app.services.fcm_notifications import dispatch_due_notifications
+    from app.services.live_trip_nudges import evaluate_active_trip_nudges
+
+    evaluation_error = None
+    try:
+        evaluation = evaluate_active_trip_nudges(db, tools=tools, now=now)
+    except Exception as exc:
+        db.rollback()
+        evaluation = {"scanned": 0, "eligible": 0, "queued": 0, "provider_errors": 0}
+        evaluation_error = type(exc).__name__
+    delivery = dispatch_due_notifications(db, sender=sender, now=now)
+    return {"evaluation": evaluation, "evaluation_error": evaluation_error, "delivery": delivery}
+
+
 def outbox_metric_record(pending: int) -> dict[str, str | int]:
     """Build the low-cardinality structured log consumed by Cloud Monitoring."""
     return {
@@ -50,16 +66,25 @@ def run(role: str) -> None:
     _start_health_server()
     if role == "notification-fcm":
         from app.services.fcm_notifications import GoogleFcmSender, dispatch_due_notifications
+        from app.services.daily_plan_tools import daily_plan_tools
 
         sender = GoogleFcmSender()
+        next_evaluation_at = 0.0
         while True:
             db = SessionLocal()
             try:
-                work = dispatch_due_notifications(db, sender=sender)["selected"]
+                if time.monotonic() >= next_evaluation_at:
+                    summary = run_notification_cycle(db, sender=sender, tools=daily_plan_tools)
+                    print(json.dumps({"severity": "INFO", "metric": "trickee_notification_cycle", **summary}, separators=(",", ":")), flush=True)
+                    work = summary["delivery"]["selected"]
+                    next_evaluation_at = time.monotonic() + 60.0
+                else:
+                    work = dispatch_due_notifications(db, sender=sender)["selected"]
             finally:
                 db.close()
-            if not work:
-                time.sleep(5.0)
+            # A pending row without an active token is still selected; never spin
+            # through the same undeliverable row without a pause.
+            time.sleep(1.0 if work else 5.0)
         return
     streams = RedisStreamClient(os.environ["TRICKEE_REDIS_URL"])
     consumer = f"{socket.gethostname()}-{os.getpid()}"

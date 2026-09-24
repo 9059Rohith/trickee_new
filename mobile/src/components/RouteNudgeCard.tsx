@@ -4,7 +4,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../constants/Colors";
 import { nudgeActionState } from "../services/mapNavigation";
 import type { RouteNudge, RouteNudgeEvent } from "../services/types";
-import { nudgeAcceptanceLabel } from "../services/presentation";
+import { liveNudgePresentation } from "../services/presentation";
 
 const formatLeaveTime = (value?: string | null) => {
   if (!value) return null;
@@ -22,15 +22,16 @@ const RouteNudgeCard: React.FC<{
   const liveTraffic =
     nudge.payload.provider_source === "google_routes" &&
     !nudge.payload.degraded_reason;
+  const presentation = liveNudgePresentation(nudge.nudge_type, nudge.payload.provider_source);
   const actionState = nudgeActionState(nudge.outcome?.latest_event);
   const mapAvailable =
     typeof nudge.payload.destination_lat === "number" &&
     typeof nudge.payload.destination_lng === "number";
   return (
-    <View style={styles.card} accessibilityLabel="Route recommendation">
+    <View style={styles.card} accessibilityLabel={presentation.label}>
       <View style={styles.headerRow}>
-        <Icon name="routes" size={20} color={Colors.trickeeYellow} />
-        <Text style={styles.eyebrow}>ROUTE UPDATE</Text>
+        <Icon name={presentation.icon} size={20} color={Colors.trickeeYellow} />
+        <Text style={styles.eyebrow}>{presentation.label}</Text>
       </View>
       <Text style={styles.title}>{nudge.title}</Text>
       <Text style={styles.body}>{nudge.body}</Text>
@@ -43,10 +44,8 @@ const RouteNudgeCard: React.FC<{
           Expected arrival SOC · {Math.round(nudge.payload.arrival_soc_pct)}%
         </Text>
       ) : null}
-      <Text style={liveTraffic ? styles.evidence : styles.warning}>
-        {liveTraffic
-          ? "Google live traffic used for this route"
-          : `Live traffic unavailable${nudge.payload.degraded_reason ? ` · ${nudge.payload.degraded_reason.replace(/_/g, " ")}` : ""}`}
+      <Text style={liveTraffic || nudge.nudge_type === "live_charger" ? styles.evidence : styles.warning}>
+        {presentation.evidence}
       </Text>
       {nudge.payload.place_confirmed === true &&
       nudge.payload.availability_confirmed !== true ? (
@@ -63,24 +62,24 @@ const RouteNudgeCard: React.FC<{
         {!actionState.terminal ? (
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Mark this route recommendation as accepted"
+            accessibilityLabel={`${presentation.action} ${presentation.label.toLowerCase()}`}
             accessibilityHint="Records your choice but does not start navigation"
             style={styles.primaryButton}
             disabled={busy}
             onPress={() => onAction("accepted")}
           >
-            <Text style={styles.primaryText}>{busy ? "Saving…" : nudgeAcceptanceLabel(false)}</Text>
+            <Text style={styles.primaryText}>{busy ? "Saving…" : presentation.action}</Text>
           </TouchableOpacity>
         ) : null}
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel={mapAvailable ? "Open route in Google Maps" : "Route map unavailable"}
+          accessibilityLabel={mapAvailable ? `${presentation.mapAction} in Google Maps` : "Map unavailable"}
           style={[styles.secondaryButton, !mapAvailable && styles.disabledButton]}
           disabled={busy || !mapAvailable}
           onPress={() => onAction("opened")}
         >
           <Text style={styles.secondaryText}>
-            {mapAvailable ? "Open navigation" : "Map unavailable"}
+            {mapAvailable ? presentation.mapAction : "Map unavailable"}
           </Text>
         </TouchableOpacity>
         {!actionState.terminal ? (

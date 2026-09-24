@@ -524,6 +524,23 @@ class NotificationOutbox(Base):
     )
 
 
+class LiveNudgeEvaluation(Base):
+    """Durable per-trip checkpoint for bounded external guidance evaluation."""
+
+    __tablename__ = "live_nudge_evaluations"
+    trip_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("mobile_trip_sessions.id"), primary_key=True
+    )
+    last_evaluated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    soc_anchor_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    soc_anchor_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    soc_anchor_distance_km: Mapped[float | None] = mapped_column(Float, nullable=True)
+    soc_anchor_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+
 class DailyPlan(Base):
     """Confirmed-input boundary for one driver day; computed values retain evidence in result_payload."""
 

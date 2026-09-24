@@ -66,4 +66,11 @@ describe("route nudge inbox", () => {
       },
     });
   });
+
+  it("uses the title and body from a data-only FCM push", () => {
+    expect(routeNudgeFromRemoteMessage({data: {
+      screen: "route_nudge", nudge_id: "nudge-10", nudge_type: "live_soc",
+      title: "Battery check recommended", body: "Estimated battery is low.",
+    }})).toMatchObject({title: "Battery check recommended", body: "Estimated battery is low."});
+  });
 });
