@@ -21,10 +21,10 @@ describe("driver-facing presentation", () => {
 
   it("distinguishes live route, charger, and SOC alerts without claiming traffic for each", () => {
     expect(liveNudgePresentation("live_route", "google_routes")).toMatchObject({
-      label: "TRAFFIC UPDATE", evidence: "Google live traffic used for this route", action: "Review route",
+      label: "TRAFFIC UPDATE", evidence: "Google live traffic used for this route", action: "Open navigation",
     });
     expect(liveNudgePresentation("live_charger", "google_places")).toMatchObject({
-      label: "CHARGING OPTION", evidence: "Charger listing from Google Places; availability unconfirmed", action: "Acknowledge", mapAction: "View charger",
+      label: "CHARGING OPTION", evidence: "Charger listing from Google Places; availability unconfirmed", action: "Navigate to charger", mapAction: "View charger",
     });
     expect(liveNudgePresentation("live_soc", "unavailable")).toMatchObject({
       label: "BATTERY ALERT", action: "Acknowledge", mapAction: "Open map",

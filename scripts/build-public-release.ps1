@@ -7,7 +7,9 @@ param(
     [string]$GoogleWebClientId = '1044486768873-7sq9luvpsmkppgod40p5qdtbkbaq6m7q.apps.googleusercontent.com',
     [string]$ApiOrigin = 'https://trickee-pilot-api-pylmkxap6a-el.a.run.app',
     [string]$WebSocketOrigin = 'https://trickee-pilot-websocket-pylmkxap6a-el.a.run.app',
-    [switch]$AllowWithoutFirebase
+    [switch]$AllowWithoutFirebase,
+    [string]$ExpectedVersionName = '1.0.21',
+    [int]$ExpectedVersionCode = 23
 )
 
 $ErrorActionPreference = 'Stop'
@@ -116,8 +118,8 @@ if ($actualApplicationId -ne $publicApplicationId) {
 if ($targetSdk -ne '36') {
     throw "Wrong target SDK in release manifest. Expected 36, found $targetSdk."
 }
-if ($versionCode -ne '22' -or $versionName -ne '1.0.20') {
-    throw "Wrong release version. Expected 1.0.20 (22), found $versionName ($versionCode)."
+if ($versionCode -ne [string]$ExpectedVersionCode -or $versionName -ne $ExpectedVersionName) {
+    throw "Wrong release version. Expected $ExpectedVersionName ($ExpectedVersionCode), found $versionName ($versionCode)."
 }
 $requiredPermissions = @(
     'android.permission.INTERNET',

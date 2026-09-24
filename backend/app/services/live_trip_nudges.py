@@ -16,13 +16,14 @@ from app.models.entities import (
 )
 
 
-EVALUATION_INTERVAL = timedelta(minutes=5)
+EVALUATION_INTERVAL = timedelta(minutes=2)
 GPS_MAX_AGE = timedelta(seconds=90)
 NUDGE_EXPIRY = timedelta(minutes=30)
 
 
 class MobilityTools(Protocol):
     def plan_route_leg(self, origin: dict[str, float], destination: dict[str, float], departure_at: datetime) -> dict: ...
+    def plan_route_options(self, origin: dict[str, float], destination: dict[str, float], departure_at: datetime) -> list[dict]: ...
     def find_route_chargers(self, center: dict[str, float], radius_m: int = 5000) -> list[dict]: ...
 
 
@@ -44,6 +45,42 @@ def _distance_km(a: dict[str, float], b: dict[str, float]) -> float:
     d_lng = math.radians(b["lng"] - a["lng"])
     h = math.sin(d_lat / 2) ** 2 + math.cos(math.radians(a["lat"])) * math.cos(math.radians(b["lat"])) * math.sin(d_lng / 2) ** 2
     return radius * 2 * math.atan2(math.sqrt(h), math.sqrt(max(0, 1 - h)))
+
+
+def _route_waypoint(encoded: object, origin: dict[str, float], destination: dict[str, float]) -> dict[str, float] | None:
+    """Take a bounded mid-route waypoint; Maps may still recalculate navigation."""
+    if not isinstance(encoded, str) or not encoded or len(encoded) > 50_000:
+        return None
+    points: list[dict[str, float]] = []
+    latitude = longitude = cursor = 0
+    try:
+        while cursor < len(encoded) and len(points) < 5000:
+            deltas = []
+            for _ in range(2):
+                shift = value = 0
+                while True:
+                    chunk = ord(encoded[cursor]) - 63
+                    cursor += 1
+                    if chunk < 0 or chunk > 63 or shift > 35:
+                        return None
+                    value |= (chunk & 0x1F) << shift
+                    shift += 5
+                    if chunk < 0x20:
+                        break
+                deltas.append(~(value >> 1) if value & 1 else value >> 1)
+            latitude += deltas[0]
+            longitude += deltas[1]
+            point = _coordinates(latitude / 1e5, longitude / 1e5)
+            if not point:
+                return None
+            points.append(point)
+    except (IndexError, ValueError):
+        return None
+    if (len(points) < 3 or cursor != len(encoded)
+            or _distance_km(points[0], origin) > 2
+            or _distance_km(points[-1], destination) > 2):
+        return None
+    return points[len(points) // 2]
 
 
 def _destination(db: Session, trip: MobileTripSession, now: datetime) -> tuple[dict[str, float], str] | None:
@@ -189,7 +226,7 @@ def _enqueue(db: Session, trip: MobileTripSession, *, key: str, kind: str, title
 
 def evaluate_active_trip_nudges(db: Session, *, tools: MobilityTools, now: datetime | None = None,
                                 limit: int = 500) -> dict[str, int]:
-    """Queue at most one bounded evaluation per live trip every five minutes."""
+    """Queue at most one bounded evaluation per live trip every two minutes."""
     now = _utc_naive(now or datetime.now(timezone.utc))
     stats = {"scanned": 0, "eligible": 0, "queued": 0, "provider_errors": 0}
     trips = db.query(MobileTripSession).filter(MobileTripSession.status == "active").order_by(
@@ -219,9 +256,10 @@ def evaluate_active_trip_nudges(db: Session, *, tools: MobilityTools, now: datet
         if checkpoint is None:
             continue
         stats["eligible"] += 1
-        live_distance = float((state.health_payload or {}).get("live_distance_km") or 0)
-        if not math.isfinite(live_distance) or live_distance < 0:
-            live_distance = 0.0
+        distance_fact = (state.health_payload or {}).get("live_distance_km")
+        live_distance = (float(distance_fact) if isinstance(distance_fact, (int, float))
+                         and not isinstance(distance_fact, bool) and math.isfinite(distance_fact)
+                         and distance_fact >= 0 else None)
         soc_reading = _confirmed_soc(db, trip, now)
         if soc_reading and soc_reading[0] != checkpoint.soc_anchor_key:
             key, recorded_at, pct = soc_reading
@@ -232,16 +270,22 @@ def evaluate_active_trip_nudges(db: Session, *, tools: MobilityTools, now: datet
             db.commit()
         energy = _energy_rate(db, vehicle, now)
         current_soc = None
-        if energy and checkpoint.soc_anchor_pct is not None and vehicle.usable_kwh:
+        if (energy and live_distance is not None and checkpoint.soc_anchor_pct is not None
+                and checkpoint.soc_anchor_distance_km is not None and vehicle.usable_kwh):
             driven = max(0.0, live_distance - float(checkpoint.soc_anchor_distance_km or 0))
             current_soc = round(max(0.0, min(100.0, checkpoint.soc_anchor_pct - driven * energy[0] / (vehicle.usable_kwh * 10))), 1)
         destination = _destination(db, trip, now)
         route: dict = {}
+        options: list[dict] = []
+        departure_at = (now + timedelta(minutes=1)).replace(tzinfo=timezone.utc)
         if destination:
             try:
-                route = tools.plan_route_leg(
-                    location, destination[0], (now + timedelta(minutes=1)).replace(tzinfo=timezone.utc)
-                )
+                options = tools.plan_route_options(location, destination[0], departure_at)
+                valid_options = [option for option in options if option.get("source") == "google_routes"
+                                 and isinstance(option.get("duration_s"), (int, float))
+                                 and not isinstance(option.get("duration_s"), bool)
+                                 and math.isfinite(option["duration_s"]) and option["duration_s"] > 0]
+                route = min(valid_options, key=lambda option: option["duration_s"]) if valid_options else {}
             except Exception:
                 stats["provider_errors"] += 1
         distance_m = route.get("distance_m")
@@ -253,6 +297,27 @@ def evaluate_active_trip_nudges(db: Session, *, tools: MobilityTools, now: datet
             and math.isfinite(distance_m) and math.isfinite(duration_s)
             and distance_m >= 0 and duration_s > 0
         )
+        fastest_route = route
+        route_waypoint = None
+        if verified_route and current_soc is not None and energy and vehicle.usable_kwh and destination:
+            candidates = []
+            for option in options:
+                alt_distance = option.get("distance_m")
+                alt_duration = option.get("duration_s")
+                if (option is fastest_route or option.get("source") != "google_routes"
+                        or not isinstance(alt_distance, (int, float)) or isinstance(alt_distance, bool)
+                        or not isinstance(alt_duration, (int, float)) or isinstance(alt_duration, bool)
+                        or not math.isfinite(alt_distance) or not math.isfinite(alt_duration)):
+                    continue
+                extra_seconds = alt_duration - fastest_route["duration_s"]
+                soc_saved = (fastest_route["distance_m"] - alt_distance) / 1000 * energy[0] / (vehicle.usable_kwh * 10)
+                waypoint = _route_waypoint(option.get("encoded_polyline"), location, destination[0])
+                if 0 <= extra_seconds <= 300 and soc_saved >= 2 and waypoint:
+                    candidates.append((soc_saved, option, waypoint))
+            if candidates:
+                _, route, route_waypoint = max(candidates, key=lambda item: item[0])
+                distance_m = route["distance_m"]
+                duration_s = route["duration_s"]
         arrival_soc = None
         if verified_route and current_soc is not None and energy and vehicle.usable_kwh:
             arrival_soc = round(max(0.0, current_soc - route["distance_m"] / 1000 * energy[0] / (vehicle.usable_kwh * 10)), 1)
@@ -265,6 +330,9 @@ def evaluate_active_trip_nudges(db: Session, *, tools: MobilityTools, now: datet
             "soc_source": energy[1] if energy else "unavailable",
             "provider_source": route.get("source") or "unavailable",
             "evidence_at": route.get("evidence_at") or now.replace(tzinfo=timezone.utc).isoformat(),
+            "route_distance_m": int(distance_m) if verified_route else None,
+            "route_duration_s": int(duration_s) if verified_route else None,
+            "selected_route_id": route.get("route_id") if verified_route else None,
         }
         queued = 0
         recent = _recent_count(db, trip, now)
@@ -282,8 +350,8 @@ def evaluate_active_trip_nudges(db: Session, *, tools: MobilityTools, now: datet
                 _enqueue(db, trip, key=key, kind="live_soc", title="Battery check recommended", body=message,
                          payload={**base_payload, "soc_threshold": threshold}, now=now)
                 queued += 1
-        traffic_delay = route.get("traffic_delay_s")
-        duration = route.get("duration_s")
+        duration = fastest_route.get("duration_s")
+        traffic_delay = fastest_route.get("traffic_delay_s")
         if (verified_route and isinstance(traffic_delay, (int, float)) and not isinstance(traffic_delay, bool)
                 and math.isfinite(traffic_delay) and traffic_delay >= 600
                 and duration > traffic_delay and traffic_delay >= (duration - traffic_delay) * 0.2
@@ -293,8 +361,14 @@ def evaluate_active_trip_nudges(db: Session, *, tools: MobilityTools, now: datet
             _enqueue(
                 db, trip, key=f"live:{trip.id}:route:{bucket}", kind="live_route",
                 title="Heavy traffic on your route",
-                body=f"Traffic adds about {round(traffic_delay / 60)} min to {destination[1]}. Open the map to review.",
-                payload={**base_payload, "traffic_delay_s": int(traffic_delay), "route_duration_s": int(duration)}, now=now,
+                body=(f"Traffic adds about {round(traffic_delay / 60)} min to {destination[1]}. "
+                      + (f"A shorter alternative may use about {round((fastest_route['distance_m'] - route['distance_m']) / 1000 * energy[0] / (vehicle.usable_kwh * 10))}% less SOC but takes about {round((route['duration_s'] - duration) / 60)} min longer"
+                         if route_waypoint else f"Current best route: {round(duration / 60)} min")
+                      + (f", estimated arrival SOC {arrival_soc:.0f}%" if arrival_soc is not None else "")
+                      + ". Open navigation to review current conditions."),
+                payload={**base_payload, "traffic_delay_s": int(traffic_delay),
+                         "route_waypoint_lat": route_waypoint["lat"] if route_waypoint else None,
+                         "route_waypoint_lng": route_waypoint["lng"] if route_waypoint else None}, now=now,
             )
             queued += 1
         needs_charger = current_soc is not None and (current_soc <= 25 or (arrival_soc is not None and arrival_soc <= 20))
@@ -304,31 +378,53 @@ def evaluate_active_trip_nudges(db: Session, *, tools: MobilityTools, now: datet
             except Exception:
                 places = []
                 stats["provider_errors"] += 1
-            reachable_range_km = current_soc * vehicle.usable_kwh * 10 / energy[0]
             viable = []
+            road_checks = 0
             for place in places[:10]:
                 if not isinstance(place, dict):
                     continue
                 point = _coordinates((place.get("coordinates") or {}).get("lat"), (place.get("coordinates") or {}).get("lng"))
-                if place.get("source") != "google_places" or not point:
+                name = str(place.get("name") or "")
+                if (place.get("source") != "google_places" or not point
+                        or not (vehicle.make or "").casefold().startswith("ola")
+                        or "ola" not in name.casefold() or "hypercharg" not in name.casefold()):
                     continue
-                distance_km = _distance_km(location, point)
-                if distance_km <= 5 and distance_km * 1.2 <= reachable_range_km:
-                    viable.append((distance_km, place, point))
+                if _distance_km(location, point) > 5:
+                    continue
+                if road_checks >= 3:
+                    break
+                road_checks += 1
+                try:
+                    charger_route = tools.plan_route_leg(location, point, departure_at)
+                except Exception:
+                    stats["provider_errors"] += 1
+                    continue
+                road_m = charger_route.get("distance_m")
+                if (charger_route.get("source") != "google_routes"
+                        or not isinstance(road_m, (int, float)) or isinstance(road_m, bool)
+                        or not math.isfinite(road_m) or road_m < 0):
+                    continue
+                distance_km = road_m / 1000
+                soc_at_charger = round(max(0.0, current_soc - distance_km * energy[0] / (vehicle.usable_kwh * 10)), 1)
+                if soc_at_charger >= 5:
+                    viable.append((distance_km, soc_at_charger, place, point))
             if viable:
-                distance_km, place, point = min(viable, key=lambda item: item[0])
+                distance_km, soc_at_charger, place, point = min(viable, key=lambda item: item[0])
                 name = str(place.get("name") or "Nearby charger")[:80]
                 bucket = int(now.timestamp() // 3600)
                 _enqueue(
                     db, trip, key=f"live:{trip.id}:charger:{bucket}", kind="live_charger",
                     title=f"Charging option: {name}",
-                    body=f"Listed about {distance_km:.1f} km away straight-line. Check driving distance and connector availability before relying on it.",
+                    body=(f"{name} is about {distance_km:.1f} km by road; estimated battery on arrival "
+                          f"{soc_at_charger:.0f}%. Check the Ola app and charger status before relying on it."),
                     payload={
                         **base_payload, "destination_lat": point["lat"], "destination_lng": point["lng"],
                         "route_name": name, "charger_place_id": place.get("place_id"),
                         "provider_source": "google_places", "place_confirmed": True,
                         "availability_confirmed": False,
-                        "charger_distance_km": round(distance_km, 2), "evidence_at": place.get("evidence_at"),
+                        "charger_distance_km": round(distance_km, 2),
+                        "soc_at_charger_pct": soc_at_charger,
+                        "evidence_at": place.get("evidence_at"),
                     }, now=now,
                 )
                 queued += 1

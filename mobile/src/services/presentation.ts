@@ -34,12 +34,12 @@ export function liveNudgePresentation(nudgeType: string, providerSource?: string
   };
   if (nudgeType === "live_charger") return {
     label: "CHARGING OPTION", icon: "ev-station", evidence: "Charger listing from Google Places; availability unconfirmed",
-    action: "Acknowledge", mapAction: "View charger",
+      action: "Navigate to charger", mapAction: "View charger",
   };
   if (nudgeType === "live_route") return {
     label: "TRAFFIC UPDATE", icon: "routes",
     evidence: providerSource === "google_routes" ? "Google live traffic used for this route" : "Live traffic unavailable",
-    action: "Review route", mapAction: "Open navigation",
+      action: "Open navigation", mapAction: "Open navigation",
   };
   return {
     label: "ROUTE UPDATE", icon: "routes",

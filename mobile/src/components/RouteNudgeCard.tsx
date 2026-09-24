@@ -27,6 +27,7 @@ const RouteNudgeCard: React.FC<{
   const mapAvailable =
     typeof nudge.payload.destination_lat === "number" &&
     typeof nudge.payload.destination_lng === "number";
+  const primaryNeedsMap = nudge.nudge_type === "live_route" || nudge.nudge_type === "live_charger";
   return (
     <View style={styles.card} accessibilityLabel={presentation.label}>
       <View style={styles.headerRow}>
@@ -36,7 +37,7 @@ const RouteNudgeCard: React.FC<{
       <Text style={styles.title}>{nudge.title}</Text>
       <Text style={styles.body}>{nudge.body}</Text>
       {nudge.payload.route_name ? (
-        <Text style={styles.fact}>Route · {nudge.payload.route_name}</Text>
+        <Text style={styles.fact}>{nudge.nudge_type === "live_charger" ? "Charger" : "Route"} · {nudge.payload.route_name}</Text>
       ) : null}
       {leaveTime ? <Text style={styles.fact}>Leave · {leaveTime}</Text> : null}
       {typeof nudge.payload.arrival_soc_pct === "number" ? (
@@ -44,12 +45,18 @@ const RouteNudgeCard: React.FC<{
           Expected arrival SOC · {Math.round(nudge.payload.arrival_soc_pct)}%
         </Text>
       ) : null}
+      {typeof nudge.payload.current_soc_pct === "number" && nudge.nudge_type.startsWith("live_") ? (
+        <Text style={styles.fact}>Current estimated SOC · {Math.round(nudge.payload.current_soc_pct)}%</Text>
+      ) : null}
+      {typeof nudge.payload.soc_at_charger_pct === "number" ? (
+        <Text style={styles.fact}>Estimated SOC at charger · {Math.round(nudge.payload.soc_at_charger_pct)}%</Text>
+      ) : null}
       <Text style={liveTraffic || nudge.nudge_type === "live_charger" ? styles.evidence : styles.warning}>
         {presentation.evidence}
       </Text>
       {nudge.payload.place_confirmed === true &&
       nudge.payload.availability_confirmed !== true ? (
-        <Text style={styles.warning}>Charger exists; live slot availability is not confirmed</Text>
+        <Text style={styles.warning}>Listed charger; compatibility and live slot availability need confirmation</Text>
       ) : null}
       <View style={styles.actions}>
         {actionState.label ? (
@@ -63,9 +70,9 @@ const RouteNudgeCard: React.FC<{
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel={`${presentation.action} ${presentation.label.toLowerCase()}`}
-            accessibilityHint="Records your choice but does not start navigation"
-            style={styles.primaryButton}
-            disabled={busy}
+            accessibilityHint={primaryNeedsMap ? "Opens Google Maps before recording your choice" : "Records your choice"}
+            style={[styles.primaryButton, primaryNeedsMap && !mapAvailable && styles.disabledButton]}
+            disabled={busy || (primaryNeedsMap && !mapAvailable)}
             onPress={() => onAction("accepted")}
           >
             <Text style={styles.primaryText}>{busy ? "Saving…" : presentation.action}</Text>

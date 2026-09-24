@@ -1,6 +1,13 @@
 # GPS Driver project context
 
-Updated: 2026-09-24. Repository: `gpsdriver`, current isolated worktree branch `feature/live-route-charger-soc-nudges`.
+Updated: 2026-09-25. Repository: `gpsdriver`, current isolated worktree branch `feature/live-route-charger-soc-nudges`.
+
+## Actionable live trip nudges (2026-09-25)
+
+- New route-option adapter requests traffic-aware Google default and alternatives, retaining each distance, ETA, delay and encoded geometry. The worker evaluates every two minutes but retains the existing durable checkpoint, expiry and cooldowns. It selects the quickest route by default; it presents a shorter, at-most-five-minutes-slower alternative only when projected SOC advantage is at least two percentage points and a valid waypoint can be extracted. The wording states an estimated energy tradeoff, not guaranteed time or battery savings. Google Maps may recalculate the path.
+- Low-SOC charger pushes now require a Google Places listing explicitly named Ola Hypercharger, a verified road route, and at least 5% estimated SOC on arrival. At most three candidate road routes are checked per evaluation. Neither compatibility nor live connector availability is guaranteed; the app explicitly asks the rider to check the Ola app/status. Missing trip distance no longer becomes a false current-SOC estimate.
+- Route Updates primary actions for live route/charger advice open Maps before recording acceptance; a failed handoff or expired nudge is not accepted. Evidence payload includes current/arrival SOC, traffic and route facts, charger road distance and SOC on arrival, selected route/charger IDs and an optional route-shaping waypoint. SOC remains an estimate from a manual anchor and conservative Wh/km, not a live battery measurement.
+- Code gates at this point: backend full pytest 207 passed before the final missing-distance/road-call tweaks; the focused missing-distance regression passes; mobile Jest 94/94, TypeScript and ESLint pass. Android JVM, signed bundle, cloud worker deployment and physical handset acceptance are still being verified. Planned Android version is `1.0.21 (23)`; do not claim it is Play-published yet.
 
 ## Live trip push nudges (2026-09-24)
 

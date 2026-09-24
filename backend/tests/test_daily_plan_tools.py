@@ -79,6 +79,34 @@ def test_provider_timeout_is_sanitized_and_never_claims_live_data():
     assert "secret" not in str(result)
 
 
+def test_route_options_preserve_distinct_traffic_and_distance_evidence():
+    captured = {}
+
+    class CapturingClient(_Client):
+        def post(self, url, **kwargs):
+            captured["url"] = url
+            captured["payload"] = kwargs["json"]
+            captured["mask"] = kwargs["headers"]["X-Goog-FieldMask"]
+            return _Response({"routes": [
+                {"distanceMeters": 12000, "duration": "1800s", "staticDuration": "900s"},
+                {"distanceMeters": 15000, "duration": "1500s", "staticDuration": "1200s"},
+            ]})
+
+    tools = DailyPlanTools(api_key="configured", client_factory=lambda _timeout: CapturingClient())
+    options = tools.plan_route_options(
+        {"lat": 12.97, "lng": 77.59}, {"lat": 12.99, "lng": 77.61},
+        datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc),
+    )
+
+    assert captured["url"].endswith(":computeRoutes")
+    assert captured["payload"]["computeAlternativeRoutes"] is True
+    assert "routes.staticDuration" in captured["mask"]
+    assert [(item["distance_m"], item["duration_s"], item["traffic_delay_s"]) for item in options] == [
+        (12000, 1800, 900), (15000, 1500, 300),
+    ]
+    assert all(item["source"] == "google_routes" for item in options)
+
+
 def test_energy_is_sequential_and_missing_capacity_is_not_zero():
     known = estimate_leg_energy(distance_m=12_000, starting_soc_pct=80, usable_kwh=3.0, wh_per_km=45)
     unknown = estimate_leg_energy(distance_m=12_000, starting_soc_pct=80, usable_kwh=None, wh_per_km=45)

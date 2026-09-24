@@ -1,5 +1,11 @@
 # Daily logger
 
+## 2026-09-25 — actionable traffic, charger and SOC nudges
+
+- Added Google traffic-aware route alternatives and bounded route-shaping waypoint extraction. Route nudges show current traffic and an evidence-labeled arrival SOC; a shorter alternative is offered only as an estimated energy-versus-time tradeoff, not a guaranteed faster route.
+- Charger pushes now require an explicitly named Ola Hypercharger listing, road-route verification and a 5% projected SOC reserve. Missing distance suppresses current-SOC claims. Live charger slot availability remains unknown.
+- Android Route Updates opens Maps before accepting live route/charger advice and rejects expired or coordinate-less navigation. Prepared version `1.0.21 (23)` for signed release validation. Backend full pytest had 207 passing before final safety tweaks; targeted regression and mobile 94/94 Jest, TypeScript and ESLint passed. Android build, cloud deployment and physical device canary are pending.
+
 ## 2026-09-24 — live route, charger and SOC push nudges
 
 - Implemented a five-minute durable active-trip evaluator in the always-on FCM worker; it uses fresh cloud GPS, assigned driver/vehicle identity, confirmed SOC, conservative Wh/km, verified Google Routes traffic and Google Places charger listings. Alerts are rate-limited, expire after 30 minutes, and never claim live charger availability or measured current SOC.

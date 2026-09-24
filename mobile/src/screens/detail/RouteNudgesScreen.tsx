@@ -15,7 +15,7 @@ import RouteNudgeCard from "../../components/RouteNudgeCard";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
-import { buildDirectionsUrl, nudgeActionState } from "../../services/mapNavigation";
+import { nudgeActionState, performNudgeAction } from "../../services/mapNavigation";
 import { mergeRouteNudges } from "../../services/nudgeInbox";
 import {
   enqueueNudgeOutcome,
@@ -93,45 +93,42 @@ const RouteNudgesScreen: React.FC = () => {
       setActionError(null);
       setActingId(nudge.id);
       try {
-        if (event === "opened") {
-          const url = buildDirectionsUrl({
-            lat: nudge.payload.destination_lat,
-            lng: nudge.payload.destination_lng,
-            label: nudge.payload.route_name,
+        await performNudgeAction(nudge.nudge_type, event, nudge.payload, Linking.openURL, async () => {
+          const selectedRouteId = nudge.payload.selected_route_id || undefined;
+          const selectedChargerId = nudge.payload.charger_place_id || nudge.payload.selected_charger_id || undefined;
+          await enqueueNudgeOutcome(nudge.id, event, {
+            selected_route_id: selectedRouteId,
+            selected_charger_id: selectedChargerId,
+            metadata: { source: "gps_driver_inbox" },
           });
-          if (!url) {
-            setActionError("This older route update has no destination coordinates. Refresh after the backend update.");
-            return;
-          }
-          await Linking.openURL(url);
-        }
-        const selectedRouteId = nudge.payload.selected_route_id || undefined;
-        await enqueueNudgeOutcome(nudge.id, event, {
-          selected_route_id: selectedRouteId,
-          metadata: { source: "gps_driver_inbox" },
+          const optimistic = nudges.map((item) =>
+            item.id === nudge.id
+              ? {
+                  ...item,
+                  outcome: {
+                    ...(item.outcome || {}),
+                    latest_event:
+                      event === "opened" && nudgeActionState(item.outcome?.latest_event).terminal
+                        ? item.outcome!.latest_event
+                        : event,
+                    selected_route_id: selectedRouteId,
+                    selected_charger_id: selectedChargerId,
+                  },
+                }
+              : item
+          );
+          setNudges(optimistic);
+          await saveCachedRouteNudges(optimistic);
+          const result = await flushNudgeOutcomes(sendOutcome);
+          setPendingOutcomes(result.remaining);
         });
-        const optimistic = nudges.map((item) =>
-          item.id === nudge.id
-            ? {
-                ...item,
-                outcome: {
-                  ...(item.outcome || {}),
-                  latest_event:
-                    event === "opened" && nudgeActionState(item.outcome?.latest_event).terminal
-                      ? item.outcome!.latest_event
-                      : event,
-                  selected_route_id: selectedRouteId,
-                },
-              }
-            : item
-        );
-        setNudges(optimistic);
-        await saveCachedRouteNudges(optimistic);
-        const result = await flushNudgeOutcomes(sendOutcome);
-        setPendingOutcomes(result.remaining);
-      } catch {
+      } catch (cause) {
+        if (cause instanceof Error && cause.message.startsWith("This ")) {
+          setActionError(cause.message);
+          return;
+        }
         setActionError(
-          event === "opened"
+          event === "opened" || ((nudge.nudge_type === "live_route" || nudge.nudge_type === "live_charger") && event === "accepted")
             ? "Google Maps could not be opened on this phone."
             : "The action is saved only if it appears on the card. Please try again."
         );

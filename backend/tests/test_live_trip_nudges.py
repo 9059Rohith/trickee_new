@@ -30,17 +30,21 @@ class FakeTools:
         if not self.route_available:
             return {"distance_m": None, "duration_s": None, "traffic_delay_s": None, "source": "unavailable"}
         return {
-            "distance_m": 15_000, "duration_s": 2400, "traffic_delay_s": 800,
+            "distance_m": 15_000 if destination["lat"] == 12.99 else 1_000,
+            "duration_s": 2400, "traffic_delay_s": 800,
             "source": "google_routes", "confidence": 0.85,
             "evidence_at": departure_at.isoformat(), "degraded_reason": None,
         }
+
+    def plan_route_options(self, origin, destination, departure_at):
+        return [self.plan_route_leg(origin, destination, departure_at)]
 
     def find_route_chargers(self, center, radius_m=5000):
         self.charger_calls += 1
         if not self.chargers_available:
             return []
         return [{
-            "place_id": "places/charger-1", "name": "Central charger",
+            "place_id": "places/charger-1", "name": "Ola Hypercharger Central",
             "coordinates": {"lat": center["lat"] + 0.005, "lng": center["lng"]},
             "source": "google_places", "availability_confirmed": False,
             "evidence_at": NOW.replace(tzinfo=timezone.utc).isoformat(),
@@ -120,11 +124,12 @@ def test_live_trip_enqueues_route_charger_and_low_soc_with_evidence():
     assert all(row.payload["screen"] == "route_nudge" for row in rows)
     assert all(row.payload["expires_at"] for row in rows)
     assert stats["queued"] == 3
-    assert tools.route_calls == 1
+    assert tools.route_calls == 2
     assert tools.charger_calls == 1
     assert next(row for row in rows if row.nudge_type == "live_charger").payload["availability_confirmed"] is False
     assert next(row for row in rows if row.nudge_type == "live_charger").payload["place_confirmed"] is True
-    assert "straight-line" in next(row for row in rows if row.nudge_type == "live_charger").body
+    assert "road" in next(row for row in rows if row.nudge_type == "live_charger").body
+    assert next(row for row in rows if row.nudge_type == "live_charger").payload["soc_at_charger_pct"] is not None
     assert next(row for row in rows if row.nudge_type == "live_route").title == "Heavy traffic on your route"
     assert next(row for row in rows if row.nudge_type == "live_soc").payload["soc_source"] == "conservative_vehicle_spec"
 
@@ -143,6 +148,78 @@ def test_stale_gps_or_finished_trip_never_queues_live_nudge():
     trip.status = "completed"
     db.commit()
     assert evaluate_active_trip_nudges(db, tools=tools, now=NOW)["queued"] == 0
+
+
+def test_generic_car_charger_is_not_recommended_for_ola_s1():
+    db, _trip, _snapshot, _user, _vehicle = seed()
+
+    class GenericCharger(FakeTools):
+        def find_route_chargers(self, center, radius_m=5000):
+            return [{"place_id": "generic", "name": "DC CCS Car Fast Charger",
+                     "coordinates": {"lat": 12.975, "lng": 77.59}, "source": "google_places"}]
+
+    evaluate_active_trip_nudges(db, tools=GenericCharger(), now=NOW)
+    assert db.query(NotificationOutbox).filter_by(nudge_type="live_charger").count() == 0
+
+
+def test_missing_live_distance_does_not_pass_starting_soc_off_as_current():
+    db, _trip, snapshot, _user, _vehicle = seed()
+    snapshot.health_payload = {}
+    db.commit()
+
+    evaluate_active_trip_nudges(db, tools=FakeTools(), now=NOW)
+
+    assert db.query(NotificationOutbox).filter_by(nudge_type="live_soc").count() == 0
+    assert db.query(NotificationOutbox).filter_by(nudge_type="live_charger").count() == 0
+    route = db.query(NotificationOutbox).filter_by(nudge_type="live_route").one()
+    assert route.payload["current_soc_pct"] is None
+
+
+def test_charger_requires_road_route_and_five_percent_arrival_reserve():
+    db, _trip, _snapshot, _user, _vehicle = seed(soc=8)
+
+    class DistantRoad(FakeTools):
+        def plan_route_leg(self, origin, destination, departure_at):
+            route = super().plan_route_leg(origin, destination, departure_at)
+            if destination["lat"] != 12.99:
+                route["distance_m"] = 9_000
+            return route
+
+    evaluate_active_trip_nudges(db, tools=DistantRoad(), now=NOW)
+    assert db.query(NotificationOutbox).filter_by(nudge_type="live_charger").count() == 0
+
+
+def test_traffic_nudge_does_not_claim_time_or_battery_saving_without_comparison():
+    db, _trip, _snapshot, _user, _vehicle = seed(soc=40)
+    evaluate_active_trip_nudges(db, tools=FakeTools(), now=NOW)
+    route = db.query(NotificationOutbox).filter_by(nudge_type="live_route").one()
+    assert route.payload["route_duration_s"] == 2400
+    assert route.payload["route_distance_m"] == 15000
+    assert "saves" not in route.body.casefold()
+    assert "estimated arrival soc" in route.body.casefold()
+
+
+def test_shorter_alternative_is_explicitly_an_energy_tradeoff_not_a_time_saving():
+    db, _trip, _snapshot, _user, _vehicle = seed(soc=40)
+
+    class RouteOptions(FakeTools):
+        def plan_route_options(self, origin, destination, departure_at):
+            return [
+                {"route_id": "google_option_0", "source": "google_routes", "distance_m": 15000,
+                 "duration_s": 2400, "traffic_delay_s": 800},
+                {"route_id": "google_option_1", "source": "google_routes", "distance_m": 12000,
+                 "duration_s": 2550, "traffic_delay_s": 450,
+                 "encoded_polyline": "oednAohqxMo}@o}@o}@o}@"},
+            ]
+
+    evaluate_active_trip_nudges(db, tools=RouteOptions(), now=NOW)
+    route = db.query(NotificationOutbox).filter_by(nudge_type="live_route").one()
+    assert route.payload["selected_route_id"] == "google_option_1"
+    assert route.payload["route_waypoint_lat"] == 12.98
+    assert route.payload["route_waypoint_lng"] == 77.6
+    assert route.payload["arrival_soc_pct"] > 15
+    assert "takes about 2 min longer" in route.body
+    assert "saves time" not in route.body.casefold()
 
 
 def test_unassigned_or_inactive_driver_cannot_receive_live_guidance():
@@ -214,12 +291,12 @@ def test_checkpoint_and_cooldown_prevent_repeat_provider_calls_and_alerts():
     tools = FakeTools()
     evaluate_active_trip_nudges(db, tools=tools, now=NOW)
     assert evaluate_active_trip_nudges(db, tools=tools, now=NOW + timedelta(minutes=1))["queued"] == 0
-    assert tools.route_calls == 1
+    assert tools.route_calls == 2
     snapshot.received_at = NOW + timedelta(minutes=6)
     snapshot.event_time = snapshot.received_at
     db.commit()
     assert evaluate_active_trip_nudges(db, tools=tools, now=NOW + timedelta(minutes=6))["queued"] == 0
-    assert tools.route_calls == 2
+    assert tools.route_calls == 3
     assert db.query(NotificationOutbox).count() == 3
     assert db.get(LiveNudgeEvaluation, trip.id).last_evaluated_at == NOW + timedelta(minutes=6)
 
@@ -268,7 +345,7 @@ def test_no_destination_suppresses_route_claim_but_can_show_soc_and_charger():
     db, _trip, _snapshot, _user, _vehicle = seed(destination=False)
     tools = FakeTools()
     evaluate_active_trip_nudges(db, tools=tools, now=NOW)
-    assert tools.route_calls == 0
+    assert tools.route_calls == 1
     assert {row.nudge_type for row in db.query(NotificationOutbox).all()} == {"live_soc", "live_charger"}
 
 
@@ -276,10 +353,10 @@ def test_trip_completed_during_provider_call_does_not_queue_late_alert():
     db, trip, _snapshot, _user, _vehicle = seed()
 
     class CompletingTools(FakeTools):
-        def plan_route_leg(self, origin, destination, departure_at):
+        def plan_route_options(self, origin, destination, departure_at):
             trip.status = "completed"
             db.commit()
-            return super().plan_route_leg(origin, destination, departure_at)
+            return super().plan_route_options(origin, destination, departure_at)
 
     assert evaluate_active_trip_nudges(db, tools=CompletingTools(), now=NOW)["queued"] == 0
     assert db.query(NotificationOutbox).count() == 0

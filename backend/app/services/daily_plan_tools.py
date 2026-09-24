@@ -144,6 +144,45 @@ class DailyPlanTools:
             reason = "google_routes_unavailable"
         return {"distance_m": None, "duration_s": None, "traffic_delay_s": None, **_evidence("unavailable", reason)}
 
+    def plan_route_options(self, origin: dict[str, float], destination: dict[str, float], departure_at: datetime) -> list[dict]:
+        """Return traffic-aware alternatives without inventing a route when Maps fails."""
+        if not self.api_key or departure_at.tzinfo is None or departure_at.utcoffset() is None:
+            return []
+        key = ("route_options", round(origin["lat"], 4), round(origin["lng"], 4),
+               round(destination["lat"], 4), round(destination["lng"], 4), int(departure_at.timestamp() // 300))
+        if cached := self._cached(key):
+            return [{**item, "cache_hit": True} for item in cached]
+        payload = {
+            "origin": {"location": {"latLng": {"latitude": origin["lat"], "longitude": origin["lng"]}}},
+            "destination": {"location": {"latLng": {"latitude": destination["lat"], "longitude": destination["lng"]}}},
+            "travelMode": "DRIVE", "routingPreference": "TRAFFIC_AWARE",
+            "computeAlternativeRoutes": True,
+            "departureTime": departure_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+        headers = {"Content-Type": "application/json", "X-Goog-Api-Key": self.api_key,
+                   "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.staticDuration,routes.polyline.encodedPolyline"}
+        try:
+            with self.client_factory(self.timeout_seconds) as client:
+                response = client.post(ROUTES_ENDPOINT, json=payload, headers=headers)
+                response.raise_for_status()
+                routes = response.json().get("routes") or []
+            options = []
+            for index, route in enumerate(routes[:4]):
+                distance_m = int(route["distanceMeters"])
+                duration_s = int(round(float(str(route["duration"]).removesuffix("s"))))
+                static_s = int(round(float(str(route.get("staticDuration", route["duration"])).removesuffix("s"))))
+                if distance_m < 0 or duration_s <= 0 or static_s <= 0:
+                    continue
+                options.append({
+                    "route_id": f"google_option_{index}", "distance_m": distance_m,
+                    "duration_s": duration_s, "traffic_delay_s": max(0, duration_s - static_s),
+                    "encoded_polyline": (route.get("polyline") or {}).get("encodedPolyline"),
+                    **_evidence("google_routes"),
+                })
+            return self._remember(key, options) if options else []
+        except (httpx.HTTPError, KeyError, TypeError, ValueError, OverflowError):
+            return []
+
     def find_route_chargers(self, center: dict[str, float], radius_m: int = 5000) -> list[dict]:
         if not self.api_key:
             return []
