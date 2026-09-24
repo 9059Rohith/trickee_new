@@ -292,7 +292,7 @@ def evaluate_active_trip_nudges(db: Session, *, tools: MobilityTools, now: datet
             bucket = int(now.timestamp() // (30 * 60))
             _enqueue(
                 db, trip, key=f"live:{trip.id}:route:{bucket}", kind="live_route",
-                title="Traffic has changed your route",
+                title="Heavy traffic on your route",
                 body=f"Traffic adds about {round(traffic_delay / 60)} min to {destination[1]}. Open the map to review.",
                 payload={**base_payload, "traffic_delay_s": int(traffic_delay), "route_duration_s": int(duration)}, now=now,
             )
@@ -322,7 +322,7 @@ def evaluate_active_trip_nudges(db: Session, *, tools: MobilityTools, now: datet
                 _enqueue(
                     db, trip, key=f"live:{trip.id}:charger:{bucket}", kind="live_charger",
                     title=f"Charging option: {name}",
-                    body=f"Listed about {distance_km:.1f} km away. Connector availability is unconfirmed.",
+                    body=f"Listed about {distance_km:.1f} km away straight-line. Check driving distance and connector availability before relying on it.",
                     payload={
                         **base_payload, "destination_lat": point["lat"], "destination_lng": point["lng"],
                         "route_name": name, "charger_place_id": place.get("place_id"),

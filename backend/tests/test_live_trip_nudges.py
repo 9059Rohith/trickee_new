@@ -123,6 +123,8 @@ def test_live_trip_enqueues_route_charger_and_low_soc_with_evidence():
     assert tools.charger_calls == 1
     assert next(row for row in rows if row.nudge_type == "live_charger").payload["availability_confirmed"] is False
     assert next(row for row in rows if row.nudge_type == "live_charger").payload["place_confirmed"] is True
+    assert "straight-line" in next(row for row in rows if row.nudge_type == "live_charger").body
+    assert next(row for row in rows if row.nudge_type == "live_route").title == "Heavy traffic on your route"
     assert next(row for row in rows if row.nudge_type == "live_soc").payload["soc_source"] == "conservative_vehicle_spec"
 
     sender = FakeSender()
