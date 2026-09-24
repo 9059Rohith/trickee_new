@@ -13,8 +13,13 @@ import {
 import { Colors } from "../../constants/Colors";
 import { useAuth } from "../../context/AuthContext";
 import { DEMO_LOGINS, Features, SHOW_DEMO_LOGINS } from "../../config";
+import { useNavigation } from "@react-navigation/native";
+import { TrickeeLogoAnimated } from "../../components/logo/TrickeeLogoAnimated";
+import { motionColors } from "../../motion/tokens";
+import { fontFamily } from "../../theme/typography";
 
 const LoginScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
   const { login, googleLogin, loading, error } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,7 +33,7 @@ const LoginScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <View style={styles.inner}>
-        <Text style={styles.brand}>TRICKEE</Text>
+        <View style={styles.brand}><TrickeeLogoAnimated size={132} mode="header" /></View>
         <Text style={styles.subtitle}>GPS-First EV Intelligence</Text>
 
         {Features.passwordLogin && (
@@ -95,6 +100,16 @@ const LoginScreen: React.FC = () => {
             ))}
           </View>
         )}
+        {__DEV__ && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Open Motion Gallery"
+            style={styles.devGallery}
+            onPress={() => navigation.navigate("MotionGallery")}
+          >
+            <Text style={styles.devGalleryText}>OPEN MOTION GALLERY</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -103,20 +118,16 @@ const LoginScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.launchBackground,
+    backgroundColor: motionColors.ink,
     justifyContent: "center",
   },
   inner: { paddingHorizontal: 32 },
-  brand: {
-    color: Colors.trickeeYellow,
-    fontSize: 36,
-    fontWeight: "900",
-    letterSpacing: 4,
-    textAlign: "center",
-  },
+  brand: { alignItems: "center" },
   subtitle: {
     color: Colors.secondaryText,
-    fontSize: 14,
+    fontFamily: fontFamily.technical,
+    fontSize: 9,
+    letterSpacing: 1.2,
     textAlign: "center",
     marginBottom: 40,
   },
@@ -166,6 +177,8 @@ const styles = StyleSheet.create({
   },
   demoBtn: { paddingVertical: 8 },
   demoText: { color: Colors.trickeeYellow, fontSize: 13, fontWeight: "600" },
+  devGallery: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: 20 },
+  devGalleryText: { color: Colors.trickeeYellow, fontSize: 10, letterSpacing: 1.2 },
 });
 
 export default LoginScreen;

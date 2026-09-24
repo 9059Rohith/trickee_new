@@ -4,6 +4,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../constants/Colors";
 import { useLiveData } from "../context/LiveDataContext";
+import { TrickeeLogoAnimated } from "./logo/TrickeeLogoAnimated";
 
 const AppHeader: React.FC<{ onMenu: () => void }> = ({ onMenu }) => {
   const insets = useSafeAreaInsets();
@@ -19,7 +20,7 @@ const AppHeader: React.FC<{ onMenu: () => void }> = ({ onMenu }) => {
         <Icon name="menu" size={25} color={Colors.white} />
       </TouchableOpacity>
       <View style={styles.brand}>
-        <Text style={styles.title}>TRICKEE</Text>
+        <TrickeeLogoAnimated size={58} mode="header" />
         <Text style={styles.subtitle}>GPS-FIRST EV INTELLIGENCE</Text>
       </View>
       <View style={styles.button}>
@@ -66,12 +67,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.05)",
   },
   brand: { flex: 1, alignItems: "center" },
-  title: {
-    color: Colors.trickeeYellow,
-    fontSize: 21,
-    fontWeight: "900",
-    letterSpacing: 1.6,
-  },
   subtitle: {
     color: Colors.secondaryText,
     fontSize: 8,

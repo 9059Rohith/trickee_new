@@ -116,6 +116,7 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
       label: "Daily Impact",
       color: Colors.neonGreen,
     },
+    ...(__DEV__ ? [{ id: "motionGallery", icon: "animation-play", label: "Motion Gallery", color: Colors.neonCyan }] : []),
   ];
 
   return (

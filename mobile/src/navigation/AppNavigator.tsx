@@ -27,6 +27,7 @@ import SideDrawer from "../components/SideDrawer";
 import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
 import { navigationForRole } from "../services/navigationPolicy";
 import { linking } from "./navigationLinking";
+import MotionGalleryScreen from "../screens/dev/MotionGalleryScreen";
 
 const RootStack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -37,6 +38,7 @@ function AuthNavigator() {
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
+      {__DEV__ && <AuthStack.Screen name="MotionGallery" component={MotionGalleryScreen} />}
     </AuthStack.Navigator>
   );
 }
@@ -71,6 +73,7 @@ function MainTabs({ navigation }: any) {
       routeIntel: "RouteIntel",
       pastTrips: "PastTrips",
       dailyImpact: "DailyImpact",
+      motionGallery: "MotionGallery",
     };
     if (routes[item]) {
       navigation.navigate(routes[item]);
@@ -162,6 +165,7 @@ export default function AppNavigator() {
                 name="VehicleOnboarding"
                 component={VehicleOnboardingScreen}
               />
+              {__DEV__ && <RootStack.Screen name="MotionGallery" component={MotionGalleryScreen} />}
             </RootStack.Group>
           </>
         ) : (
