@@ -1,10 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { DailyPlan, DailyPlanDraft } from "./types";
+import type { DailyPlan, DailyPlanDraft, RecurringPlanTemplate } from "./types";
 
 const PLAN_KEY = "trickee.daily-plan.latest.v1";
 const CORRUPT_KEY = "trickee.daily-plan.latest.corrupt.v1";
 const FORM_KEY = "trickee.daily-plan.form.v2";
 const FORM_CORRUPT_KEY = "trickee.daily-plan.form.corrupt.v2";
+const RECURRING_KEY = "trickee.daily-plan.recurring.v1";
+const RECURRING_CORRUPT_KEY = "trickee.daily-plan.recurring.corrupt.v1";
 
 export type PlannerLocalDraft = {
   version: 2;
@@ -40,6 +42,29 @@ export async function loadDailyPlan(): Promise<DailyPlan | null> {
 
 export async function saveDailyPlan(plan: DailyPlan): Promise<void> {
   await AsyncStorage.setItem(PLAN_KEY, JSON.stringify(plan));
+}
+
+export async function loadRecurringPlans(): Promise<RecurringPlanTemplate[]> {
+  const raw = await AsyncStorage.getItem(RECURRING_KEY);
+  if (!raw) return [];
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!Array.isArray(value)) throw new Error("Recurring plan cache is not an array");
+    return value.filter((item): item is RecurringPlanTemplate => (
+      item != null &&
+      typeof item === "object" &&
+      typeof (item as RecurringPlanTemplate).id === "string" &&
+      Array.isArray((item as RecurringPlanTemplate).weekdays) &&
+      Array.isArray((item as RecurringPlanTemplate).stops)
+    ));
+  } catch {
+    await AsyncStorage.setItem(RECURRING_CORRUPT_KEY, raw);
+    return [];
+  }
+}
+
+export async function saveRecurringPlans(templates: RecurringPlanTemplate[]): Promise<void> {
+  await AsyncStorage.setItem(RECURRING_KEY, JSON.stringify(templates));
 }
 
 export async function loadPlannerLocalDraft(): Promise<PlannerLocalDraft | null> {

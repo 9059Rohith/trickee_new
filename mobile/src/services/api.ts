@@ -18,11 +18,15 @@ import type {
   DailyPlan,
   DailyPlanChatResponse,
   DailyPlanStop,
+  NextDailyPlanLeg,
+  RecurringPlanTemplate,
+  RecurringPlanTemplateInput,
   TripDayResponse,
   TripWait,
   Vehicle,
   VehicleSpecUpdate,
 } from "./types";
+import type { TripStartPayload } from "./tripStart";
 
 export class ApiError extends Error {
   status: number;
@@ -157,6 +161,8 @@ export const api = {
       final_sequence_no: number;
       location?: { lat: number; lng: number };
       idempotency_key: string;
+      arrival_outcome?: "arrived" | "skipped" | "ended_elsewhere";
+      outcome_reason?: string;
     }
   ) => request<any>("POST", `/api/v2/trips/${tripId}/complete`, token, data),
 
@@ -263,10 +269,25 @@ export const api = {
   getDailyPlan: (token: string, planId: string) =>
     request<DailyPlan>("GET", `/daily-plans/${planId}`, token),
 
+  getNextDailyPlanLeg: (token: string, signal?: AbortSignal) =>
+    request<NextDailyPlanLeg | null>("GET", "/daily-plans/next", token, undefined, signal),
+
+  listRecurringPlans: (token: string, signal?: AbortSignal) =>
+    request<RecurringPlanTemplate[]>("GET", "/daily-plans/recurring", token, undefined, signal),
+
+  createRecurringPlan: (token: string, data: RecurringPlanTemplateInput) =>
+    request<RecurringPlanTemplate>("POST", "/daily-plans/recurring", token, data),
+
+  updateRecurringPlan: (token: string, templateId: string, data: RecurringPlanTemplateInput) =>
+    request<RecurringPlanTemplate>("PUT", `/daily-plans/recurring/${templateId}`, token, data),
+
+  disableRecurringPlan: (token: string, templateId: string) =>
+    request<RecurringPlanTemplate>("DELETE", `/daily-plans/recurring/${templateId}`, token),
+
   // --- Trips ---
   startTrip: (
     token: string,
-    data: {
+    data: TripStartPayload | {
       vehicle_id: string;
       destination_text?: string;
       starting_soc?: number;

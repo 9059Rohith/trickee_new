@@ -186,6 +186,7 @@ export type DailyPlanDraft = {
 
 export type DailyPlanLeg = {
   index: number;
+  status?: "pending" | "active" | "arrived" | "skipped" | "ended_elsewhere" | string;
   destination: {
     query?: string;
     name?: string | null;
@@ -236,6 +237,44 @@ export type DailyPlanChatResponse = {
     error_code?: string | null;
   };
 };
+
+export type NextDailyPlanLeg = {
+  plan_id: string;
+  leg_index: number;
+  status: "pending" | "active" | string;
+  destination_text: string;
+  destination_lat: number;
+  destination_lng: number;
+  planned_departure_at: string | null;
+  planned_arrival_at: string | null;
+  service_date: string;
+  timezone: string;
+};
+
+export type RecurringPlanStop = {
+  index?: number;
+  label: string;
+  arrival_local_time: string;
+  lat: number;
+  lng: number;
+};
+
+export type RecurringPlanTemplate = {
+  id: string;
+  name: string;
+  timezone: string;
+  weekdays: number[];
+  starting_soc_pct: number;
+  effective_from: string | null;
+  effective_until: string | null;
+  is_active: boolean;
+  stops: RecurringPlanStop[];
+};
+
+export type RecurringPlanTemplateInput = Omit<
+  RecurringPlanTemplate,
+  "id" | "is_active"
+>;
 
 // --- Trip ---
 export type TripSession = {
