@@ -34,3 +34,16 @@ resource "google_secret_manager_secret_iam_member" "notification_maps_reader" {
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.role["notification-fcm"].email}"
 }
+
+resource "google_secret_manager_secret_iam_member" "maps_reader" {
+  for_each  = toset(["api", "route-guidance"])
+  secret_id = "projects/${var.project_id}/secrets/trickee-google-maps-api-key"
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.role[each.key].email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "api_groq_reader" {
+  secret_id = "projects/${var.project_id}/secrets/trickee-groq-api-key"
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.role["api"].email}"
+}

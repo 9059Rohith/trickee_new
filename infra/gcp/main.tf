@@ -284,7 +284,7 @@ resource "google_cloud_run_v2_service" "role" {
         }
       }
       dynamic "env" {
-        for_each = contains(["notification-fcm", "route-guidance"], each.key) ? [1] : []
+        for_each = contains(["api", "notification-fcm", "route-guidance"], each.key) ? [1] : []
         content {
           name = "TRICKEE_GOOGLE_MAPS_API_KEY"
           value_source {
@@ -293,6 +293,25 @@ resource "google_cloud_run_v2_service" "role" {
               version = "latest"
             }
           }
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api" ? [1] : []
+        content {
+          name = "TRICKEE_GROQ_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = "trickee-groq-api-key"
+              version = "latest"
+            }
+          }
+        }
+      }
+      dynamic "env" {
+        for_each = each.key == "api" ? [1] : []
+        content {
+          name  = "TRICKEE_GROQ_MODEL"
+          value = "openai/gpt-oss-20b"
         }
       }
       env {
