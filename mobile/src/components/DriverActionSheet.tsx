@@ -7,20 +7,18 @@
  * - SOC entry prompt on trip start for GPS-only vehicles
  */
 import React, { useCallback, useState } from "react";
+import { Alert } from "react-native";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useLiveData } from "../context/LiveDataContext";
 import SOCEntryModal from "./SOCEntryModal";
 import CalculationOverlay from "./CalculationOverlay";
-import {
-  prepareTelemetryCollector,
-  startTelemetryTrip,
-  stopTelemetryTrip,
-} from "../services/telemetryNative";
+import { stopTelemetryTrip } from "../services/telemetryNative";
 import { waitForTripFinalization } from "../services/tripFinalization";
 import { runWithSessionRecovery } from "../services/sessionRecovery";
 import { clearTripWaitJournal, localTripWaitState } from "../services/tripWaitJournal";
 import { syncTripWaits } from "../services/tripWaitSync";
+import { completionOutcomeForTrip, type ArrivalOutcome } from "../services/tripStart";
 
 type Props = {
   visible: boolean;
@@ -36,26 +34,18 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
 
   const activeTrip = me?.active_trip;
 
-  const completeStartTrip = async (startingSoc: number) => {
-    if (!token || !vehicle) {
-      return;
-    }
-    try {
-      const idempotencyKey = `trip-${Date.now()}`;
-      const trip = await runWithSessionRecovery(token, restore, async (sessionToken) => {
-        await prepareTelemetryCollector(sessionToken, vehicle.id);
-        return api.startTrip(sessionToken, {
-          vehicle_id: vehicle.id,
-          starting_soc: startingSoc,
-          idempotency_key: idempotencyKey,
-        });
-      });
-      await startTelemetryTrip(trip.id, vehicle.id);
-      await refresh();
-    } catch (err: any) {
-      throw err;
-    }
-  };
+  const chooseArrivalOutcome = (): Promise<ArrivalOutcome | null> => new Promise(resolve => {
+    Alert.alert(
+      "How did this planned stop end?",
+      "This updates today’s plan without changing the recorded GPS route.",
+      [
+        { text: "Arrived", onPress: () => resolve("arrived") },
+        { text: "Skipped", onPress: () => resolve("skipped") },
+        { text: "Ended elsewhere", onPress: () => resolve("ended_elsewhere") },
+      ],
+      { cancelable: true, onDismiss: () => resolve(null) }
+    );
+  });
 
   const completeEndTrip = async (endingSoc: number) => {
     if (!token) {
@@ -71,6 +61,8 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
         throw new Error("Resume the waiting or charging stop before ending this trip.");
       }
     }
+    const selectedOutcome = activeTrip?.planned_trip_id ? await chooseArrivalOutcome() : null;
+    const arrivalOutcome = completionOutcomeForTrip(activeTrip || {}, selectedOutcome);
     onClose();
     setCalculationResult(undefined);
     setCalculationError(null);
@@ -87,6 +79,7 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
           final_sequence_no: telemetry.finalSequenceNo,
           location: telemetry.lastLocation,
           idempotency_key: idempotencyKey,
+          ...(arrivalOutcome ? { arrival_outcome: arrivalOutcome } : {}),
         });
         return waitForTripFinalization(sessionToken, telemetry.tripId!);
       });
@@ -112,18 +105,6 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
 
   return (
     <>
-      {vehicle && (
-        <SOCEntryModal
-          visible={visible && !activeTrip}
-          onClose={onClose}
-          vehicleId={vehicle.id}
-          title="Starting trip SOC"
-          subtitle="Enter the dashboard battery percentage before moving. This becomes the trip's measured energy baseline."
-          submitLabel="Start GPS Trip"
-          showSourceSelector={false}
-          onSubmit={completeStartTrip}
-        />
-      )}
       {vehicle && (
         <SOCEntryModal
           visible={visible && Boolean(activeTrip)}

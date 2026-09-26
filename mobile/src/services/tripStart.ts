@@ -1,3 +1,5 @@
+import type { NextDailyPlanLeg, TripSession } from "./types";
+
 export type TripDestination =
   | {
       mode: "planned";
@@ -121,4 +123,72 @@ export function createTripStartAttemptId(now = Date.now(), random = Math.random(
     .toString()
     .padStart(6, "0");
   return `trip-start-${now}-${suffix}`;
+}
+
+export function plannedDestinationFromNextLeg(
+  leg: NextDailyPlanLeg | null,
+  requested?: { planId: string; legIndex: number }
+): Extract<TripDestination, { mode: "planned" }> | null {
+  if (!leg) return null;
+  if (requested && (leg.plan_id !== requested.planId || leg.leg_index !== requested.legIndex)) {
+    return null;
+  }
+  if (
+    !leg.destination_text.trim() ||
+    !validCoordinate(leg.destination_lat, -90, 90) ||
+    !validCoordinate(leg.destination_lng, -180, 180)
+  ) return null;
+  return {
+    mode: "planned",
+    planId: leg.plan_id,
+    legIndex: leg.leg_index,
+    text: leg.destination_text,
+    lat: leg.destination_lat,
+    lng: leg.destination_lng,
+    source: "planned_stop",
+  };
+}
+
+export type ArrivalOutcome = "arrived" | "skipped" | "ended_elsewhere";
+
+export function completionOutcomeForTrip(
+  trip: Pick<TripSession, "planned_trip_id">,
+  selected: ArrivalOutcome | null
+): ArrivalOutcome | undefined {
+  if (!trip.planned_trip_id) return undefined;
+  if (!selected) {
+    throw new Error("Choose whether you arrived, skipped the stop, or ended elsewhere.");
+  }
+  return selected;
+}
+
+export async function executeTripStart(
+  draft: TripStartDraft,
+  dependencies: {
+    prepareCollector: () => Promise<unknown>;
+    createTrip: (payload: TripStartPayload) => Promise<{ id: string }>;
+    startNative: (tripId: string, vehicleId: string) => Promise<unknown>;
+  }
+): Promise<{ id: string }> {
+  const payload = buildTripStartPayload(draft);
+  await dependencies.prepareCollector();
+  const trip = await dependencies.createTrip(payload);
+  await dependencies.startNative(trip.id, draft.vehicleId);
+  return trip;
+}
+
+export function createTripStartSubmissionGuard() {
+  let inFlight: Promise<unknown> | null = null;
+  return {
+    run<T>(operation: () => Promise<T>): Promise<T> {
+      if (inFlight) return inFlight as Promise<T>;
+      const pending = operation();
+      inFlight = pending;
+      const clear = () => {
+        if (inFlight === pending) inFlight = null;
+      };
+      pending.then(clear, clear);
+      return pending;
+    },
+  };
 }

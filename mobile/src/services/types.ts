@@ -290,6 +290,9 @@ export type TripSession = {
   destination_text?: string;
   destination_lat?: number;
   destination_lng?: number;
+  destination_source?: string | null;
+  planned_trip_id?: string | null;
+  planned_leg_index?: number | null;
   confidence?: number;
   source?: string;
   starting_soc?: number | null;

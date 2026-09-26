@@ -25,6 +25,7 @@ import ConfidenceIndicator from "../../components/ConfidenceIndicator";
 import TripActiveBanner from "../../components/TripActiveBanner";
 import DriverActionSheet from "../../components/DriverActionSheet";
 import SOCEntryModal from "../../components/SOCEntryModal";
+import NextTripCard from "../../components/NextTripCard";
 import { LoadingState, ErrorState } from "../../components/StateViews";
 import { useLiveData } from "../../context/LiveDataContext";
 import { useAuth } from "../../context/AuthContext";
@@ -37,6 +38,9 @@ import {
 import { beginWaitLocally, finishWaitLocally } from "../../services/tripWaitActions";
 import { syncTripWaits } from "../../services/tripWaitSync";
 import { resolveBottomNavigationClearance } from "../../services/homeLayout";
+import { api } from "../../services/api";
+import { runWithSessionRecovery } from "../../services/sessionRecovery";
+import type { NextDailyPlanLeg } from "../../services/types";
 import {
   acknowledgeStationaryNudge,
   telemetryStatus,
@@ -47,9 +51,10 @@ const fmt = (val: number | null | undefined, digits = 1) =>
 
 type HomeScreenProps = {
   bottomTabBarHeight?: number;
+  onStartTrip?: (params?: { planId: string; legIndex: number }) => void;
 };
 
-const HomeScreen: React.FC<HomeScreenProps> = ({ bottomTabBarHeight = 0 }) => {
+const HomeScreen: React.FC<HomeScreenProps> = ({ bottomTabBarHeight = 0, onStartTrip }) => {
   const { token, restore } = useAuth();
   const {
     me,
@@ -71,6 +76,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ bottomTabBarHeight = 0 }) => {
   const [waitSubmitting, setWaitSubmitting] = useState(false);
   const [resumeSocVisible, setResumeSocVisible] = useState(false);
   const [savedWaitState, setSavedWaitState] = useState<{ tripId: string; data: LocalTripWaitState } | null>(null);
+  const [nextPlanLeg, setNextPlanLeg] = useState<NextDailyPlanLeg | null>(null);
   const pendingWaitId = useRef<string | null>(null);
   const syncingWait = useRef(false);
 
@@ -88,6 +94,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ bottomTabBarHeight = 0 }) => {
   const bottomNavigationClearance = resolveBottomNavigationClearance(
     bottomTabBarHeight
   );
+
+  useEffect(() => {
+    if (!token || activeTripId) {
+      setNextPlanLeg(null);
+      return;
+    }
+    let cancelled = false;
+    runWithSessionRecovery(token, restore, sessionToken => api.getNextDailyPlanLeg(sessionToken))
+      .then(leg => { if (!cancelled) setNextPlanLeg(leg); })
+      .catch(() => { if (!cancelled) setNextPlanLeg(null); });
+    return () => { cancelled = true; };
+  }, [activeTripId, lastUpdated, restore, token]);
 
   useEffect(() => {
     if (!activeTripId) {
@@ -245,6 +263,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ bottomTabBarHeight = 0 }) => {
         {activeTrip && (
           <TripActiveBanner tripStartedAt={activeTrip.started_at} />
         )}
+
+        {!activeTrip && nextPlanLeg ? (
+          <NextTripCard
+            leg={nextPlanLeg}
+            onStart={() => onStartTrip?.({ planId: nextPlanLeg.plan_id, legIndex: nextPlanLeg.leg_index })}
+          />
+        ) : null}
 
         {activeTrip && activeWait ? (
           <View accessibilityLiveRegion="polite" style={styles.stationaryCard}>
@@ -434,7 +459,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ bottomTabBarHeight = 0 }) => {
           accessibilityRole="button"
           accessibilityLabel={activeTrip ? "End current trip" : "Start a new trip"}
           style={[styles.actionBtn, activeTrip && styles.endTripBtn]}
-          onPress={() => setActionsOpen(true)}
+          onPress={() => activeTrip ? setActionsOpen(true) : onStartTrip?.()}
         >
           <Text style={[styles.actionBtnText, activeTrip && styles.endTripText]}>
             {activeTrip ? "End Trip" : "Start Trip"}
@@ -443,7 +468,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ bottomTabBarHeight = 0 }) => {
       </View>
 
       <DriverActionSheet
-        visible={actionsOpen}
+        visible={actionsOpen && Boolean(activeTrip)}
         onClose={() => setActionsOpen(false)}
       />
 

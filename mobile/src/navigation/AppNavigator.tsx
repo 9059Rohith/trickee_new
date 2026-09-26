@@ -23,6 +23,7 @@ import DailyImpactScreen from "../screens/detail/DailyImpactScreen";
 import RouteNudgesScreen from "../screens/detail/RouteNudgesScreen";
 import DailyPlannerScreen from "../screens/detail/DailyPlannerScreen";
 import TripDetailsScreen from "../screens/detail/TripDetailsScreen";
+import TripStartScreen from "../screens/detail/TripStartScreen";
 import AppHeader from "../components/AppHeader";
 import SideDrawer from "../components/SideDrawer";
 import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
@@ -103,7 +104,12 @@ function MainTabs({ navigation }: any) {
         screenOptions={{ headerShown: false }}
       >
         <MainTab.Screen name="Home">
-          {() => roleNavigation.home === "owner" ? <OwnerDashboardScreen /> : <HomeScreen bottomTabBarHeight={bottomTabBarHeight} />}
+          {() => roleNavigation.home === "owner" ? <OwnerDashboardScreen /> : (
+            <HomeScreen
+              bottomTabBarHeight={bottomTabBarHeight}
+              onStartTrip={(params) => navigation.navigate("TripStart", params)}
+            />
+          )}
         </MainTab.Screen>
         <MainTab.Screen name="Live Map" component={LiveMapScreen} />
         <MainTab.Screen name="Monitoring" component={MonitoringScreen} />
@@ -165,6 +171,10 @@ export default function AppNavigator() {
               <RootStack.Screen
                 name="DailyPlanner"
                 component={DailyPlannerScreen}
+              />
+              <RootStack.Screen
+                name="TripStart"
+                component={TripStartScreen}
               />
               <RootStack.Screen
                 name="VehicleOnboarding"
