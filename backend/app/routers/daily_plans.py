@@ -4,18 +4,19 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.entities import DailyPlan, Driver, NotificationOutbox, TripPrediction, User, Vehicle
+from app.models.entities import DailyPlan, DailyPlanLeg, Driver, NotificationOutbox, RecurringPlanStop, RecurringPlanTemplate, TripPrediction, User, Vehicle
 from app.schemas.api import ok, utc_iso
 from app.services.auth import get_current_user
 from app.services.daily_plan_conversation import daily_plan_conversation
 from app.services.daily_plan_orchestrator import build_plan_result
 from app.services.daily_plan_tools import daily_plan_tools
 from app.services.plan_leg_service import materialize_plan_legs
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 router = APIRouter(prefix="/daily-plans", tags=["daily plans"])
@@ -61,6 +62,47 @@ class ConfirmRequest(BaseModel):
     stops: list[ConfirmStop] | None = Field(default=None, min_length=1, max_length=10)
 
 
+class RecurringStopRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    label: str = Field(min_length=1, max_length=255)
+    arrival_local_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+
+
+class RecurringTemplateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=120)
+    timezone: str = Field(min_length=3, max_length=64)
+    weekdays: list[int] = Field(min_length=1, max_length=7)
+    starting_soc_pct: float = Field(ge=0, le=100)
+    effective_from: date | None = None
+    effective_until: date | None = None
+    stops: list[RecurringStopRequest] = Field(min_length=1, max_length=10)
+
+    @field_validator("weekdays")
+    @classmethod
+    def valid_weekdays(cls, value: list[int]) -> list[int]:
+        if any(day < 0 or day > 6 for day in value) or len(set(value)) != len(value):
+            raise ValueError("weekdays must contain unique values from 0 through 6")
+        return sorted(value)
+
+    @field_validator("timezone")
+    @classmethod
+    def valid_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("timezone is not recognized") from exc
+        return value
+
+    @model_validator(mode="after")
+    def valid_effective_range(self) -> "RecurringTemplateRequest":
+        if self.effective_from and self.effective_until and self.effective_until < self.effective_from:
+            raise ValueError("effective_until must not precede effective_from")
+        return self
+
+
 def _require_driver(db: Session, user: User) -> Driver:
     if user.role != "driver" or not user.driver_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Driver account required")
@@ -87,6 +129,50 @@ def _plan_dict(plan: DailyPlan) -> dict[str, Any]:
         "draft": plan.draft_payload, "result": plan.result_payload,
         "confirmed_at": utc_iso(plan.confirmed_at), "created_at": utc_iso(plan.created_at),
     }
+
+
+def _template_dict(template: RecurringPlanTemplate, stops: list[RecurringPlanStop]) -> dict[str, Any]:
+    return {
+        "id": template.id,
+        "name": template.name,
+        "timezone": template.timezone,
+        "weekdays": template.weekdays,
+        "starting_soc_pct": template.starting_soc_pct,
+        "effective_from": template.effective_from.isoformat() if template.effective_from else None,
+        "effective_until": template.effective_until.isoformat() if template.effective_until else None,
+        "is_active": template.is_active,
+        "stops": [{
+            "index": stop.stop_index,
+            "label": stop.destination_text,
+            "arrival_local_time": stop.arrival_local_time,
+            "lat": stop.destination_lat,
+            "lng": stop.destination_lng,
+        } for stop in stops],
+    }
+
+
+def _owned_template(db: Session, template_id: str, user: User, driver: Driver) -> RecurringPlanTemplate:
+    template = db.query(RecurringPlanTemplate).filter(
+        RecurringPlanTemplate.id == template_id,
+        RecurringPlanTemplate.user_id == user.id,
+        RecurringPlanTemplate.driver_id == driver.id,
+    ).first()
+    if template is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Recurring plan not found")
+    return template
+
+
+def _replace_template_stops(db: Session, template: RecurringPlanTemplate, stops: list[RecurringStopRequest]) -> None:
+    db.query(RecurringPlanStop).filter(RecurringPlanStop.template_id == template.id).delete()
+    for index, stop in enumerate(stops):
+        db.add(RecurringPlanStop(
+            template_id=template.id,
+            stop_index=index,
+            destination_text=" ".join(stop.label.split()),
+            destination_lat=stop.lat,
+            destination_lng=stop.lng,
+            arrival_local_time=stop.arrival_local_time,
+        ))
 
 
 def _owned_plan(db: Session, plan_id: str, user: User, driver: Driver) -> DailyPlan:
@@ -188,6 +274,135 @@ def chat_daily_plan(
             "model_name": conversation.model_name, "error_code": conversation.error_code,
         },
     }, "Daily plan draft created")
+
+
+@router.get("/next")
+def get_next_daily_plan_leg(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    driver = _require_driver(db, current_user)
+    vehicle = _assigned_vehicle(db, driver)
+    plans = db.query(DailyPlan).filter(
+        DailyPlan.user_id == current_user.id,
+        DailyPlan.driver_id == driver.id,
+        DailyPlan.vehicle_id == vehicle.id,
+        DailyPlan.status == "confirmed",
+    ).all()
+    eligible: list[tuple[DailyPlan, DailyPlanLeg]] = []
+    for plan in plans:
+        try:
+            today = datetime.now(ZoneInfo(plan.timezone)).date()
+        except ZoneInfoNotFoundError:
+            continue
+        if plan.service_date != today:
+            continue
+        for leg in db.query(DailyPlanLeg).filter(
+            DailyPlanLeg.plan_id == plan.id,
+            DailyPlanLeg.status.in_(("pending", "active")),
+        ).all():
+            eligible.append((plan, leg))
+    if not eligible:
+        return ok(None, "No eligible planned leg")
+    plan, leg = min(eligible, key=lambda row: (
+        row[1].status != "active",
+        row[1].planned_departure_at is None,
+        row[1].planned_departure_at or datetime.max,
+        row[1].leg_index,
+    ))
+    return ok({
+        "plan_id": plan.id,
+        "leg_index": leg.leg_index,
+        "status": leg.status,
+        "destination_text": leg.destination_text,
+        "destination_lat": leg.destination_lat,
+        "destination_lng": leg.destination_lng,
+        "planned_departure_at": utc_iso(leg.planned_departure_at),
+        "planned_arrival_at": utc_iso(leg.planned_arrival_at),
+        "service_date": plan.service_date.isoformat(),
+        "timezone": plan.timezone,
+    }, "Next planned leg")
+
+
+@router.get("/recurring")
+def list_recurring_plans(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    driver = _require_driver(db, current_user)
+    templates = db.query(RecurringPlanTemplate).filter(
+        RecurringPlanTemplate.user_id == current_user.id,
+        RecurringPlanTemplate.driver_id == driver.id,
+    ).order_by(RecurringPlanTemplate.created_at).all()
+    return ok([
+        _template_dict(
+            template,
+            db.query(RecurringPlanStop).filter_by(template_id=template.id).order_by(RecurringPlanStop.stop_index).all(),
+        )
+        for template in templates
+    ])
+
+
+@router.post("/recurring")
+def create_recurring_plan(
+    body: RecurringTemplateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    driver = _require_driver(db, current_user)
+    vehicle = _assigned_vehicle(db, driver)
+    template = RecurringPlanTemplate(
+        user_id=current_user.id,
+        driver_id=driver.id,
+        vehicle_id=vehicle.id,
+        name=" ".join(body.name.split()),
+        timezone=body.timezone,
+        weekdays=body.weekdays,
+        starting_soc_pct=body.starting_soc_pct,
+        effective_from=body.effective_from,
+        effective_until=body.effective_until,
+        is_active=True,
+    )
+    db.add(template); db.flush()
+    _replace_template_stops(db, template, body.stops)
+    db.commit(); db.refresh(template)
+    stops = db.query(RecurringPlanStop).filter_by(template_id=template.id).order_by(RecurringPlanStop.stop_index).all()
+    return ok(_template_dict(template, stops), "Recurring plan created")
+
+
+@router.put("/recurring/{template_id}")
+def update_recurring_plan(
+    template_id: str,
+    body: RecurringTemplateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    driver = _require_driver(db, current_user)
+    template = _owned_template(db, template_id, current_user, driver)
+    template.name = " ".join(body.name.split())
+    template.timezone = body.timezone
+    template.weekdays = body.weekdays
+    template.starting_soc_pct = body.starting_soc_pct
+    template.effective_from = body.effective_from
+    template.effective_until = body.effective_until
+    _replace_template_stops(db, template, body.stops)
+    db.commit(); db.refresh(template)
+    stops = db.query(RecurringPlanStop).filter_by(template_id=template.id).order_by(RecurringPlanStop.stop_index).all()
+    return ok(_template_dict(template, stops), "Recurring plan updated")
+
+
+@router.delete("/recurring/{template_id}")
+def disable_recurring_plan(
+    template_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    driver = _require_driver(db, current_user)
+    template = _owned_template(db, template_id, current_user, driver)
+    template.is_active = False
+    db.commit(); db.refresh(template)
+    stops = db.query(RecurringPlanStop).filter_by(template_id=template.id).order_by(RecurringPlanStop.stop_index).all()
+    return ok(_template_dict(template, stops), "Recurring plan disabled")
 
 
 @router.get("/{plan_id}")

@@ -186,6 +186,7 @@ locals {
     imu-rules        = { command = "imu-rules", max = var.worker_max_instances, concurrency = 1, timeout = "3600s" }
     trip-finalizer   = { command = "trip-finalizer", max = var.worker_max_instances, concurrency = 1, timeout = "3600s" }
     notification-fcm = { command = "notification-fcm", max = 1, concurrency = 1, timeout = "3600s" }
+    recurring-plans  = { command = "recurring-plans", max = 1, concurrency = 1, timeout = "3600s" }
   }
 }
 

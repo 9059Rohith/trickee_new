@@ -64,6 +64,25 @@ def _start_health_server() -> None:
 
 def run(role: str) -> None:
     _start_health_server()
+    if role == "recurring-plans":
+        from app.services.recurring_plans import materialize_due_plans
+
+        while True:
+            db = SessionLocal()
+            try:
+                stats = materialize_due_plans(db)
+                print(json.dumps({
+                    "severity": "INFO",
+                    "metric": "trickee_recurring_plan_materialization",
+                    "scanned": stats.scanned,
+                    "created": stats.created,
+                    "existing": stats.existing,
+                    "skipped": stats.skipped,
+                }, separators=(",", ":")), flush=True)
+            finally:
+                db.close()
+            time.sleep(300.0)
+        return
     if role == "notification-fcm":
         from app.services.fcm_notifications import GoogleFcmSender, dispatch_due_notifications
         from app.services.daily_plan_tools import daily_plan_tools
