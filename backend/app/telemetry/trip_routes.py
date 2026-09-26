@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -22,6 +22,7 @@ from app.models.entities import (
 from app.schemas.api import ok, utc_iso
 from app.services.auth import get_current_user
 from app.services.reconciliation import MAX_FINAL_SEQUENCE_NO
+from app.services.plan_leg_service import resolve_owned_plan_leg, transition_leg_for_trip
 
 router = APIRouter(prefix="/api/v2/trips", tags=["telemetry-trips"])
 
@@ -42,6 +43,29 @@ class StartTripBody(StrictBody):
     started_at: datetime | None = None
     origin: Coordinate | None = None
     idempotency_key: str = Field(min_length=1, max_length=80)
+    destination_text: str | None = Field(default=None, max_length=255)
+    destination_lat: float | None = Field(default=None, ge=-90, le=90)
+    destination_lng: float | None = Field(default=None, ge=-180, le=180)
+    planned_trip_id: str | None = Field(default=None, max_length=36)
+    planned_leg_index: int | None = Field(default=None, ge=0)
+    destination_source: str | None = Field(default=None, max_length=30)
+    record_without_destination: bool = False
+
+    @model_validator(mode="after")
+    def validate_destination_contract(self) -> "StartTripBody":
+        if (self.planned_trip_id is None) != (self.planned_leg_index is None):
+            raise ValueError("planned_trip_id and planned_leg_index must be supplied together")
+        if (self.destination_lat is None) != (self.destination_lng is None):
+            raise ValueError("destination latitude and longitude must be supplied together")
+        if self.record_without_destination:
+            if self.planned_trip_id is not None or self.destination_lat is not None:
+                raise ValueError("destinationless recording cannot include a destination")
+            if self.destination_source not in (None, "destinationless"):
+                raise ValueError("destinationless recording has an invalid destination source")
+        elif self.planned_trip_id is None and self.destination_lat is not None:
+            if not self.destination_text or self.destination_source not in ("search_result", "map_pin"):
+                raise ValueError("manual destinations require resolved text and provenance")
+        return self
 
 
 class CompleteTripBody(StrictBody):
@@ -49,6 +73,8 @@ class CompleteTripBody(StrictBody):
     final_sequence_no: int = Field(ge=0, le=MAX_FINAL_SEQUENCE_NO)
     location: Coordinate | None = None
     idempotency_key: str = Field(min_length=1, max_length=80)
+    arrival_outcome: str | None = Field(default=None, pattern="^(arrived|skipped|ended_elsewhere)$")
+    outcome_reason: str | None = Field(default=None, max_length=255)
 
 
 class WaitTripBody(StrictBody):
@@ -80,6 +106,14 @@ def _trip_data(trip: MobileTripSession, cursor: int = 0) -> dict:
         "final_sequence_no": trip.final_sequence_no,
         "started_at": utc_iso(trip.started_at),
         "ended_at": utc_iso(trip.ended_at),
+        "destination_text": trip.destination_text,
+        "destination_lat": trip.destination_lat,
+        "destination_lng": trip.destination_lng,
+        "destination_source": trip.destination_source,
+        "planned_trip_id": trip.planned_trip_id,
+        "planned_leg_index": trip.planned_leg_index,
+        "ended_lat": trip.ended_lat,
+        "ended_lng": trip.ended_lng,
         "waits": (trip.context or {}).get("waits", []),
     }
 
@@ -211,6 +245,20 @@ def start_trip(
         raise HTTPException(status.HTTP_409_CONFLICT, "No vehicle is assigned to this driver")
     if driver.assigned_vehicle_id != vehicle.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Vehicle is not assigned to this driver")
+    plan_leg = None
+    if body.planned_trip_id is not None and body.planned_leg_index is not None:
+        plan_leg = resolve_owned_plan_leg(
+            db, user, driver, vehicle, body.planned_trip_id, body.planned_leg_index
+        )
+        destination_text = plan_leg.destination_text
+        destination_lat = plan_leg.destination_lat
+        destination_lng = plan_leg.destination_lng
+        destination_source = "planned_stop"
+    else:
+        destination_text = None if body.record_without_destination else body.destination_text
+        destination_lat = None if body.record_without_destination else body.destination_lat
+        destination_lng = None if body.record_without_destination else body.destination_lng
+        destination_source = "destinationless" if body.record_without_destination else body.destination_source
     started_at = body.started_at or datetime.utcnow()
     if started_at.tzinfo is not None:
         started_at = started_at.astimezone(timezone.utc).replace(tzinfo=None)
@@ -222,6 +270,12 @@ def start_trip(
         started_at=started_at,
         origin_lat=body.origin.lat if body.origin else None,
         origin_lng=body.origin.lng if body.origin else None,
+        destination_text=destination_text,
+        destination_lat=destination_lat,
+        destination_lng=destination_lng,
+        planned_trip_id=body.planned_trip_id,
+        planned_leg_index=body.planned_leg_index,
+        destination_source=destination_source,
         status="active",
         source="android_foreground_service",
         idempotency_key=body.idempotency_key,
@@ -229,6 +283,11 @@ def start_trip(
         context={"starting_soc": body.starting_soc, "soc_source": "manual_dashboard"},
     )
     db.add(trip)
+    db.flush()
+    if plan_leg is not None:
+        plan_leg.trip_id = trip.id
+        plan_leg.status = "active"
+        plan_leg.started_at = trip.started_at
     if body.starting_soc is not None:
         db.add(SOCReading(
             vehicle_id=vehicle.id,
@@ -278,7 +337,12 @@ def complete_trip(
     if trip is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Trip not found")
     if trip.completion_idempotency_key:
-        if trip.completion_idempotency_key != body.idempotency_key or trip.final_sequence_no != body.final_sequence_no:
+        prior_outcome = (trip.context or {}).get("arrival_outcome")
+        if (
+            trip.completion_idempotency_key != body.idempotency_key
+            or trip.final_sequence_no != body.final_sequence_no
+            or prior_outcome != body.arrival_outcome
+        ):
             raise HTTPException(status.HTTP_409_CONFLICT, "Trip was completed with a different command")
         cursor = max((row[0] for row in db.query(DeviceTripUploadCursor.highest_contiguous_sequence).filter(
             DeviceTripUploadCursor.trip_id == trip.id
@@ -299,11 +363,20 @@ def complete_trip(
     trip.completion_idempotency_key = body.idempotency_key
     trip.completion_requested_at = now
     if body.location:
-        trip.destination_lat = body.location.lat
-        trip.destination_lng = body.location.lng
+        trip.ended_lat = body.location.lat
+        trip.ended_lng = body.location.lng
     context = dict(trip.context or {})
-    context.update({"ending_soc": body.ending_soc, "ending_soc_source": "manual_dashboard"})
+    if trip.planned_trip_id is not None and body.arrival_outcome is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "arrival_outcome is required for a planned trip")
+    context.update({
+        "ending_soc": body.ending_soc,
+        "ending_soc_source": "manual_dashboard",
+        "arrival_outcome": body.arrival_outcome,
+        "outcome_reason": body.outcome_reason,
+    })
     trip.context = context
+    if body.arrival_outcome is not None:
+        transition_leg_for_trip(db, trip, body.arrival_outcome, body.outcome_reason)
     finalization = TripFinalization(
         trip_id=trip.id,
         final_sequence_no=body.final_sequence_no,

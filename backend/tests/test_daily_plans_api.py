@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
-from app.models.entities import DailyPlan, Driver, Fleet, NotificationOutbox, TripPrediction, User, Vehicle
+from app.models.entities import DailyPlan, DailyPlanLeg, Driver, Fleet, NotificationOutbox, TripPrediction, User, Vehicle
 from app.routers import daily_plans
 from app.services.auth import create_access_token
 from app.services.daily_plan_parser import ParsedDailyPlan, ParsedStop
@@ -96,6 +96,10 @@ def test_chat_persists_driver_scoped_draft_and_confirm_schedules_high_priority_o
     notices = db.query(NotificationOutbox).all()
     assert (plan.user_id, plan.driver_id, plan.vehicle_id) == (user_id, driver_id, vehicle_id)
     assert len(notices) == 2
+    legs = db.query(DailyPlanLeg).filter_by(plan_id=plan.id).order_by(DailyPlanLeg.leg_index).all()
+    assert len(legs) == 2
+    assert legs[0].destination_lat == 21.17
+    assert legs[0].status == "pending"
     assert all(n.payload["delivery_priority"] == "high" for n in notices)
     assert all(n.payload["android_channel_id"] == "trickee_route_alerts_high" for n in notices)
     first_payload = notices[0].payload

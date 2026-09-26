@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
-from app.models.entities import DeviceTripUploadCursor, Driver, Fleet, MobileTripSession, SOCReading, TripFinalization, User, Vehicle
+from app.models.entities import DailyPlan, DailyPlanLeg, DeviceTripUploadCursor, Driver, Fleet, MobileTripSession, SOCReading, TripFinalization, User, Vehicle
 from app.services.auth import create_access_token
 
 engine = create_engine("sqlite:///./test_trip_lifecycle.db", connect_args={"check_same_thread": False})
@@ -45,11 +45,73 @@ def start(identity, trip_id="00000000-0000-4000-8000-000000000001", key="start-1
     })
 
 
+def start_planned(identity):
+    with Session() as db:
+        driver = db.query(Driver).filter_by(assigned_vehicle_id=identity["vehicle"]).one()
+        plan = DailyPlan(
+            user_id=identity["user"], driver_id=driver.id, vehicle_id=identity["vehicle"],
+            service_date=date.today(), timezone="Asia/Kolkata", starting_soc_pct=90,
+            source_message="Office", parser_source="test", draft_payload={}, status="confirmed",
+            result_payload={"legs": [{"index": 0, "destination": {
+                "name": "Office", "coordinates": {"lat": 21.17, "lng": 72.83},
+            }}]},
+        )
+        db.add(plan); db.flush()
+        db.add(DailyPlanLeg(
+            plan_id=plan.id, leg_index=0, destination_text="Office",
+            destination_lat=21.17, destination_lng=72.83, status="pending",
+        ))
+        db.commit()
+        plan_id = plan.id
+    response = client.post("/api/v2/trips/start", headers=identity["headers"], json={
+        "trip_id": "00000000-0000-4000-8000-000000000099",
+        "vehicle_id": identity["vehicle"], "starting_soc": 90,
+        "idempotency_key": "planned-start", "planned_trip_id": plan_id,
+        "planned_leg_index": 0, "destination_source": "planned_stop",
+    })
+    assert response.status_code == 200
+    return response.json()["data"]["id"], plan_id
+
+
 def test_start_replay_preserves_client_trip_identity(identity):
     first = start(identity); second = start(identity)
     assert first.status_code == second.status_code == 200
     assert first.json()["data"]["id"] == second.json()["data"]["id"]
     with Session() as db: assert db.query(MobileTripSession).count() == 1
+
+
+@pytest.mark.parametrize("outcome", ["arrived", "skipped", "ended_elsewhere"])
+def test_planned_completion_preserves_destination_and_transitions_leg_once(identity, outcome):
+    trip_id, plan_id = start_planned(identity)
+    body = {
+        "ending_soc": 80,
+        "final_sequence_no": 0,
+        "idempotency_key": f"planned-end-{outcome}",
+        "arrival_outcome": outcome,
+        "outcome_reason": "tester selected outcome",
+        "location": {"lat": 21.25, "lng": 72.91},
+    }
+    first = client.post(f"/api/v2/trips/{trip_id}/complete", headers=identity["headers"], json=body)
+    replay = client.post(f"/api/v2/trips/{trip_id}/complete", headers=identity["headers"], json=body)
+
+    assert first.status_code == replay.status_code == 200
+    with Session() as db:
+        trip = db.query(MobileTripSession).filter_by(id=trip_id).one()
+        leg = db.query(DailyPlanLeg).filter_by(plan_id=plan_id, leg_index=0).one()
+        assert (trip.destination_lat, trip.destination_lng) == (21.17, 72.83)
+        assert (trip.ended_lat, trip.ended_lng) == (21.25, 72.91)
+        assert leg.status == outcome
+        assert leg.outcome_reason == "tester selected outcome"
+        assert db.query(DailyPlanLeg).filter_by(plan_id=plan_id).count() == 1
+
+
+def test_planned_completion_requires_explicit_arrival_outcome(identity):
+    trip_id, _ = start_planned(identity)
+    response = client.post(f"/api/v2/trips/{trip_id}/complete", headers=identity["headers"], json={
+        "ending_soc": 80, "final_sequence_no": 0, "idempotency_key": "planned-end-missing",
+        "location": {"lat": 21.25, "lng": 72.91},
+    })
+    assert response.status_code == 422
 
 
 def test_charging_wait_resumes_same_trip_with_one_post_charge_soc(identity):

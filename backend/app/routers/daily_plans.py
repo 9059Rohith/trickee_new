@@ -15,6 +15,7 @@ from app.services.auth import get_current_user
 from app.services.daily_plan_conversation import daily_plan_conversation
 from app.services.daily_plan_orchestrator import build_plan_result
 from app.services.daily_plan_tools import daily_plan_tools
+from app.services.plan_leg_service import materialize_plan_legs
 
 
 router = APIRouter(prefix="/daily-plans", tags=["daily plans"])
@@ -212,6 +213,8 @@ def confirm_daily_plan(
     if plan.status == "confirmed":
         if plan.confirmation_key != body.confirmation_key:
             raise HTTPException(status.HTTP_409_CONFLICT, "Plan already confirmed")
+        materialize_plan_legs(db, plan)
+        db.commit()
         return ok(_plan_dict(plan), "Daily plan already confirmed")
     if (plan.draft_payload or {}).get("warnings"):
         raise HTTPException(status.HTTP_409_CONFLICT, "Resolve schedule warnings before confirmation")
@@ -250,6 +253,7 @@ def confirm_daily_plan(
     plan.status = "confirmed"
     plan.confirmation_key = body.confirmation_key
     plan.confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    materialize_plan_legs(db, plan)
 
     for leg in result["legs"]:
         departure_raw = leg.get("planned_departure_at")
