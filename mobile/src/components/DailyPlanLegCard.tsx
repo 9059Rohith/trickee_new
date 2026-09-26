@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Colors } from "../constants/Colors";
 import type { DailyPlanLeg } from "../services/types";
 
@@ -8,7 +8,7 @@ const formatTime = (value: string | null) =>
     ? new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "Unavailable";
 
-const DailyPlanLegCard: React.FC<{ leg: DailyPlanLeg }> = ({ leg }) => {
+const DailyPlanLegCard: React.FC<{ leg: DailyPlanLeg; onStart?: () => void }> = ({ leg, onStart }) => {
   const destination = leg.destination.name || leg.destination.query || "Stop";
   return (
     <View style={styles.card}>
@@ -28,6 +28,11 @@ const DailyPlanLegCard: React.FC<{ leg: DailyPlanLeg }> = ({ leg }) => {
       </Text>
       <Text style={styles.source}>Energy: {leg.energy_source} · Route: {leg.route_source}</Text>
       {leg.degraded_reason ? <Text style={styles.reason}>{leg.degraded_reason.replace(/_/g, " ")}</Text> : null}
+      {onStart && !["arrived", "skipped", "ended_elsewhere"].includes(leg.status || "") ? (
+        <TouchableOpacity style={styles.startButton} onPress={onStart}>
+          <Text style={styles.startText}>Review and start this trip</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 };
@@ -43,6 +48,8 @@ const styles = StyleSheet.create({
   soc: { color: Colors.neonCyan, fontSize: 14, fontWeight: "700" },
   source: { color: Colors.secondaryText, fontSize: 10 },
   reason: { color: Colors.trickeeYellow, fontSize: 12 },
+  startButton: { minHeight: 44, borderRadius: 11, backgroundColor: Colors.trickeeYellow, alignItems: "center", justifyContent: "center", marginTop: 4 },
+  startText: { color: Colors.darkText, fontWeight: "900" },
 });
 
 export default DailyPlanLegCard;

@@ -100,7 +100,7 @@ export type RouteNudgeEvent =
   | "followed";
 
 export type RouteNudgePayload = {
-  screen: "route_nudge" | "daily_planner";
+  screen: "route_nudge" | "daily_planner" | "trip_start";
   decision_id?: string;
   planned_trip_id?: string;
   selected_route_id?: string | null;

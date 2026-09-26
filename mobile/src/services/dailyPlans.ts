@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { DailyPlan, DailyPlanDraft, RecurringPlanTemplate } from "./types";
+import type { DailyPlan, DailyPlanDraft, RecurringPlanTemplate, RecurringPlanTemplateInput } from "./types";
 
 const PLAN_KEY = "trickee.daily-plan.latest.v1";
 const CORRUPT_KEY = "trickee.daily-plan.latest.corrupt.v1";
@@ -65,6 +65,41 @@ export async function loadRecurringPlans(): Promise<RecurringPlanTemplate[]> {
 
 export async function saveRecurringPlans(templates: RecurringPlanTemplate[]): Promise<void> {
   await AsyncStorage.setItem(RECURRING_KEY, JSON.stringify(templates));
+}
+
+export function buildRecurringTemplateInput(
+  plan: DailyPlan,
+  name: string,
+  weekdays: number[]
+): RecurringPlanTemplateInput {
+  const cleanName = name.trim();
+  const uniqueDays = Array.from(new Set(weekdays)).sort((left, right) => left - right);
+  if (plan.status !== "confirmed") throw new Error("Confirm the daily plan before making it recurring.");
+  if (!cleanName) throw new Error("Enter a recurring schedule name.");
+  if (!uniqueDays.length || uniqueDays.some(day => !Number.isInteger(day) || day < 0 || day > 6)) {
+    throw new Error("Choose at least one valid weekday.");
+  }
+  const stops = plan.draft.stops.map(stop => {
+    if (!stop.label.trim() || !stop.requested_arrival_local || !stop.coordinates) {
+      throw new Error("Every recurring stop needs a time and confirmed map location.");
+    }
+    return {
+      label: stop.label.trim(),
+      arrival_local_time: stop.requested_arrival_local,
+      lat: stop.coordinates.lat,
+      lng: stop.coordinates.lng,
+    };
+  });
+  if (!stops.length) throw new Error("Add at least one stop.");
+  return {
+    name: cleanName,
+    timezone: plan.timezone,
+    weekdays: uniqueDays,
+    starting_soc_pct: plan.starting_soc_pct,
+    effective_from: plan.service_date,
+    effective_until: null,
+    stops,
+  };
 }
 
 export async function loadPlannerLocalDraft(): Promise<PlannerLocalDraft | null> {

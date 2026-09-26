@@ -10,6 +10,7 @@ import {
   saveDailyPlan,
   savePlannerLocalDraft,
   validateDailyPlanDraft,
+  buildRecurringTemplateInput,
 } from "../dailyPlans";
 
 describe("daily plan storage and validation", () => {
@@ -63,5 +64,25 @@ describe("daily plan storage and validation", () => {
     await AsyncStorage.setItem("trickee.daily-plan.form.v2", "not-json");
     await expect(loadPlannerLocalDraft()).resolves.toBeNull();
     await expect(AsyncStorage.getItem("trickee.daily-plan.form.corrupt.v2")).resolves.toBe("not-json");
+  });
+});
+
+describe("recurring plan form", () => {
+  it("serializes selected weekdays from a confirmed resolved plan", () => {
+    const confirmed = {
+      id: "plan-1", driver_id: "driver-1", vehicle_id: "vehicle-1",
+      service_date: "2026-09-26", timezone: "Asia/Kolkata", starting_soc_pct: 82,
+      status: "confirmed", confirmed_at: "2026-09-26T00:00:00Z",
+      draft: {
+        service_date: "2026-09-26", timezone: "Asia/Kolkata", parser_source: "test", warnings: [],
+        stops: [{ label: "Office", requested_arrival_local: "09:30", status: "resolved", coordinates: { lat: 21.17, lng: 72.83 } }],
+      },
+      result: { legs: [], final_soc_pct: 70, complete: true },
+    };
+    expect(buildRecurringTemplateInput(confirmed as never, "Weekday route", [4, 0, 2, 2])).toMatchObject({
+      name: "Weekday route",
+      weekdays: [0, 2, 4],
+      stops: [{ label: "Office", arrival_local_time: "09:30", lat: 21.17, lng: 72.83 }],
+    });
   });
 });

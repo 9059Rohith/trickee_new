@@ -19,6 +19,7 @@ class TrickeeFirebaseMessagingService : FirebaseMessagingService() {
             body = body,
             screen = data["screen"] ?: "route_nudge",
             planId = data["plan_id"],
+            legIndex = data["leg_index"]?.toIntOrNull(),
         )
     }
 }

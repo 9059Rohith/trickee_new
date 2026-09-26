@@ -489,7 +489,7 @@ def confirm_daily_plan(
             title=f"Leave soon for {destination}"[:120],
             body=(f"Planned departure is {departure.strftime('%H:%M')}.{soc_text}")[:500],
             payload={
-                "screen": "route_nudge", "plan_id": plan.id, "leg_index": leg["index"],
+                "screen": "trip_start", "plan_id": plan.id, "leg_index": leg["index"],
                 "occurrence_id": f"{plan.id}-leg-{leg['index']}",
                 "delivery_priority": "high", "android_channel_id": "trickee_route_alerts_high",
                 "expires_at": expires_at_utc.replace(tzinfo=timezone.utc).isoformat(),

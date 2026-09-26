@@ -1,6 +1,7 @@
 import {
   mergeRouteNudges,
   parseRouteNudgeTarget,
+  parseNotificationTarget,
   routeNudgeFromRemoteMessage,
 } from "../nudgeInbox";
 import type { RouteNudge } from "../types";
@@ -41,6 +42,28 @@ describe("route nudge inbox", () => {
     expect(
       parseRouteNudgeTarget({ screen: "admin", nudge_id: "nudge-1" })
     ).toBeNull();
+  });
+
+  it("accepts only bounded plan-start notification identifiers", () => {
+    expect(parseNotificationTarget({
+      screen: "trip_start",
+      nudge_id: "nudge-next",
+      plan_id: "plan-1",
+      leg_index: "2",
+    })).toEqual({ screen: "trip_start", nudgeId: "nudge-next", planId: "plan-1", legIndex: 2 });
+    expect(parseNotificationTarget({
+      screen: "trip_start",
+      nudge_id: "nudge-next",
+      plan_id: "../../admin",
+      leg_index: "2",
+    })).toBeNull();
+    expect(parseNotificationTarget({
+      screen: "trip_start",
+      nudge_id: "nudge-next",
+      plan_id: "plan-1",
+      leg_index: "2",
+      url: "https://attacker.example",
+    })).toBeNull();
   });
 
   it("parses only bounded route-nudge identifiers and numeric route facts", () => {

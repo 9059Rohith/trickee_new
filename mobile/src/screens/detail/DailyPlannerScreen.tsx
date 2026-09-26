@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigation } from "@react-navigation/native";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -26,8 +27,10 @@ import { api } from "../../services/api";
 import { schedulePlanReminders } from "../../services/dailyPlanNotifications";
 import {
   discardPlannerLocalDraft,
+  buildRecurringTemplateInput,
   loadDailyPlan,
   loadPlannerLocalDraft,
+  saveRecurringPlans,
   saveDailyPlan,
   savePlannerLocalDraft,
   validateDailyPlanDraft,
@@ -42,7 +45,7 @@ import {
 } from "../../services/plannerForm";
 import { currentPlannerLocation } from "../../services/telemetryNative";
 import { showTestHighPriorityNotification } from "../../services/telemetryNative";
-import type { DailyPlan } from "../../services/types";
+import type { DailyPlan, RecurringPlanTemplate } from "../../services/types";
 import type { PlanConfirmationStage } from "../../services/planConfirmationState";
 
 const localDate = () => {
@@ -56,7 +59,10 @@ const withStopIds = (value: DailyPlan): DailyPlan => ({
   draft: { ...value.draft, stops: ensurePlannerStopIds(value.draft.stops) },
 });
 
+const weekdayOptions = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
 const DailyPlannerScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
   const { token } = useAuth();
   const { latestSoc } = useLiveData();
   const [message, setMessage] = useState("");
@@ -77,6 +83,10 @@ const DailyPlannerScreen: React.FC = () => {
   const [hydrated, setHydrated] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [confirmationStage, setConfirmationStage] = useState<PlanConfirmationStage | null>(null);
+  const [recurringName, setRecurringName] = useState("My regular route");
+  const [recurringWeekdays, setRecurringWeekdays] = useState<number[]>([0, 1, 2, 3, 4]);
+  const [recurringTemplates, setRecurringTemplates] = useState<RecurringPlanTemplate[]>([]);
+  const [recurringBusy, setRecurringBusy] = useState(false);
 
   const openStopMap = async (stopId: string) => {
     const existing = plan?.draft.stops.find(stop => stop.local_id === stopId)?.coordinates;
@@ -138,6 +148,19 @@ const DailyPlannerScreen: React.FC = () => {
       })
       .finally(() => setHydrated(true));
   }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    api.listRecurringPlans(token)
+      .then(async templates => {
+        if (cancelled) return;
+        setRecurringTemplates(templates);
+        await saveRecurringPlans(templates);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [token]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -253,6 +276,45 @@ const DailyPlannerScreen: React.FC = () => {
     setSaveState("idle");
   };
 
+  const toggleWeekday = (day: number) => {
+    setRecurringWeekdays(current => current.includes(day)
+      ? current.filter(value => value !== day)
+      : [...current, day].sort((left, right) => left - right));
+  };
+
+  const saveRecurring = async () => {
+    if (!token || !plan) return;
+    setRecurringBusy(true);
+    setError(null);
+    try {
+      const input = buildRecurringTemplateInput(plan, recurringName, recurringWeekdays);
+      const created = await api.createRecurringPlan(token, input);
+      const next = [...recurringTemplates.filter(item => item.id !== created.id), created];
+      setRecurringTemplates(next);
+      await saveRecurringPlans(next);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save the recurring schedule.");
+    } finally {
+      setRecurringBusy(false);
+    }
+  };
+
+  const disableRecurring = async (templateId: string) => {
+    if (!token) return;
+    setRecurringBusy(true);
+    setError(null);
+    try {
+      const disabled = await api.disableRecurringPlan(token, templateId);
+      const next = recurringTemplates.map(item => item.id === disabled.id ? disabled : item);
+      setRecurringTemplates(next);
+      await saveRecurringPlans(next);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not disable the recurring schedule.");
+    } finally {
+      setRecurringBusy(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <BackgroundLogo />
@@ -333,8 +395,45 @@ const DailyPlannerScreen: React.FC = () => {
                 </TouchableOpacity>
               ) : null}
               {reminderStatus ? <Text style={styles.success}>{reminderStatus}</Text> : null}
-              {plan.result?.legs.map((leg) => <DailyPlanLegCard key={leg.index} leg={leg} />)}
+              {plan.result?.legs.map((leg) => (
+                <DailyPlanLegCard
+                  key={leg.index}
+                  leg={leg}
+                  onStart={plan.status === "confirmed" ? () => navigation.navigate("TripStart", { planId: plan.id, legIndex: leg.index }) : undefined}
+                />
+              ))}
               {plan.result ? <Text style={styles.disclaimer}>SOC is an estimate from the latest GPS prediction when available, otherwise the vehicle specification baseline. Traffic and chargers show their source; place listings do not prove live availability.</Text> : null}
+              {plan.status === "confirmed" ? (
+                <View style={styles.recurringCard}>
+                  <Text style={styles.sectionTitle}>Repeat this schedule</Text>
+                  <TextInput style={styles.input} value={recurringName} onChangeText={setRecurringName} placeholder="Schedule name" placeholderTextColor={Colors.secondaryText} />
+                  <View style={styles.weekdays}>
+                    {weekdayOptions.map((label, day) => (
+                      <TouchableOpacity
+                        key={label}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: recurringWeekdays.includes(day) }}
+                        style={[styles.weekdayChip, recurringWeekdays.includes(day) && styles.weekdayChipActive]}
+                        onPress={() => toggleWeekday(day)}
+                      >
+                        <Text style={[styles.weekdayText, recurringWeekdays.includes(day) && styles.weekdayTextActive]}>{label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity style={styles.confirmButton} disabled={recurringBusy} onPress={saveRecurring}>
+                    <Text style={styles.confirmText}>{recurringBusy ? "Saving…" : "Save recurring schedule"}</Text>
+                  </TouchableOpacity>
+                  {recurringTemplates.map(template => (
+                    <View key={template.id} style={styles.templateRow}>
+                      <View style={styles.templateCopy}>
+                        <Text style={styles.stopName}>{template.name}</Text>
+                        <Text style={styles.source}>{template.weekdays.map(day => weekdayOptions[day]).join(", ")} · {template.is_active ? "Active" : "Disabled"}</Text>
+                      </View>
+                      {template.is_active ? <TouchableOpacity onPress={() => disableRecurring(template.id)}><Text style={styles.discardText}>Disable</Text></TouchableOpacity> : null}
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </View>
           ) : null}
         </ScrollView>
@@ -401,6 +500,15 @@ const styles = StyleSheet.create({
   error: { color: Colors.redSoft, backgroundColor: "rgba(255,68,68,0.09)", borderRadius: 10, padding: 12 },
   success: { color: Colors.greenAccent, lineHeight: 18 },
   disclaimer: { color: Colors.secondaryText, fontSize: 11, lineHeight: 17 },
+  recurringCard: { gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: Colors.premiumCardBorder, backgroundColor: Colors.premiumCardBg },
+  weekdays: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  weekdayChip: { minWidth: 43, minHeight: 40, borderRadius: 20, borderWidth: 1, borderColor: Colors.borderLight, alignItems: "center", justifyContent: "center" },
+  weekdayChipActive: { borderColor: Colors.trickeeYellow, backgroundColor: Colors.estimatedBadgeBg },
+  weekdayText: { color: Colors.secondaryText, fontWeight: "800", fontSize: 12 },
+  weekdayTextActive: { color: Colors.trickeeYellow },
+  templateRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.borderSubtle },
+  templateCopy: { flex: 1, gap: 3 },
+  source: { color: Colors.secondaryText, fontSize: 11 },
 });
 
 export default DailyPlannerScreen;

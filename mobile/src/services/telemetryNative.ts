@@ -196,6 +196,7 @@ export async function scheduleHighPriorityReminder(data: {
   body: string;
   dueAtMs: number;
   planId: string;
+  legIndex: number;
 }): Promise<void> {
   await requestReminderPermission();
   await requireAndroidModule().scheduleHighPriorityReminder(data);

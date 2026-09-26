@@ -24,6 +24,7 @@ object TrickeeNotificationPresenter {
         body: String,
         screen: String = "route_nudge",
         planId: String? = null,
+        legIndex: Int? = null,
     ): Boolean {
         if (
             Build.VERSION.SDK_INT >= 33 &&
@@ -31,6 +32,7 @@ object TrickeeNotificationPresenter {
         ) {
             return false
         }
+        val deepLink = NotificationRoutePolicy.deepLink(screen, planId, legIndex) ?: return false
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
@@ -44,11 +46,11 @@ object TrickeeNotificationPresenter {
                 }
             )
         }
-        val route = if (screen == "daily_planner") "daily-planner" else "route-nudges"
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("trickeegps://$route"), context, MainActivity::class.java).apply {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(deepLink), context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("screen", screen)
             putExtra("plan_id", planId)
+            putExtra("leg_index", legIndex)
         }
         val pendingIntent = PendingIntent.getActivity(
             context,

@@ -144,6 +144,7 @@ def transition_leg_for_trip(
                         "screen": "trip_start",
                         "plan_id": trip.planned_trip_id,
                         "leg_index": next_leg.leg_index,
+                        "occurrence_id": f"{trip.planned_trip_id}-leg-{next_leg.leg_index}",
                         "destination_lat": next_leg.destination_lat,
                         "destination_lng": next_leg.destination_lng,
                     },

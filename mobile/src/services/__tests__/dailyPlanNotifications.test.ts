@@ -1,4 +1,4 @@
-import { schedulePlanReminders } from "../dailyPlanNotifications";
+import { planLegOccurrenceId, schedulePlanReminders } from "../dailyPlanNotifications";
 import { scheduleHighPriorityReminder } from "../telemetryNative";
 
 jest.mock("../telemetryNative", () => ({
@@ -45,8 +45,15 @@ describe("schedulePlanReminders", () => {
         occurrenceId: "plan-1-leg-0",
         title: "Leave soon for Office",
         planId: "plan-1",
+        legIndex: 0,
       })
     );
+  });
+
+  it("uses one stable occurrence identity for local and FCM replacement", () => {
+    expect(planLegOccurrenceId("plan-1", 4)).toBe("plan-1-leg-4");
+    expect(() => planLegOccurrenceId("https://attacker.example", 4)).toThrow("plan identifier");
+    expect(() => planLegOccurrenceId("plan-1", -1)).toThrow("leg index");
   });
 
   it("does not claim success when native scheduling fails", async () => {

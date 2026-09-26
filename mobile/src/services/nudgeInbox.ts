@@ -12,6 +12,15 @@ export type RouteNudgeTarget = {
   plannedTripId?: string;
 };
 
+export type PlanStartTarget = {
+  screen: "trip_start";
+  nudgeId: string;
+  planId: string;
+  legIndex: number;
+};
+
+export type NotificationTarget = RouteNudgeTarget | PlanStartTarget;
+
 function boundedId(value: unknown): string | undefined {
   if (typeof value !== "string" || value.length < 1 || value.length > 160) {
     return undefined;
@@ -39,22 +48,34 @@ function optionalBoolean(value: unknown): boolean | null {
   return null;
 }
 
-export function parseRouteNudgeTarget(
+export function parseNotificationTarget(
   data?: Record<string, unknown>
-): RouteNudgeTarget | null {
-  if (!data || data.url || data.screen !== "route_nudge") {
+): NotificationTarget | null {
+  if (!data || data.url) {
     return null;
   }
   const nudgeId = boundedId(data.nudge_id);
   if (!nudgeId) {
     return null;
   }
+  if (data.screen === "trip_start") {
+    const planId = boundedId(data.plan_id);
+    const legIndex = Number(data.leg_index);
+    if (!planId || !Number.isInteger(legIndex) || legIndex < 0 || legIndex > 99) return null;
+    return { screen: "trip_start", nudgeId, planId, legIndex };
+  }
+  if (data.screen !== "route_nudge") return null;
   return {
     screen: "route_nudge",
     nudgeId,
     decisionId: boundedId(data.decision_id),
     plannedTripId: boundedId(data.planned_trip_id),
   };
+}
+
+export function parseRouteNudgeTarget(data?: Record<string, unknown>): RouteNudgeTarget | null {
+  const target = parseNotificationTarget(data);
+  return target?.screen === "route_nudge" ? target : null;
 }
 
 export function mergeRouteNudges(
@@ -72,14 +93,14 @@ export function routeNudgeFromRemoteMessage(
   message: RemoteMessage
 ): RouteNudge | null {
   const data = message.data || {};
-  const target = parseRouteNudgeTarget(data);
+  const target = parseNotificationTarget(data);
   if (!target) {
     return null;
   }
   const payload: RouteNudgePayload = {
-    screen: "route_nudge",
-    decision_id: target.decisionId,
-    planned_trip_id: target.plannedTripId,
+    screen: target.screen,
+    decision_id: target.screen === "route_nudge" ? target.decisionId : undefined,
+    planned_trip_id: target.screen === "route_nudge" ? target.plannedTripId : target.planId,
     selected_route_id: optionalString(data.selected_route_id),
     selected_charger_id: optionalString(data.selected_charger_id),
     charger_place_id: optionalString(data.charger_place_id),

@@ -21,8 +21,9 @@ class DailyPlanReminderWorker(context: Context, params: WorkerParameters) : Work
             occurrenceId = occurrenceId,
             title = title,
             body = body,
-            screen = "daily_planner",
+            screen = "trip_start",
             planId = inputData.getString(KEY_PLAN_ID),
+            legIndex = inputData.getInt(KEY_LEG_INDEX, -1),
         )
         return Result.success()
     }
@@ -33,5 +34,6 @@ class DailyPlanReminderWorker(context: Context, params: WorkerParameters) : Work
         const val KEY_BODY = "body"
         const val KEY_OCCURRENCE = "occurrence_id"
         const val KEY_PLAN_ID = "plan_id"
+        const val KEY_LEG_INDEX = "leg_index"
     }
 }

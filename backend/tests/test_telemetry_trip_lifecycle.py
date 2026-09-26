@@ -148,6 +148,7 @@ def test_planned_completion_queues_next_stop_once_only_when_progressing(identity
         assert len(nudges) == expected_nudges
         if nudges:
             assert nudges[0].payload["leg_index"] == 1
+            assert nudges[0].payload["occurrence_id"] == f"{plan_id}-leg-1"
 
 
 def test_charging_wait_resumes_same_trip_with_one_post_charge_soc(identity):
