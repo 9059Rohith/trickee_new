@@ -187,6 +187,11 @@ class MobileTripSession(Base):
     destination_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
     destination_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     destination_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    planned_trip_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    planned_leg_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    destination_source: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    ended_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ended_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="active", index=True)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
     source: Mapped[str] = mapped_column(String(40), nullable=False, default="action_button")
@@ -545,10 +550,20 @@ class DailyPlan(Base):
     """Confirmed-input boundary for one driver day; computed values retain evidence in result_payload."""
 
     __tablename__ = "daily_plans"
+    __table_args__ = (
+        UniqueConstraint(
+            "recurring_template_id",
+            "service_date",
+            name="uq_daily_plan_template_service_date",
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     driver_id: Mapped[str] = mapped_column(String(36), ForeignKey("drivers.id"), nullable=False, index=True)
     vehicle_id: Mapped[str] = mapped_column(String(36), ForeignKey("vehicles.id"), nullable=False, index=True)
+    recurring_template_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("recurring_plan_templates.id"), nullable=True, index=True
+    )
     service_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     timezone: Mapped[str] = mapped_column(String(64), nullable=False)
     starting_soc_pct: Mapped[float] = mapped_column(Float, nullable=False)
@@ -566,6 +581,101 @@ class DailyPlan(Base):
         onupdate=datetime.utcnow,
         nullable=False,
     )
+
+
+class DailyPlanLeg(Base):
+    """One durable, destination-resolved leg in a dated daily plan."""
+
+    __tablename__ = "daily_plan_legs"
+    __table_args__ = (
+        UniqueConstraint("plan_id", "leg_index", name="uq_daily_plan_leg_index"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    plan_id: Mapped[str] = mapped_column(String(36), ForeignKey("daily_plans.id"), nullable=False, index=True)
+    leg_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    destination_text: Mapped[str] = mapped_column(String(255), nullable=False)
+    destination_lat: Mapped[float] = mapped_column(Float, nullable=False)
+    destination_lng: Mapped[float] = mapped_column(Float, nullable=False)
+    planned_departure_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    planned_arrival_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", index=True)
+    trip_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("mobile_trip_sessions.id"), nullable=True, unique=True, index=True
+    )
+    outcome_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+
+class RecurringPlanTemplate(Base):
+    """Weekly schedule definition that materializes idempotent dated plans."""
+
+    __tablename__ = "recurring_plan_templates"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    driver_id: Mapped[str] = mapped_column(String(36), ForeignKey("drivers.id"), nullable=False, index=True)
+    vehicle_id: Mapped[str] = mapped_column(String(36), ForeignKey("vehicles.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False)
+    weekdays: Mapped[list[int]] = mapped_column(JSON, nullable=False)
+    starting_soc_pct: Mapped[float] = mapped_column(Float, nullable=False)
+    effective_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    effective_until: Mapped[date | None] = mapped_column(Date, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+
+class RecurringPlanStop(Base):
+    __tablename__ = "recurring_plan_stops"
+    __table_args__ = (
+        UniqueConstraint("template_id", "stop_index", name="uq_recurring_plan_stop_index"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    template_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("recurring_plan_templates.id"), nullable=False, index=True
+    )
+    stop_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    destination_text: Mapped[str] = mapped_column(String(255), nullable=False)
+    destination_lat: Mapped[float] = mapped_column(Float, nullable=False)
+    destination_lng: Mapped[float] = mapped_column(Float, nullable=False)
+    arrival_local_time: Mapped[str] = mapped_column(String(5), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+
+class RouteGuidanceSnapshot(Base):
+    """Auditable provider response used for one bounded guidance decision."""
+
+    __tablename__ = "route_guidance_snapshots"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    trip_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("mobile_trip_sessions.id"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    route_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    origin_lat: Mapped[float] = mapped_column(Float, nullable=False)
+    origin_lng: Mapped[float] = mapped_column(Float, nullable=False)
+    destination_lat: Mapped[float] = mapped_column(Float, nullable=False)
+    destination_lng: Mapped[float] = mapped_column(Float, nullable=False)
+    distance_km: Mapped[float | None] = mapped_column(Float, nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    eta_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    predicted_arrival_soc_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reserve_soc_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    is_estimated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    stale_after: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
 class NudgeOutcome(Base):

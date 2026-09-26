@@ -84,7 +84,7 @@
 ### Task 2: Add backward-compatible persistence
 
 **Files:**
-- Create: `backend/alembic/versions/0008_plan_aware_guidance.py`
+- Create: `backend/alembic/versions/0009_plan_aware_guidance.py`
 - Modify: `backend/app/models/entities.py`
 - Modify: `backend/tests/test_alembic_roundtrip.py`
 - Create: `backend/tests/test_plan_guidance_models.py`
@@ -94,7 +94,7 @@
 
 - [ ] **Step 1: Write failing model and migration tests** asserting new-table constraints, unique `(plan_id, leg_index)` and `(template_id, service_date)` boundaries, nullable legacy trip fields, distinct planned destination/actual endpoint, and preservation of existing `DailyPlan.result_payload`.
 - [ ] **Step 2: Run `python -m pytest tests/test_plan_guidance_models.py tests/test_alembic_roundtrip.py -q` from `backend`** and verify schema/model failures.
-- [ ] **Step 3: Implement SQLAlchemy entities and additive Alembic 0008 upgrade/downgrade** without rewriting historical trip destination columns.
+- [ ] **Step 3: Implement SQLAlchemy entities and additive Alembic 0009 upgrade/downgrade** without rewriting historical trip destination columns.
 - [ ] **Step 4: Rerun targeted tests and the full backend suite**, inspect generated SQL for destructive statements, then commit `feat(backend): add plan-aware guidance schema`.
 
 ### Task 3: Link a verified plan leg to trip lifecycle
