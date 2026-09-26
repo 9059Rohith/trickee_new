@@ -23,6 +23,13 @@ import { DEFAULT_MAP_CENTER } from "../../config";
 import type { ChargerOption } from "../../services/types";
 import { buildDirectionsUrl } from "../../services/mapNavigation";
 import { estimateLiveSoc } from "../../services/liveSoc";
+import { currentDeviceLocation } from "../../services/telemetryNative";
+import {
+  chargerDestinationDistanceKm,
+  chargerLocationLabel,
+  resolveChargerLocation,
+  type TimestampedLocation,
+} from "../../services/locationFreshness";
 
 const FilterPill: React.FC<{
   title: string;
@@ -68,22 +75,6 @@ const filterStyles = StyleSheet.create({
   pillText: { fontSize: 11, fontWeight: "700", color: "rgba(255,255,255,0.5)" },
 });
 
-/** Rough straight-line distance in km (for the charger request hint only). */
-const haversineKm = (
-  a: { lat: number; lng: number },
-  b: { lat: number; lng: number }
-) => {
-  const R = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-};
-
 const isFast = (c: ChargerOption) =>
   (c.charger_type || "").toLowerCase().includes("fast");
 
@@ -109,15 +100,28 @@ const LiveMapScreen: React.FC = () => {
   const [chargersLoading, setChargersLoading] = useState(false);
   const [chargersError, setChargersError] = useState<string | null>(null);
   const [chargeAdvice, setChargeAdvice] = useState<string | null>(null);
+  const [oneShotLocation, setOneShotLocation] = useState<TimestampedLocation | null>(null);
+  const activeTrip = me?.active_trip ?? null;
+  const telemetryLocation = useMemo<TimestampedLocation | null>(() => {
+    const capturedAtMs = telemetry?.recorded_at ? Date.parse(telemetry.recorded_at) : Number.NaN;
+    return telemetry?.lat != null && telemetry?.lng != null && Number.isFinite(capturedAtMs)
+      ? { lat: telemetry.lat, lng: telemetry.lng, capturedAtMs }
+      : null;
+  }, [telemetry?.lat, telemetry?.lng, telemetry?.recorded_at]);
+  const chargerLocation = useMemo(() => resolveChargerLocation({
+    activeTrip: Boolean(activeTrip),
+    oneShot: oneShotLocation,
+    lastTelemetry: telemetryLocation,
+    nowMs: Date.now(),
+  }), [activeTrip, oneShotLocation, telemetryLocation]);
 
-  const hasVehicleLocation = telemetry?.lat != null && telemetry?.lng != null;
-  const vehicleLat = hasVehicleLocation ? telemetry!.lat! : DEFAULT_MAP_CENTER.latitude;
-  const vehicleLng = hasVehicleLocation ? telemetry!.lng! : DEFAULT_MAP_CENTER.longitude;
+  const hasVehicleLocation = chargerLocation.kind !== "unavailable";
+  const vehicleLat = hasVehicleLocation ? chargerLocation.lat : DEFAULT_MAP_CENTER.latitude;
+  const vehicleLng = hasVehicleLocation ? chargerLocation.lng : DEFAULT_MAP_CENTER.longitude;
   // Re-query roughly every 100 m instead of on every one-second GPS packet.
   const chargerLat = Math.round(vehicleLat * 1000) / 1000;
   const chargerLng = Math.round(vehicleLng * 1000) / 1000;
   const vehicleCode = vehicle?.vehicle_code || "No vehicle";
-  const activeTrip = me?.active_trip ?? null;
   const storedSoc = gpsSummary?.soc?.is_recent ? latestSoc : null;
   const liveSoc = activeTrip
     ? estimateLiveSoc({
@@ -152,6 +156,16 @@ const LiveMapScreen: React.FC = () => {
     ]
   );
 
+  const refreshOneShot = useCallback(async () => {
+    if (activeTrip) return;
+    const current = await currentDeviceLocation();
+    setOneShotLocation(current);
+  }, [activeTrip]);
+
+  useEffect(() => {
+    refreshOneShot().catch(() => undefined);
+  }, [refreshOneShot]);
+
   const loadChargers = useCallback(
     async (signal?: AbortSignal) => {
       if (
@@ -167,12 +181,10 @@ const LiveMapScreen: React.FC = () => {
       setChargersLoading(true);
       setChargersError(null);
       try {
-        const destinationKm = dest
-          ? haversineKm(
-              { lat: vehicleLat, lng: vehicleLng },
-              { lat: dest.lat, lng: dest.lng }
-            )
-          : 10;
+        const destinationKm = chargerDestinationDistanceKm(
+          { lat: vehicleLat, lng: vehicleLng },
+          dest ? { lat: dest.lat, lng: dest.lng } : null
+        );
         const result = await api.recommendChargers(
           token,
           {
@@ -181,7 +193,7 @@ const LiveMapScreen: React.FC = () => {
             lat: chargerLat,
             lng: chargerLng,
             soc,
-            destination_km: Math.min(destinationKm, 500),
+            ...(destinationKm == null ? {} : { destination_km: Math.min(destinationKm, 500) }),
             available_time_min: 30,
           },
           signal
@@ -250,9 +262,9 @@ const LiveMapScreen: React.FC = () => {
         id: "vehicle-1",
         latitude: vehicleLat,
         longitude: vehicleLng,
-        title: vehicleCode,
+        title: activeTrip ? vehicleCode : "Phone location",
         color: Colors.trickeeYellow,
-        icon: "car",
+        icon: activeTrip ? "car" : "user",
       }]
       : [];
     if (dest) {
@@ -278,7 +290,7 @@ const LiveMapScreen: React.FC = () => {
       }
     });
     return list;
-  }, [hasVehicleLocation, vehicleLat, vehicleLng, vehicleCode, dest, visibleChargers]);
+  }, [activeTrip, hasVehicleLocation, vehicleLat, vehicleLng, vehicleCode, dest, visibleChargers]);
 
   const openCharger = async (charger: ChargerOption) => {
     const url = charger.google_maps_uri || buildDirectionsUrl({
@@ -306,7 +318,7 @@ const LiveMapScreen: React.FC = () => {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={refresh}
+            onRefresh={() => Promise.all([refresh(), refreshOneShot().catch(() => undefined)]).then(() => undefined)}
             tintColor={Colors.trickeeYellow}
             colors={[Colors.trickeeYellow]}
           />
@@ -342,17 +354,16 @@ const LiveMapScreen: React.FC = () => {
 
         {!hasVehicleLocation ? (
           <Text style={styles.liveWarning}>
-            Waiting for a real GPS packet. The fallback center below is not a vehicle position.
+            Location unavailable. Enable precise location and pull to refresh; the fallback center is not used for charger search.
           </Text>
         ) : (
-          <Text style={styles.liveEvidence}>
-            {liveState?.freshness === "LIVE"
-              ? `Live GPS · sequence ${liveState.sequence_no}`
-              : `Last GPS packet · ${liveState?.freshness || "polling"}`}
+          <Text style={chargerLocation.kind === "fresh" ? styles.liveEvidence : styles.liveWarning}>
+            {chargerLocationLabel(chargerLocation)}
           </Text>
         )}
 
         <OpenStreetMap
+          key={`${chargerLocation.kind}-${vehicleLat.toFixed(4)}-${vehicleLng.toFixed(4)}`}
           initialLatitude={vehicleLat}
           initialLongitude={vehicleLng}
           initialZoom={14}
@@ -442,6 +453,7 @@ const LiveMapScreen: React.FC = () => {
           )}
         </View>
 
+        {hasVehicleLocation ? <Text style={styles.locationBasis}>{chargerLocationLabel(chargerLocation)}</Text> : null}
         {chargerReason && visibleChargers.length > 0 && (
           <Text style={styles.reasonText}>{chargerReason}</Text>
         )}
@@ -590,6 +602,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     paddingHorizontal: 4,
   },
+  locationBasis: { color: Colors.secondaryText, fontSize: 11, lineHeight: 16 },
   hudCard: { marginTop: -4 },
   hudContent: { padding: 18, gap: 14 },
   hudTopRow: {

@@ -280,7 +280,7 @@ class ChargerRequest(BaseModel):
     lat: float = Field(ge=-90, le=90)
     lng: float = Field(ge=-180, le=180)
     soc: float | None = Field(default=None, ge=0, le=100)
-    destination_km: float = Field(ge=0)
+    destination_km: float | None = Field(default=None, ge=0)
     available_time_min: float = Field(ge=0)
 
 
@@ -348,6 +348,7 @@ def recommend_chargers(
     )
     needs_charge = body.soc is not None and (body.soc <= 25 or (
         estimated_range is not None
+        and body.destination_km is not None
         and body.destination_km > 0
         and estimated_range < body.destination_km * 1.2
     ))
@@ -365,8 +366,14 @@ def recommend_chargers(
         reason = "Nearby verified station listings are shown; add SOC for charging advice."
     elif needs_charge:
         reason = (
-            "Charging is recommended from the current SOC and route reserve. "
-            "The station listing is verified, but live connector availability is not."
+            "Charging is recommended from the current SOC. "
+            if body.destination_km is None
+            else "Charging is recommended from the current SOC and route reserve. "
+        ) + "The station listing is verified, but live connector availability is not."
+    elif body.destination_km is None:
+        reason = (
+            "Nearby verified station listings are shown from the phone location. "
+            "Only current SOC was assessed."
         )
     else:
         reason = (

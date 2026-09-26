@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../../constants/Colors";
@@ -13,21 +13,13 @@ import type { ChargerRecommendation } from "../../services/types";
 import { buildDirectionsUrl } from "../../services/mapNavigation";
 import { estimateLiveSoc } from "../../services/liveSoc";
 import { shouldRefreshRoute, type RouteRefreshSnapshot } from "../../services/routeRefreshPolicy";
-
-const haversineKm = (
-  a: { lat: number; lng: number },
-  b: { lat: number; lng: number }
-) => {
-  const radiusKm = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
-  const value =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return radiusKm * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
-};
+import { currentDeviceLocation } from "../../services/telemetryNative";
+import {
+  chargerDestinationDistanceKm,
+  chargerLocationLabel,
+  resolveChargerLocation,
+  type TimestampedLocation,
+} from "../../services/locationFreshness";
 
 const fmt = (v: number | null | undefined, d = 1) =>
   typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "--";
@@ -38,11 +30,25 @@ const RouteIntelScreen: React.FC = () => {
   const [rec, setRec] = useState<ChargerRecommendation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [oneShotLocation, setOneShotLocation] = useState<TimestampedLocation | null>(null);
   const lastRequest = useRef<RouteRefreshSnapshot | null>(null);
+  const activeTrip = me?.active_trip ?? null;
+  const telemetryLocation = useMemo<TimestampedLocation | null>(() => {
+    const capturedAtMs = telemetry?.recorded_at ? Date.parse(telemetry.recorded_at) : Number.NaN;
+    return telemetry?.lat != null && telemetry?.lng != null && Number.isFinite(capturedAtMs)
+      ? { lat: telemetry.lat, lng: telemetry.lng, capturedAtMs }
+      : null;
+  }, [telemetry?.lat, telemetry?.lng, telemetry?.recorded_at]);
+  const chargerLocation = useMemo(() => resolveChargerLocation({
+    activeTrip: Boolean(activeTrip),
+    oneShot: oneShotLocation,
+    lastTelemetry: telemetryLocation,
+    nowMs: Date.now(),
+  }), [activeTrip, oneShotLocation, telemetryLocation]);
 
-  const liveSoc = me?.active_trip
+  const liveSoc = activeTrip
     ? estimateLiveSoc({
-        startingSocPct: me.active_trip.starting_soc,
+        startingSocPct: activeTrip.starting_soc,
         distanceKm: liveState?.distance_km,
         usableKwh: vehicle?.usable_kwh,
         whPerKm: gpsSummary?.latest_prediction?.wh_per_km,
@@ -54,9 +60,18 @@ const RouteIntelScreen: React.FC = () => {
       ? (soc * vehicle.usable_kwh * 10) / gpsSummary.latest_prediction.wh_per_km
       : null;
   const destination =
-    me?.active_trip?.destination_lat != null && me.active_trip.destination_lng != null
-      ? { lat: me.active_trip.destination_lat, lng: me.active_trip.destination_lng }
+    activeTrip?.destination_lat != null && activeTrip.destination_lng != null
+      ? { lat: activeTrip.destination_lat, lng: activeTrip.destination_lng }
       : null;
+
+  useEffect(() => {
+    if (activeTrip) return;
+    let cancelled = false;
+    currentDeviceLocation()
+      .then(location => { if (!cancelled) setOneShotLocation(location); })
+      .catch(() => { if (!cancelled) setOneShotLocation(null); });
+    return () => { cancelled = true; };
+  }, [activeTrip]);
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -64,16 +79,15 @@ const RouteIntelScreen: React.FC = () => {
         !token ||
         !driver ||
         !vehicle ||
-        telemetry?.lat == null ||
-        telemetry?.lng == null
+        chargerLocation.kind === "unavailable"
       ) {
         setLoading(false);
         return;
       }
       const now = Date.now();
       const nextRequest: RouteRefreshSnapshot = {
-        latitude: telemetry.lat,
-        longitude: telemetry.lng,
+        latitude: chargerLocation.lat,
+        longitude: chargerLocation.lng,
         soc,
         destinationKey: destination ? `${destination.lat},${destination.lng}` : "none",
         requestedAtMs: now,
@@ -88,18 +102,13 @@ const RouteIntelScreen: React.FC = () => {
           {
             driver_id: driver.id,
             vehicle_id: vehicle.id,
-            lat: telemetry.lat,
-            lng: telemetry.lng,
+            lat: chargerLocation.lat,
+            lng: chargerLocation.lng,
             soc,
-            destination_km: destination
-              ? Math.min(
-                  haversineKm(
-                    { lat: telemetry.lat, lng: telemetry.lng },
-                    destination
-                  ),
-                  500
-                )
-              : 10,
+            ...(() => {
+              const distance = chargerDestinationDistanceKm(chargerLocation, destination);
+              return distance == null ? {} : { destination_km: Math.min(distance, 500) };
+            })(),
             available_time_min: 30,
           },
           signal
@@ -116,7 +125,7 @@ const RouteIntelScreen: React.FC = () => {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [token, driver?.id, vehicle?.id, telemetry?.lat, telemetry?.lng, soc, destination?.lat, destination?.lng, rec]
+    [token, driver?.id, vehicle?.id, chargerLocation, soc, destination?.lat, destination?.lng, rec]
   );
 
   useEffect(() => {
@@ -159,6 +168,9 @@ const RouteIntelScreen: React.FC = () => {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
+          <Text style={chargerLocation.kind === "fresh" ? styles.locationFresh : styles.locationStale}>
+            {chargerLocationLabel(chargerLocation)}
+          </Text>
           {/* Range summary */}
           <GlassCard cornerRadius={18}>
             <View style={styles.rangeRow}>
@@ -307,6 +319,8 @@ const RouteIntelScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.appBackground },
   content: { padding: 16, gap: 14, paddingBottom: 40 },
+  locationFresh: { color: Colors.neonGreen, fontSize: 12, fontWeight: "700" },
+  locationStale: { color: Colors.trickeeYellow, fontSize: 12, lineHeight: 18 },
   rangeRow: { flexDirection: "row", padding: 18, alignItems: "center" },
   rangeStat: { flex: 1, alignItems: "center", gap: 4 },
   rangeValue: { fontSize: 30, fontWeight: "900", color: Colors.trickeeYellow },

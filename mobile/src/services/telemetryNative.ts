@@ -176,9 +176,10 @@ export async function telemetryStatus(): Promise<NativeTelemetryStatus> {
   return requireAndroidModule().status();
 }
 
-export async function currentPlannerLocation(): Promise<{
+export async function currentDeviceLocation(): Promise<{
   lat: number;
   lng: number;
+  capturedAtMs: number;
 }> {
   await requestPlannerLocationPermission();
   const result = await requireAndroidModule().currentLocation();
@@ -187,6 +188,16 @@ export async function currentPlannerLocation(): Promise<{
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     throw new Error("A current GPS location is not available yet.");
   }
+  const capturedAtMs = Number(result.capturedAtMs);
+  return {
+    lat,
+    lng,
+    capturedAtMs: Number.isFinite(capturedAtMs) && capturedAtMs > 0 ? capturedAtMs : Date.now(),
+  };
+}
+
+export async function currentPlannerLocation(): Promise<{ lat: number; lng: number }> {
+  const { lat, lng } = await currentDeviceLocation();
   return { lat, lng };
 }
 

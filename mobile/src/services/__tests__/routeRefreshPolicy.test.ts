@@ -26,4 +26,10 @@ describe("route intelligence refresh policy", () => {
   it("always permits the first request", () => {
     expect(shouldRefreshRoute(null, snapshot(), 1_000_000)).toBe(true);
   });
+
+  it("uses an explicit no-destination key without inventing a route length", () => {
+    const current = snapshot({ destinationKey: "none" });
+    expect(shouldRefreshRoute(snapshot({ destinationKey: "23.1,72.5" }), current, 1_005_000)).toBe(true);
+    expect(current).not.toHaveProperty("destinationKm");
+  });
 });

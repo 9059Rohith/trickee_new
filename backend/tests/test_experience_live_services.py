@@ -155,6 +155,28 @@ def test_charger_recommendations_use_provider_and_low_soc_decision():
     assert data["provider_source"] == "google_places"
 
 
+def test_charger_browsing_without_destination_omits_route_range_claims():
+    (driver_id, vehicle_id), headers = seed_driver()
+    response = client.post(
+        "/api/v1/chargers/recommend",
+        headers=headers,
+        json={
+            "driver_id": driver_id,
+            "vehicle_id": vehicle_id,
+            "lat": 21.17,
+            "lng": 72.83,
+            "soc": 70,
+            "available_time_min": 30,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["charge_advice"] == "not_needed"
+    assert "destination" not in data["reason"].lower()
+    assert "route reserve" not in data["reason"].lower()
+
+
 def test_active_guidance_returns_latest_snapshot_with_truthful_freshness():
     (driver_id, vehicle_id), headers = seed_driver()
     db = TestSession()
