@@ -68,6 +68,19 @@ def test_due_nudge_is_sent_and_marked_with_fcm_message_id():
     assert nudge.last_error_detail == "projects/test/messages/1"
 
 
+@pytest.mark.parametrize("nudge_type", [
+    "departure_changed", "low_arrival_soc", "charger_recommendation", "next_stop_ready",
+])
+def test_plan_aware_guidance_notification_types_use_the_durable_fcm_path(nudge_type):
+    db, _device, nudge = _db()
+    nudge.nudge_type = nudge_type
+    db.commit()
+    sender = FakeSender()
+    result = dispatch_due_notifications(db, sender=sender, now=datetime.utcnow())
+    assert result["sent"] == 1
+    assert sender.messages[0]["data"]["nudge_id"] == nudge.id
+
+
 def test_transient_fcm_failure_stays_pending_for_retry():
     db, _device, nudge = _db()
     sender = FakeSender(FcmDeliveryError("UNAVAILABLE", "temporary", permanent=False))

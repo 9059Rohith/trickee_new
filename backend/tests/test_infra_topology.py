@@ -20,3 +20,12 @@ def test_recurring_plan_worker_is_a_singleton_database_worker():
     normalized_variables = " ".join(variables.split())
     assert 'recurring-plans = { command = "recurring-plans", max = 1' in normalized_main
     assert 'recurring-plans = toset(["database-url"])' in normalized_variables
+
+
+def test_route_guidance_worker_is_bounded_with_database_and_maps_access():
+    root = Path(__file__).resolve().parents[2] / "infra" / "gcp"
+    main = " ".join((root / "main.tf").read_text(encoding="utf-8").split())
+    variables = " ".join((root / "variables.tf").read_text(encoding="utf-8").split())
+    assert 'route-guidance = { command = "route-guidance", max = 1' in main
+    assert 'route-guidance = toset(["database-url"])' in variables
+    assert 'contains(["notification-fcm", "route-guidance"], each.key)' in main

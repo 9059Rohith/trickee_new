@@ -100,7 +100,7 @@ locals {
     "monitoring.googleapis.com", "logging.googleapis.com", "cloudscheduler.googleapis.com",
     "firebase.googleapis.com", "fcm.googleapis.com"
   ])
-  roles       = toset(["api", "websocket", "relay", "live-state", "imu-rules", "trip-finalizer", "notification-fcm", "recurring-plans", "finalization-reconciler", "migrate", "archive", "retention"])
+  roles       = toset(["api", "websocket", "relay", "live-state", "imu-rules", "trip-finalizer", "notification-fcm", "recurring-plans", "route-guidance", "finalization-reconciler", "migrate", "archive", "retention"])
   redis_roles = toset(["relay", "live-state", "imu-rules", "trip-finalizer"])
   secret_access = {
     api                     = toset(["database-url", "jwt-secret", "google-oauth-client-id"])
@@ -111,6 +111,7 @@ locals {
     trip-finalizer          = toset(["database-url", "redis-ca"])
     notification-fcm        = toset(["database-url"])
     recurring-plans         = toset(["database-url"])
+    route-guidance          = toset(["database-url"])
     finalization-reconciler = toset(["database-url"])
     migrate                 = toset(["database-url"])
     archive                 = toset(["database-url"])

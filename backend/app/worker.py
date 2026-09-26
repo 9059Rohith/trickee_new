@@ -83,6 +83,27 @@ def run(role: str) -> None:
                 db.close()
             time.sleep(300.0)
         return
+    if role == "route-guidance":
+        from app.services.daily_plan_tools import daily_plan_tools
+        from app.services.route_guidance import evaluate_active_trip_guidance
+
+        while True:
+            db = SessionLocal()
+            try:
+                decision = evaluate_active_trip_guidance(db, tools=daily_plan_tools)
+                print(json.dumps({
+                    "severity": "INFO",
+                    "metric": "trickee_route_guidance_cycle",
+                    "scanned": decision.scanned,
+                    "committed": decision.committed,
+                    "queued": decision.queued,
+                    "provider_errors": decision.provider_errors,
+                    "stale_rejections": decision.stale_rejections,
+                }, separators=(",", ":")), flush=True)
+            finally:
+                db.close()
+            time.sleep(60.0)
+        return
     if role == "notification-fcm":
         from app.services.fcm_notifications import GoogleFcmSender, dispatch_due_notifications
         from app.services.daily_plan_tools import daily_plan_tools

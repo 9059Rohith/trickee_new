@@ -14,6 +14,7 @@ from app.database import get_db
 from app.models.entities import (
     Driver,
     MobileTripSession,
+    RouteGuidanceSnapshot,
     TelemetryEvent,
     TelemetryWindow,
     TripEnergyLabel,
@@ -40,6 +41,41 @@ def _require_trip_history_access(current_user: User, driver_id: str) -> None:
 
 def _iso_or_none(value: datetime | None) -> str | None:
     return utc_iso(value) if value else None
+
+
+@router.get("/guidance/active")
+def active_route_guidance(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    trip = db.query(MobileTripSession).filter(
+        MobileTripSession.user_id == current_user.id,
+        MobileTripSession.status == "active",
+    ).order_by(MobileTripSession.started_at.desc()).first()
+    if trip is None:
+        return ok(None, "No active trip")
+    snapshot = db.query(RouteGuidanceSnapshot).filter_by(trip_id=trip.id).order_by(
+        RouteGuidanceSnapshot.created_at.desc()
+    ).first()
+    if snapshot is None:
+        return ok({"trip_id": trip.id, "status": "unavailable"}, "Route guidance unavailable")
+    now = datetime.utcnow()
+    return ok({
+        "trip_id": trip.id,
+        "status": "stale" if snapshot.stale_after and snapshot.stale_after < now else "current",
+        "provider_source": snapshot.provider,
+        "route_id": snapshot.route_id,
+        "distance_km": snapshot.distance_km,
+        "duration_seconds": snapshot.duration_seconds,
+        "eta_at": utc_iso(snapshot.eta_at),
+        "predicted_arrival_soc_pct": snapshot.predicted_arrival_soc_pct,
+        "reserve_soc_pct": snapshot.reserve_soc_pct,
+        "confidence": snapshot.confidence,
+        "is_estimated": snapshot.is_estimated,
+        "evidence": snapshot.payload,
+        "created_at": utc_iso(snapshot.created_at),
+        "stale_after": utc_iso(snapshot.stale_after),
+    }, "Active route guidance")
 
 
 @router.get("/drivers/{driver_id}/trips")

@@ -207,6 +207,19 @@ class DailyPlanTools:
         except (httpx.HTTPError, KeyError, TypeError, ValueError):
             return []
 
+    def find_route_corridor_chargers(self, centers: list[dict[str, float]], radius_m: int = 5000) -> list[dict]:
+        """Fetch bounded, provider-confirmed places around at most five corridor centers."""
+        results: list[dict] = []
+        seen: set[str] = set()
+        for center in centers[:5]:
+            for charger in self.find_route_chargers(center, radius_m=radius_m):
+                key = str(charger.get("place_id") or charger.get("coordinates"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                results.append(charger)
+        return results[:25]
+
 
 def estimate_leg_energy(*, distance_m: int | None, starting_soc_pct: float | None, usable_kwh: float | None, wh_per_km: float | None, rate_source: str = "deterministic_wh_per_km") -> dict:
     if usable_kwh is None or usable_kwh <= 0:

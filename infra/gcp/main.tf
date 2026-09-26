@@ -187,6 +187,7 @@ locals {
     trip-finalizer   = { command = "trip-finalizer", max = var.worker_max_instances, concurrency = 1, timeout = "3600s" }
     notification-fcm = { command = "notification-fcm", max = 1, concurrency = 1, timeout = "3600s" }
     recurring-plans  = { command = "recurring-plans", max = 1, concurrency = 1, timeout = "3600s" }
+    route-guidance   = { command = "route-guidance", max = 1, concurrency = 1, timeout = "3600s" }
   }
 }
 
@@ -283,7 +284,7 @@ resource "google_cloud_run_v2_service" "role" {
         }
       }
       dynamic "env" {
-        for_each = each.key == "notification-fcm" ? [1] : []
+        for_each = contains(["notification-fcm", "route-guidance"], each.key) ? [1] : []
         content {
           name = "TRICKEE_GOOGLE_MAPS_API_KEY"
           value_source {

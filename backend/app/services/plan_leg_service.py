@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models.entities import DailyPlan, DailyPlanLeg, Driver, MobileTripSession, User, Vehicle
+from app.models.entities import DailyPlan, DailyPlanLeg, Driver, MobileTripSession, NotificationOutbox, User, Vehicle
 
 
 ArrivalOutcome = Literal["arrived", "skipped", "ended_elsewhere"]
@@ -121,4 +121,35 @@ def transition_leg_for_trip(
     leg.status = outcome
     leg.outcome_reason = reason
     leg.completed_at = trip.ended_at or datetime.utcnow()
+    if outcome in {"arrived", "skipped"}:
+        next_leg = db.query(DailyPlanLeg).filter(
+            DailyPlanLeg.plan_id == trip.planned_trip_id,
+            DailyPlanLeg.leg_index > trip.planned_leg_index,
+            DailyPlanLeg.status == "pending",
+        ).order_by(DailyPlanLeg.leg_index).first()
+        if next_leg is not None:
+            key = f"next-stop:{trip.planned_trip_id}:{next_leg.leg_index}"
+            if db.query(NotificationOutbox.id).filter_by(idempotency_key=key).first() is None:
+                now = trip.ended_at or datetime.utcnow()
+                db.add(NotificationOutbox(
+                    idempotency_key=key,
+                    user_id=trip.user_id,
+                    driver_id=trip.driver_id,
+                    vehicle_id=trip.vehicle_id,
+                    planned_trip_id=trip.planned_trip_id,
+                    nudge_type="next_stop_ready",
+                    title=f"Next stop: {next_leg.destination_text}"[:120],
+                    body="Review the next planned stop and start it when you are ready.",
+                    payload={
+                        "screen": "trip_start",
+                        "plan_id": trip.planned_trip_id,
+                        "leg_index": next_leg.leg_index,
+                        "destination_lat": next_leg.destination_lat,
+                        "destination_lng": next_leg.destination_lng,
+                    },
+                    status="pending",
+                    due_at=now,
+                    created_at=now,
+                    updated_at=now,
+                ))
     return leg

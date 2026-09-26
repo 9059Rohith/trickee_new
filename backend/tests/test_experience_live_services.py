@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +13,7 @@ from app.models.entities import (
     Driver,
     Fleet,
     MobileTripSession,
+    RouteGuidanceSnapshot,
     TelemetryEvent,
     TelemetryWindow,
     TripEnergyLabel,
@@ -152,6 +153,33 @@ def test_charger_recommendations_use_provider_and_low_soc_decision():
     assert data["recommended_charger"]["lat"] == 21.171
     assert data["recommended_charger"]["availability_confirmed"] is False
     assert data["provider_source"] == "google_places"
+
+
+def test_active_guidance_returns_latest_snapshot_with_truthful_freshness():
+    (driver_id, vehicle_id), headers = seed_driver()
+    db = TestSession()
+    user = db.query(User).filter_by(driver_id=driver_id).one()
+    trip = MobileTripSession(
+        user_id=user.id, driver_id=driver_id, vehicle_id=vehicle_id,
+        started_at=datetime.utcnow(), status="active", finalization_state="collecting",
+        destination_text="Office", destination_lat=21.20, destination_lng=72.90,
+    )
+    db.add(trip); db.flush()
+    db.add(RouteGuidanceSnapshot(
+        trip_id=trip.id, provider="google_routes", route_id="route-1",
+        origin_lat=21.17, origin_lng=72.83, destination_lat=21.20, destination_lng=72.90,
+        distance_km=8.2, duration_seconds=900, predicted_arrival_soc_pct=62,
+        reserve_soc_pct=15, confidence=0.85, is_estimated=True,
+        stale_after=datetime.utcnow() + timedelta(minutes=5),
+        payload={"provider_source": "google_routes"},
+    ))
+    db.commit(); db.close()
+
+    response = client.get("/api/v1/guidance/active", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == "current"
+    assert response.json()["data"]["provider_source"] == "google_routes"
+    assert response.json()["data"]["is_estimated"] is True
 
 
 def test_assistant_uses_llm_boundary_with_authoritative_vehicle_summary():

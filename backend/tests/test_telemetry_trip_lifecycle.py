@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
-from app.models.entities import DailyPlan, DailyPlanLeg, DeviceTripUploadCursor, Driver, Fleet, MobileTripSession, SOCReading, TripFinalization, User, Vehicle
+from app.models.entities import DailyPlan, DailyPlanLeg, DeviceTripUploadCursor, Driver, Fleet, MobileTripSession, NotificationOutbox, SOCReading, TripFinalization, User, Vehicle
 from app.services.auth import create_access_token
 
 engine = create_engine("sqlite:///./test_trip_lifecycle.db", connect_args={"check_same_thread": False})
@@ -112,6 +112,42 @@ def test_planned_completion_requires_explicit_arrival_outcome(identity):
         "location": {"lat": 21.25, "lng": 72.91},
     })
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(("outcome", "expected_nudges"), [("arrived", 1), ("skipped", 1), ("ended_elsewhere", 0)])
+def test_planned_completion_queues_next_stop_once_only_when_progressing(identity, outcome, expected_nudges):
+    trip_id, plan_id = start_planned(identity)
+    with Session() as db:
+        db.add(DailyPlanLeg(
+            plan_id=plan_id,
+            leg_index=1,
+            destination_text="Depot",
+            destination_lat=21.21,
+            destination_lng=72.89,
+            status="pending",
+        ))
+        db.commit()
+
+    body = {
+        "ending_soc": 80,
+        "final_sequence_no": 0,
+        "idempotency_key": f"next-stop-{outcome}",
+        "arrival_outcome": outcome,
+        "outcome_reason": "tester selected outcome",
+        "location": {"lat": 21.25, "lng": 72.91},
+    }
+    first = client.post(f"/api/v2/trips/{trip_id}/complete", headers=identity["headers"], json=body)
+    replay = client.post(f"/api/v2/trips/{trip_id}/complete", headers=identity["headers"], json=body)
+
+    assert first.status_code == replay.status_code == 200
+    with Session() as db:
+        nudges = db.query(NotificationOutbox).filter_by(
+            planned_trip_id=plan_id,
+            nudge_type="next_stop_ready",
+        ).all()
+        assert len(nudges) == expected_nudges
+        if nudges:
+            assert nudges[0].payload["leg_index"] == 1
 
 
 def test_charging_wait_resumes_same_trip_with_one_post_charge_soc(identity):
