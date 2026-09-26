@@ -8,8 +8,8 @@ param(
     [string]$ApiOrigin = 'https://trickee-pilot-api-pylmkxap6a-el.a.run.app',
     [string]$WebSocketOrigin = 'https://trickee-pilot-websocket-pylmkxap6a-el.a.run.app',
     [switch]$AllowWithoutFirebase,
-    [string]$ExpectedVersionName = '1.0.21',
-    [int]$ExpectedVersionCode = 23
+    [string]$ExpectedVersionName = '1.0.22',
+    [int]$ExpectedVersionCode = 24
 )
 
 $ErrorActionPreference = 'Stop'

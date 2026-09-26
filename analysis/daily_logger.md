@@ -681,3 +681,10 @@
   Tester must update in place, not uninstall or clear data. Online/offline
   charging-stop physical canaries remain. Reconcile the direct Cloud Run
   image changes in the next reviewed Terraform plan.
+
+## 2026-09-26 — plan-aware guidance 1.0.22 source candidate
+
+- Implemented destination-aware trip start, planned-leg launch, recurring Plan My Day templates, immutable route/charging guidance snapshots, safe notification deep links, arrival outcomes, and explicit voice-entry failures. Notifications never start GPS collection by themselves.
+- Fixed the idle charger-map defect found by ADB on tester build `1.0.21 (23)`: the screen had required active-trip telemetry before requesting chargers. The candidate now requests a timestamped one-shot phone location while idle, prefers active telemetry during trips, labels locations older than five minutes, and never sends a fabricated fallback coordinate to the charger API.
+- Prepared package `com.trickee.gpsdriverapp` as `1.0.22 (24)` with target SDK 36 and release notes. Added Firebase environment-variable support so CI/release builds can use transient secrets without committing them.
+- Fresh local evidence: backend `244 passed`; Alembic upgrade/downgrade `2 passed`; mobile `30 suites / 119 tests`; TypeScript, ESLint, Terraform formatting/validation, release identity, and public configuration checks passed. Android release lint hit a Windows CMake path-length loop only in the long worktree path; retry from a short mapped path is required. Signed AAB/APK, handset acceptance, production migration/deployment, and Play Internal publication remain pending.

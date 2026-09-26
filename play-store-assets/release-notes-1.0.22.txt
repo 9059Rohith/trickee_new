@@ -1,0 +1,8 @@
+GPS Driver 1.0.22
+
+- Nearby chargers now load from the phone's current location even before a trip starts.
+- Trip start can use a planned stop, a typed destination, a map-selected point, or no destination.
+- Plan My Day supports recurring weekdays and direct trip start from each scheduled leg.
+- Voice destination entry now reports permission, recognizer, timeout, and recognition errors clearly.
+- Route guidance and charging recommendations are stored as auditable snapshots.
+- Notifications can open the relevant plan or trip without starting collection automatically.

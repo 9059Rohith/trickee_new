@@ -60,9 +60,13 @@ def firebasePropertyNames = [
     "TRICKEE_FIREBASE_PROJECT_ID",
     "TRICKEE_FIREBASE_SENDER_ID",
 ]
+def firebaseValue = { name ->
+    project.findProperty(name)?.toString()
+        ?: externalSigningProperties.getProperty(name)
+        ?: System.getenv(name)
+}
 def hasFirebaseConfig = firebasePropertyNames.every {
-    def value = project.findProperty(it)?.toString()
-        ?: externalSigningProperties.getProperty(it)
+    def value = firebaseValue(it)
     value != null && !value.trim().isEmpty()
 }
 def allowReleaseWithoutFirebase = providers.gradleProperty("TRICKEE_ALLOW_RELEASE_WITHOUT_FCM")
@@ -101,16 +105,16 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        versionCode 23
-        versionName "1.0.21"
+        versionCode 24
+        versionName "1.0.22"
         manifestPlaceholders = [usesCleartextTraffic: "false"]
         buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", "\"${project.findProperty('TRICKEE_GOOGLE_WEB_CLIENT_ID') ?: ''}\""
         buildConfigField "String", "API_ORIGIN", "\"${project.findProperty('TRICKEE_API_ORIGIN') ?: ''}\""
         buildConfigField "String", "WEBSOCKET_ORIGIN", "\"${project.findProperty('TRICKEE_WEBSOCKET_ORIGIN') ?: project.findProperty('TRICKEE_API_ORIGIN') ?: ''}\""
-        buildConfigField "String", "FIREBASE_API_KEY", "\"${project.findProperty('TRICKEE_FIREBASE_API_KEY') ?: externalSigningProperties.getProperty('TRICKEE_FIREBASE_API_KEY') ?: ''}\""
-        buildConfigField "String", "FIREBASE_APP_ID", "\"${project.findProperty('TRICKEE_FIREBASE_APP_ID') ?: externalSigningProperties.getProperty('TRICKEE_FIREBASE_APP_ID') ?: ''}\""
-        buildConfigField "String", "FIREBASE_PROJECT_ID", "\"${project.findProperty('TRICKEE_FIREBASE_PROJECT_ID') ?: externalSigningProperties.getProperty('TRICKEE_FIREBASE_PROJECT_ID') ?: ''}\""
-        buildConfigField "String", "FIREBASE_SENDER_ID", "\"${project.findProperty('TRICKEE_FIREBASE_SENDER_ID') ?: externalSigningProperties.getProperty('TRICKEE_FIREBASE_SENDER_ID') ?: ''}\""
+        buildConfigField "String", "FIREBASE_API_KEY", "\"${firebaseValue('TRICKEE_FIREBASE_API_KEY') ?: ''}\""
+        buildConfigField "String", "FIREBASE_APP_ID", "\"${firebaseValue('TRICKEE_FIREBASE_APP_ID') ?: ''}\""
+        buildConfigField "String", "FIREBASE_PROJECT_ID", "\"${firebaseValue('TRICKEE_FIREBASE_PROJECT_ID') ?: ''}\""
+        buildConfigField "String", "FIREBASE_SENDER_ID", "\"${firebaseValue('TRICKEE_FIREBASE_SENDER_ID') ?: ''}\""
     }
 
     signingConfigs {

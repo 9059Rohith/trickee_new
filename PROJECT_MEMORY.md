@@ -1,6 +1,14 @@
 # GPS Driver project context
 
-Updated: 2026-09-25. Repository: `gpsdriver`, current isolated worktree branch `feature/live-route-charger-soc-nudges`.
+Updated: 2026-09-26. Repository: `gpsdriver`, current isolated worktree branch `feature/plan-aware-trip-guidance-v1.0.22`.
+
+## Plan-aware trip guidance candidate (2026-09-26)
+
+- Android `1.0.22 (24)` adds an explicit trip-start decision: use a planned leg, type or speak a destination, select a point on the map, or continue without a destination. A backend trip is created before the native collector starts, and no notification starts collection automatically.
+- Plan My Day now persists ordered legs and recurring weekdays, materializes stable daily occurrences, and can start the selected leg directly. The backend stores the planned destination separately from the actual trip endpoint and records immutable route/charging guidance snapshots for audit.
+- Live Map no longer depends on active-trip telemetry to find chargers. When idle it requests a timestamped one-shot phone location; during a trip it prefers live telemetry. Locations older than five minutes are labeled as last known, and the app does not query chargers from a fabricated fallback coordinate.
+- Voice destination entry now surfaces permission, unavailable-recognizer, timeout, and recognition failures, with typed entry always retained. Firebase release values may be injected through process environment variables, avoiding secret files in the repository.
+- Fresh source gates: backend `244/244`, Alembic isolated upgrade/downgrade `2/2`, mobile Jest `119/119`, TypeScript, ESLint, Terraform formatting/validation, release identity test, and public configuration verifier pass. The first Android release-lint attempt exposed a Windows CMake path-length failure in the long worktree path; the source itself did not fail compilation. Short-path Android verification, signed artifacts, physical handset canary, cloud deployment/migration, and Play publication remain pending and must not be claimed yet.
 
 ## Actionable live trip nudges (2026-09-25)
 

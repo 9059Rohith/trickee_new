@@ -13,9 +13,9 @@ class AppIdentityTest {
     }
 
     @Test
-    fun appVersionMatchesChargingStopRelease() {
-        assertEquals(19, BuildConfig.VERSION_CODE)
-        assertEquals("1.0.17", BuildConfig.VERSION_NAME)
+    fun appVersionMatchesPlanAwareGuidanceRelease() {
+        assertEquals(24, BuildConfig.VERSION_CODE)
+        assertEquals("1.0.22", BuildConfig.VERSION_NAME)
     }
 
     @Test
