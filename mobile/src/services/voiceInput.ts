@@ -1,8 +1,22 @@
 import { NativeEventEmitter, NativeModules, Platform } from "react-native";
-export { mergeVoiceTranscript, voiceErrorMessage } from "./voiceInputPolicy";
+export {
+  createVoiceStartGuard,
+  mergeVoiceTranscript,
+  voiceErrorMessage,
+  voiceSubscriptionFailureMessage,
+} from "./voiceInputPolicy";
 
 export type VoiceInputEvent = {
-  type: "listening" | "partial" | "final" | "processing" | "end" | "error";
+  type:
+    | "starting"
+    | "listening"
+    | "partial"
+    | "final"
+    | "processing"
+    | "completed"
+    | "failed"
+    | "end"
+    | "error";
   text?: string;
   code?: string;
   message?: string;

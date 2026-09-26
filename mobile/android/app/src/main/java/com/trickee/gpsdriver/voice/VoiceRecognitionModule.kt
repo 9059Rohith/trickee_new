@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -22,7 +24,16 @@ class VoiceRecognitionModule(
     private val context: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(context), RecognitionListener, LifecycleEventListener {
     private var recognizer: SpeechRecognizer? = null
-    private var usingOnDevice = false
+    private var recognizerMode = RecognizerMode.PLATFORM
+    private var fallbackAttempted = false
+    private var requestedLocale = "en-IN"
+    private val session = VoiceSessionPolicy()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val readyTimeout = Runnable {
+        val code = session.readyTimeout() ?: return@Runnable
+        emit("failed", code = code)
+        releaseRecognizer(resetSession = false)
+    }
 
     init {
         context.addLifecycleEventListener(this)
@@ -59,32 +70,33 @@ class VoiceRecognitionModule(
                 }
                 VoiceStartDecision.START -> Unit
             }
+            if (!session.begin()) {
+                promise.reject("recognizer_busy", "A voice-entry session is already active")
+                return@runOnUiThread
+            }
             try {
                 releaseRecognizer()
-                recognizer = if (
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                    SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
-                ) {
-                    usingOnDevice = true
-                    SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-                } else {
-                    usingOnDevice = false
-                    SpeechRecognizer.createSpeechRecognizer(context)
-                }.also { it.setRecognitionListener(this) }
-
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale.ifBlank { "en-IN" })
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                }
-                recognizer?.startListening(intent)
+                session.begin()
+                requestedLocale = locale.ifBlank { "en-IN" }
+                fallbackAttempted = false
+                // Android does not expose trustworthy locale capability data on all supported
+                // versions. Prefer the platform recognizer unless the requested locale has been
+                // positively verified; this avoids selecting an en-US-only offline recognizer for en-IN.
+                recognizerMode = VoiceRecognitionPolicy.selectRecognizerMode(
+                    apiLevel = Build.VERSION.SDK_INT,
+                    requestedLocaleSupported = false,
+                    onDeviceAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                        SpeechRecognizer.isOnDeviceRecognitionAvailable(context),
+                )
+                startRecognizer(recognizerMode)
+                emit("starting", onDevice = recognizerMode == RecognizerMode.ON_DEVICE)
                 promise.resolve(Arguments.createMap().apply {
                     putBoolean("started", true)
-                    putBoolean("on_device", usingOnDevice)
+                    putBoolean("on_device", recognizerMode == RecognizerMode.ON_DEVICE)
                 })
             } catch (error: Exception) {
-                releaseRecognizer()
+                session.failed()
+                releaseRecognizer(resetSession = false)
                 promise.reject("recognizer_unavailable", error.message ?: "Could not start speech recognition", error)
             }
         }
@@ -93,6 +105,10 @@ class VoiceRecognitionModule(
     @ReactMethod
     fun stop(promise: Promise) {
         UiThreadUtil.runOnUiThread {
+            if (session.state == VoiceSessionState.STARTING || session.state == VoiceSessionState.LISTENING) {
+                session.processing()
+                emit("processing")
+            }
             recognizer?.stopListening()
             promise.resolve(null)
         }
@@ -108,22 +124,48 @@ class VoiceRecognitionModule(
         }
     }
 
-    override fun onReadyForSpeech(params: Bundle?) = emit("listening", onDevice = usingOnDevice)
+    override fun onReadyForSpeech(params: Bundle?) {
+        mainHandler.removeCallbacks(readyTimeout)
+        session.listening()
+        emit("listening", onDevice = recognizerMode == RecognizerMode.ON_DEVICE)
+    }
     override fun onBeginningOfSpeech() = Unit
     override fun onRmsChanged(rmsdB: Float) = Unit
     override fun onBufferReceived(buffer: ByteArray?) = Unit
-    override fun onEndOfSpeech() = emit("processing")
+    override fun onEndOfSpeech() {
+        session.processing()
+        emit("processing")
+    }
 
     override fun onError(error: Int) {
-        emit("error", code = VoiceRecognitionPolicy.errorCode(error))
-        releaseRecognizer()
+        mainHandler.removeCallbacks(readyTimeout)
+        val code = VoiceRecognitionPolicy.errorCode(error)
+        if (VoiceRecognitionPolicy.shouldFallback(code, recognizerMode, fallbackAttempted)) {
+            fallbackAttempted = true
+            releaseRecognizer(resetSession = false)
+            session.reset()
+            session.begin()
+            recognizerMode = RecognizerMode.PLATFORM
+            try {
+                startRecognizer(recognizerMode)
+                emit("starting", code = "platform_fallback", onDevice = false)
+                return
+            } catch (_: Exception) {
+                // The stable failure below is actionable without exposing device internals.
+            }
+        }
+        session.failed()
+        emit("failed", code = code)
+        releaseRecognizer(resetSession = false)
         emit("end")
     }
 
     override fun onResults(results: Bundle?) {
+        mainHandler.removeCallbacks(readyTimeout)
         val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-        if (!text.isNullOrBlank()) emit("final", text = text)
-        releaseRecognizer()
+        session.completed()
+        emit("completed", text = text)
+        releaseRecognizer(resetSession = false)
         emit("end")
     }
 
@@ -145,10 +187,29 @@ class VoiceRecognitionModule(
             })
     }
 
-    private fun releaseRecognizer() {
+    private fun startRecognizer(mode: RecognizerMode) {
+        recognizer = if (mode == RecognizerMode.ON_DEVICE && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+        } else {
+            SpeechRecognizer.createSpeechRecognizer(context)
+        }.also { it.setRecognitionListener(this) }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, requestedLocale)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+        }
+        recognizer?.startListening(intent)
+        mainHandler.removeCallbacks(readyTimeout)
+        mainHandler.postDelayed(readyTimeout, READY_TIMEOUT_MS)
+    }
+
+    private fun releaseRecognizer(resetSession: Boolean = true) {
+        mainHandler.removeCallbacks(readyTimeout)
         recognizer?.destroy()
         recognizer = null
-        usingOnDevice = false
+        recognizerMode = RecognizerMode.PLATFORM
+        if (resetSession) session.reset()
     }
 
     override fun onHostResume() = Unit
@@ -165,4 +226,8 @@ class VoiceRecognitionModule(
 
     @ReactMethod fun addListener(eventName: String) = Unit
     @ReactMethod fun removeListeners(count: Int) = Unit
+
+    companion object {
+        private const val READY_TIMEOUT_MS = 8_000L
+    }
 }

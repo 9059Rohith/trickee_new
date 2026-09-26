@@ -6,6 +6,24 @@ export function mergeVoiceTranscript(existing: string, transcript: string): stri
   return `${left} ${right}`;
 }
 
+export function createVoiceStartGuard() {
+  let active = false;
+  return {
+    tryStart(): boolean {
+      if (active) return false;
+      active = true;
+      return true;
+    },
+    release(): void {
+      active = false;
+    },
+  };
+}
+
+export function voiceSubscriptionFailureMessage(): string {
+  return "Voice entry is not connected in this app build. Continue by typing.";
+}
+
 export function voiceErrorMessage(code?: string): string {
   switch (code) {
     case "permission_denied":
@@ -20,6 +38,8 @@ export function voiceErrorMessage(code?: string): string {
       return "I could not hear a clear schedule. Try again or continue by typing.";
     case "recognizer_busy":
       return "The phone's voice recognizer is busy. Wait a moment and try again.";
+    case "start_timeout":
+      return "The microphone did not become ready. Try again or continue by typing.";
     default:
       return "Voice entry stopped unexpectedly. Try again or continue by typing.";
   }
