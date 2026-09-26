@@ -60,6 +60,8 @@ While a destination-aware trip is active, route guidance is recalculated from th
 
 Charging candidates must be near a route corridor or reachable detour, not merely near the destination. A station listing may be described as verified only when the place provider confirms it. Live connector availability, occupancy, price, and booking are never claimed without a provider that supplies those fields.
 
+Nearby-charger browsing is available outside an active trip, but it must use a fresh one-shot phone location. If the one-shot request fails, the UI may show results from the last accepted telemetry location only when it labels them `last known`, displays the observation time, and does not describe them as current. Destination-dependent range advice is omitted outside a destination-aware trip rather than calculated from a synthetic distance.
+
 Route/provider failure degrades guidance to unavailable or stale. It never blocks starting, collecting, uploading, or ending a GPS trip.
 
 ## User Flows
@@ -202,6 +204,7 @@ It does not claim learned personal preferences. Notification outcomes are stored
 - Notification permission denial is visible and does not invalidate the plan.
 - Missing Firebase token leaves the server notification pending until expiry; local reminders remain independent.
 - Stale location, SOC, route, or charger data is marked stale or unavailable.
+- Outside an active trip, charger lookup uses a fresh one-shot location or visibly time-stamped last-known coordinates; it never silently treats previous-trip telemetry as current.
 - A provider response without source evidence cannot be displayed as live traffic or live charger availability.
 - No trip starts automatically, and no navigation app opens without a driver action.
 - Existing one-second Room capture, explicit acknowledgements, retry logic, and finalization behavior remain unchanged.
@@ -221,6 +224,7 @@ Implementation follows test-driven development.
 - planned arrival, skipped, and ended-elsewhere states advance correctly;
 - recurring-template editing does not mutate an already materialized day;
 - provider and permission failures degrade without blocking trip start.
+- charger browsing outside a trip uses a fresh one-shot location and labels any allowed last-known fallback with its age;
 - voice module absence and recognizer unavailability are visible rather than silently ignored;
 - unsupported `en-IN` on-device recognition falls back once to the platform recognizer;
 - repeated taps cannot create concurrent recognition sessions;
