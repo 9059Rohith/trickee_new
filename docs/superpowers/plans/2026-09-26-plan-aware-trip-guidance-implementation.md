@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship GPS Driver 1.0.20 (code 22) with reliable voice entry, destination-aware trip start, Plan My Day linkage, recurring schedules, truthful nearby chargers, contextual guidance notifications, and a verified internal-testing release.
+**Goal:** Ship GPS Driver 1.0.22 (code 24) with reliable voice entry, destination-aware trip start, Plan My Day linkage, recurring schedules, truthful nearby chargers, contextual guidance notifications, and a verified internal-testing release.
 
 **Architecture:** Add backward-compatible plan, leg, endpoint, recurrence, and guidance persistence to the existing FastAPI/PostgreSQL backend. Expose narrow APIs that the React Native app uses through pure policy services and a dedicated trip-start screen, while preserving the native Room telemetry pipeline unchanged. Deploy additive migrations and backend workers before releasing the Android client.
 
@@ -22,7 +22,7 @@
 - Voice is optional, stores no raw audio, and never logs transcript content.
 - New code follows test-driven development: observe RED, implement minimally, observe GREEN, then run the full owning suite.
 - Do not store credentials, tokens, signing secrets, private keys, or tester PII in source, logs, plans, or artifacts.
-- Release target is `versionName 1.0.20`, `versionCode 22`, package `com.trickee.gpsdriverapp`.
+- Release target is `versionName 1.0.22`, `versionCode 24`, package `com.trickee.gpsdriverapp`.
 
 ## Review Focus
 
@@ -244,23 +244,23 @@
 - [ ] **Step 3: Implement one-shot lookup and truthful labels**, remove the synthetic 10 km destination assumption, and keep current-location station browsing available without a trip.
 - [ ] **Step 4: Run complete Jest suite and lint**, then commit `fix(mobile): make charger location freshness explicit`.
 
-### Task 10: Integrate, migrate, and build version 1.0.20
+### Task 10: Integrate, migrate, and build version 1.0.22
 
 **Files:**
 - Modify: `mobile/android/app/build.gradle`
-- Create: `play-store-assets/release-notes-1.0.20.txt`
+- Create: `play-store-assets/release-notes-1.0.22.txt`
 - Modify: `PROJECT_MEMORY.md`
 - Modify: `analysis/daily_logger.md`
 - Test: all backend, mobile, Android, migration, and infrastructure suites.
 
 **Interfaces:**
 - Consumes: all prior tasks.
-- Produces: signed `Trickee-GPS-Driver-public-1.0.20-22.aab`, matching APK and metadata.
+- Produces: signed `Trickee-GPS-Driver-public-1.0.22-24.aab`, matching APK and metadata.
 
 - [ ] **Step 1: Run baseline-to-head migration against a disposable PostgreSQL database** and verify existing trips/plans survive, new constraints hold, and rollback behavior matches the spec.
 - [ ] **Step 2: Run `python -m pytest tests -q` from `backend`, `npm test -- --runInBand` and `npm run lint` from `mobile`, Android `testReleaseUnitTest lintRelease`, and `python infra/gcp/validate_architecture.py`**; record every count and failure.
 - [ ] **Step 3: Fix only failures attributable to this work through new failing regression tests**, rerunning the owning suite after each repair.
-- [ ] **Step 4: Increment to version 1.0.20/code 22, write tester-facing release notes, and run `scripts/verify-public-release-config.ps1`**.
+- [ ] **Step 4: Increment to version 1.0.22/code 24, write tester-facing release notes, and run `scripts/verify-public-release-config.ps1`**.
 - [ ] **Step 5: Run `scripts/build-public-release.ps1`**, verify AAB/APK hashes, package, version, min/target SDK, signing certificate identity, and absence of cleartext/debuggable flags.
 - [ ] **Step 6: Install the APK on a physical Android device and execute planned/manual/destinationless, voice, notification, offline, reboot, charging, and trip-finalization checks**; do not promote with any failed scenario.
 - [ ] **Step 7: Update the durable project log with exact evidence and commit `chore(release): prepare GPS Driver 1.0.20`**.
@@ -276,6 +276,6 @@
 - [ ] **Step 1: Capture current GCP project/account, Cloud Run revisions, database migration revision, Terraform plan, and rollback targets** without mutating production.
 - [ ] **Step 2: Apply the reviewed additive Terraform/backend release, run the migrate job once, and verify API, recurring-plan, notification, and route-guidance worker health** before shifting full traffic.
 - [ ] **Step 3: Run authenticated production smoke tests** for legacy trip start, plan-aware start validation, next-leg lookup, notification outbox, and route-provider degradation.
-- [ ] **Step 4: Upload the verified AAB to the existing Play internal-testing track with the 1.0.20 notes**, confirm tester availability, package/version/signing identity, and retain the previous release for rollback.
+- [ ] **Step 4: Upload the verified AAB to the existing Play internal-testing track with the 1.0.22 notes**, confirm tester availability, package/version/signing identity, and retain the previous release for rollback.
 - [ ] **Step 5: Perform one controlled tester canary**, reconciling device Room state, Cloud SQL telemetry, plan-leg status, destination/endpoint separation, notification outcome, and absence of crash loops.
 - [ ] **Step 6: Report the exact production revision/digest, Play release state, automated/physical test evidence, known limitations, and rollback commands; do not claim completion if Cloud SQL, device, or Play evidence is missing.**
