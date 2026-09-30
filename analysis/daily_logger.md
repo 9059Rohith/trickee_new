@@ -704,3 +704,11 @@
 - Typed addresses can be searched with the keyboard action or **Find on map**. A completed voice transcript uses the same search path. Successful matches open the OpenStreetMap picker at the resolved point; the pin remains movable.
 - Preserved destination provenance: untouched provider coordinates remain `search_result`, moved or manually selected coordinates become `map_pin`, and editing an address invalidates its old coordinates. Parent rerenders no longer cancel an active voice-recognition subscription, and late search responses cannot replace newer user input.
 - Verification: backend full pytest `247 passed`; focused mobile feature tests `13 passed`; full mobile Jest `32 suites / 127 tests`; TypeScript and ESLint pass. No deployment, signed bundle, Play release, or physical-device verification was performed for this source patch.
+
+## 2026-09-30 — trip-start search deployed and Android 1.0.23 built
+
+- Pushed source patch `0d40f7b` and release commit `8cd1dfba258d8df40b3a646876df9217d78cc61a` on `feature/plan-aware-trip-guidance-v1.0.22`.
+- Cloud Build `e37dfcde-aec9-40db-905c-7cf078dc28f8` succeeded with backend digest `sha256:d94d78186dedee00b2048bb31cd018e15b953aabc224664b9b3b5e6e546ab2ad`. Cloud Run API revision `trickee-pilot-api-00020-qdq` serves 100% traffic, `/health` is `ok`, the destination-resolution route appears in public OpenAPI, and a live Google Places canary returned coordinates. No schema migration was needed.
+- Built signed Android `1.0.23 (25)` from exact source commit `8cd1dfb` using the physical short checkout `E:\g23`; this avoided the Windows CMake path-length loop seen in the long checkout. Package is `com.trickee.gpsdriverapp`, target SDK 36, remote Firebase configuration is present, and the registered Play upload certificate SHA-1 was independently confirmed.
+- Verified AAB: `C:\Users\AJEYA\AppData\Local\Trickee\gpsdriver-public-android-build\release\Trickee-GPS-Driver-public-1.0.23-25.aab`; size 30,213,210 bytes; SHA-256 `48EBE3AEDD8E24D502281F26090302A7C99ECA07452C562CC2423B98E94E7AC8`. APK SHA-256 is `612C5B11CF0DDE52D8FB72E38C37448C36117AB9BDE08EBA7C7F6332A6AB39DE`.
+- Google Play Internal Testing upload and physical-handset canary remain separate external gates and are not claimed here. Install as an in-place update; do not uninstall or clear data if local telemetry may be pending.

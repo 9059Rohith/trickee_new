@@ -2,6 +2,14 @@
 
 Updated: 2026-09-30. Repository: `gpsdriver`, current isolated worktree branch `feature/plan-aware-trip-guidance-v1.0.22`.
 
+## Trip-start search production release (2026-09-30)
+
+- Source patch `0d40f7b` and release commit `8cd1dfba258d8df40b3a646876df9217d78cc61a` are pushed on `feature/plan-aware-trip-guidance-v1.0.22`.
+- Cloud Build `e37dfcde-aec9-40db-905c-7cf078dc28f8` produced immutable backend digest `sha256:d94d78186dedee00b2048bb31cd018e15b953aabc224664b9b3b5e6e546ab2ad`. API revision `trickee-pilot-api-00020-qdq` serves 100% traffic with release SHA `8cd1dfb`. Public health is `ok`, OpenAPI exposes `/api/v1/daily-plans/resolve-destination`, a direct Google Places provider canary returned valid coordinates, and no database migration was required.
+- Signed Android package `com.trickee.gpsdriverapp` is `1.0.23 (25)`, target SDK 36. The strict build and independent `jarsigner`/certificate checks passed; registered upload-certificate SHA-1 is `1F:B5:89:39:0D:03:53:49:80:A2:90:B1:80:CE:13:B0:8F:48:07:9A`; remote Firebase configuration is present.
+- AAB: `C:\Users\AJEYA\AppData\Local\Trickee\gpsdriver-public-android-build\release\Trickee-GPS-Driver-public-1.0.23-25.aab`, 30,213,210 bytes, SHA-256 `48EBE3AEDD8E24D502281F26090302A7C99ECA07452C562CC2423B98E94E7AC8`. APK SHA-256 is `612C5B11CF0DDE52D8FB72E38C37448C36117AB9BDE08EBA7C7F6332A6AB39DE`.
+- Source gates passed: backend `247 passed`, mobile Jest `32 suites / 127 tests`, TypeScript, ESLint, Android release identity/configuration, and the signed release build. Google Play upload and physical-handset acceptance are not claimed; testers must update in place and must not clear app data while telemetry may remain queued.
+
 ## Trip-start address search patch (2026-09-30)
 
 - Manual trip destinations now support explicit typed-address search and completed voice-transcript search. The authenticated backend resolves text with the existing server-side Google Places adapter, so the Maps key is not shipped in the Android app.
