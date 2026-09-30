@@ -5,9 +5,16 @@ import { canConfirmMapSelection } from "../services/planConfirmationState";
 import OpenStreetMap from "./OpenStreetMap";
 
 type Coordinates = { lat: number; lng: number };
-type Props = { visible: boolean; initialCoordinates: Coordinates; fallbackUsed: boolean; onConfirm: (coordinates: Coordinates) => void; onClose: () => void };
+type Props = {
+  visible: boolean;
+  initialCoordinates: Coordinates;
+  initialSource?: "device_location" | "search_result";
+  fallbackUsed: boolean;
+  onConfirm: (coordinates: Coordinates, adjusted: boolean) => void;
+  onClose: () => void;
+};
 
-const LocationPickerModal: React.FC<Props> = ({ visible, initialCoordinates, fallbackUsed, onConfirm, onClose }) => {
+const LocationPickerModal: React.FC<Props> = ({ visible, initialCoordinates, initialSource = "device_location", fallbackUsed, onConfirm, onClose }) => {
   const [selected, setSelected] = useState(initialCoordinates);
   const [hasMoved, setHasMoved] = useState(false);
   useEffect(() => {
@@ -22,9 +29,9 @@ const LocationPickerModal: React.FC<Props> = ({ visible, initialCoordinates, fal
       <View style={styles.mapWrap}><OpenStreetMap key={`${visible}-${initialCoordinates.lat}-${initialCoordinates.lng}`} initialLatitude={initialCoordinates.lat} initialLongitude={initialCoordinates.lng} initialZoom={16} fill borderRadius={0} pickerMode onCenterChange={coordinates => { setSelected(coordinates); setHasMoved(true); }} /></View>
       <View style={styles.footer}>
         <Text style={styles.hint}>Move the map until the yellow pin is exactly over the entrance.</Text>
-        {fallbackUsed ? <Text accessibilityLiveRegion="polite" style={styles.warning}>Live GPS is unavailable. The starting map position is only a preview; move the pin before confirming.</Text> : <Text style={styles.evidence}>Started from the phone's latest available location.</Text>}
+        {fallbackUsed ? <Text accessibilityLiveRegion="polite" style={styles.warning}>Live GPS is unavailable. The starting map position is only a preview; move the pin before confirming.</Text> : <Text style={styles.evidence}>{initialSource === "search_result" ? "Map centered on the matched address. Confirm it or move the pin." : "Started from the phone's latest available location."}</Text>}
         <Text style={styles.coords}>{selected.lat.toFixed(5)}, {selected.lng.toFixed(5)}</Text>
-        <TouchableOpacity testID="location-picker-confirm" accessibilityRole="button" accessibilityLabel="Confirm selected stop location" accessibilityState={{ disabled: !confirmEnabled }} disabled={!confirmEnabled} style={[styles.confirm, !confirmEnabled && styles.confirmDisabled]} onPress={() => onConfirm(selected)}><Text style={[styles.confirmText, !confirmEnabled && styles.confirmTextDisabled]}>{confirmEnabled ? "Confirm this location" : "Move the pin to choose a location"}</Text></TouchableOpacity>
+        <TouchableOpacity testID="location-picker-confirm" accessibilityRole="button" accessibilityLabel="Confirm selected stop location" accessibilityState={{ disabled: !confirmEnabled }} disabled={!confirmEnabled} style={[styles.confirm, !confirmEnabled && styles.confirmDisabled]} onPress={() => onConfirm(selected, hasMoved)}><Text style={[styles.confirmText, !confirmEnabled && styles.confirmTextDisabled]}>{confirmEnabled ? "Confirm this location" : "Move the pin to choose a location"}</Text></TouchableOpacity>
       </View>
     </SafeAreaView>
   </Modal>;

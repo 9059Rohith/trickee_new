@@ -13,16 +13,27 @@ import {
 type Props = {
   value: string;
   onChangeText: (value: string) => void;
+  onFinalText?: (value: string) => void;
   label?: string;
   locale?: string;
 };
 
-const VoiceInputButton: React.FC<Props> = ({ value, onChangeText, label = "Speak instead", locale = "en-IN" }) => {
+const VoiceInputButton: React.FC<Props> = ({ value, onChangeText, onFinalText, label = "Speak instead", locale = "en-IN" }) => {
   const [listening, setListening] = useState(false);
   const [starting, setStarting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const baseText = useRef("");
   const startGuard = useRef(createVoiceStartGuard());
+  const onChangeTextRef = useRef(onChangeText);
+  const onFinalTextRef = useRef(onFinalText);
+
+  useEffect(() => {
+    onChangeTextRef.current = onChangeText;
+  }, [onChangeText]);
+
+  useEffect(() => {
+    onFinalTextRef.current = onFinalText;
+  }, [onFinalText]);
 
   useEffect(() => {
     let subscription: { remove: () => void } | null = null;
@@ -36,8 +47,10 @@ const VoiceInputButton: React.FC<Props> = ({ value, onChangeText, label = "Speak
           setListening(true);
           setStatus(event.on_device ? "Listening on this phone..." : "Listening...");
         } else if ((event.type === "partial" || event.type === "final" || event.type === "completed") && event.text) {
-          onChangeText(mergeVoiceTranscript(baseText.current, event.text));
+          const transcript = mergeVoiceTranscript(baseText.current, event.text);
+          onChangeTextRef.current(transcript);
           const completed = event.type === "final" || event.type === "completed";
+          if (completed) onFinalTextRef.current?.(transcript);
           setStatus(completed ? "Transcript added. Review it before continuing." : "Listening...");
           if (completed) {
             setStarting(false);
@@ -69,7 +82,7 @@ const VoiceInputButton: React.FC<Props> = ({ value, onChangeText, label = "Speak
         // The optional native module may be unavailable on unsupported builds.
       }
     };
-  }, [onChangeText]);
+  }, []);
 
   const start = async () => {
     if (Platform.OS !== "android") {

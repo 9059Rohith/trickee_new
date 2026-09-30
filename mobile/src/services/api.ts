@@ -26,7 +26,7 @@ import type {
   Vehicle,
   VehicleSpecUpdate,
 } from "./types";
-import type { TripStartPayload } from "./tripStart";
+import type { DestinationSearchResult, TripStartPayload } from "./tripStart";
 
 export class ApiError extends Error {
   status: number;
@@ -271,6 +271,9 @@ export const api = {
 
   getNextDailyPlanLeg: (token: string, signal?: AbortSignal) =>
     request<NextDailyPlanLeg | null>("GET", "/daily-plans/next", token, undefined, signal),
+
+  resolveDestination: (token: string, query: string) =>
+    request<DestinationSearchResult>("POST", "/daily-plans/resolve-destination", token, { query }),
 
   listRecurringPlans: (token: string, signal?: AbortSignal) =>
     request<RecurringPlanTemplate[]>("GET", "/daily-plans/recurring", token, undefined, signal),

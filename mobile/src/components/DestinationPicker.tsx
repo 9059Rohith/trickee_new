@@ -1,12 +1,16 @@
 import React from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Colors } from "../constants/Colors";
-import type { TripDestination } from "../services/tripStart";
+import { manualDestinationTextChanged, type TripDestination } from "../services/tripStart";
+import VoiceInputButton from "./VoiceInputButton";
 
 type Props = {
   destination: TripDestination;
   onChange: (destination: TripDestination) => void;
   onPickMap: () => void;
+  onSearch: (query: string) => void;
+  searching: boolean;
+  searchError: string | null;
 };
 
 const manualDraft = (): Extract<TripDestination, { mode: "manual" }> => ({
@@ -17,7 +21,7 @@ const manualDraft = (): Extract<TripDestination, { mode: "manual" }> => ({
   source: "map_pin",
 });
 
-const DestinationPicker: React.FC<Props> = ({ destination, onChange, onPickMap }) => {
+const DestinationPicker: React.FC<Props> = ({ destination, onChange, onPickMap, onSearch, searching, searchError }) => {
   const chooseDestinationless = () => {
     Alert.alert(
       "Record without destination?",
@@ -55,19 +59,38 @@ const DestinationPicker: React.FC<Props> = ({ destination, onChange, onPickMap }
             accessibilityLabel="Destination label"
             style={styles.input}
             value={destination.text}
-            onChangeText={text => onChange({ ...destination, text })}
+            onChangeText={text => onChange(manualDestinationTextChanged(destination, text))}
             placeholder="Destination name or address"
             placeholderTextColor={Colors.secondaryText}
+            returnKeyType="search"
+            onSubmitEditing={() => destination.text.trim().length >= 3 && onSearch(destination.text)}
           />
+          <VoiceInputButton
+            value={destination.text}
+            onChangeText={text => onChange(manualDestinationTextChanged(destination, text))}
+            onFinalText={onSearch}
+            label="Speak destination"
+          />
+          <TouchableOpacity
+            testID="trip-destination-search"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: searching || destination.text.trim().length < 3 }}
+            disabled={searching || destination.text.trim().length < 3}
+            style={[styles.searchButton, (searching || destination.text.trim().length < 3) && styles.disabledButton]}
+            onPress={() => onSearch(destination.text)}
+          >
+            {searching ? <ActivityIndicator color={Colors.darkText} /> : <Text style={styles.searchButtonText}>Find on map</Text>}
+          </TouchableOpacity>
+          {searchError ? <Text accessibilityLiveRegion="assertive" style={styles.error}>{searchError}</Text> : null}
           <TouchableOpacity testID="trip-destination-map" style={styles.mapButton} onPress={onPickMap}>
             <Text style={styles.mapButtonText}>
-              {destination.lat == null ? "Choose exact point on map" : "Change map pin"}
+              {destination.lat == null ? "Choose a point manually" : "Review or move pin"}
             </Text>
           </TouchableOpacity>
           {destination.lat != null && destination.lng != null ? (
-            <Text style={styles.coordinates}>MAP PIN · {destination.lat.toFixed(5)}, {destination.lng.toFixed(5)}</Text>
+            <Text style={styles.coordinates}>{destination.source === "search_result" ? "SEARCH PIN" : "MAP PIN"} · {destination.lat.toFixed(5)}, {destination.lng.toFixed(5)}</Text>
           ) : (
-            <Text style={styles.warning}>Text alone is not submitted. Confirm an exact map pin.</Text>
+            <Text style={styles.warning}>Find the address or choose a point before starting.</Text>
           )}
         </View>
       ) : (
@@ -98,9 +121,13 @@ const styles = StyleSheet.create({
   destination: { color: Colors.white, fontSize: 18, fontWeight: "900" },
   coordinates: { color: Colors.secondaryText, fontSize: 12 },
   input: { minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderLight, color: Colors.white, paddingHorizontal: 13, backgroundColor: Colors.appBackground },
-  mapButton: { minHeight: 48, borderRadius: 12, backgroundColor: Colors.trickeeYellow, alignItems: "center", justifyContent: "center" },
-  mapButtonText: { color: Colors.darkText, fontWeight: "900" },
+  searchButton: { minHeight: 48, borderRadius: 12, backgroundColor: Colors.trickeeYellow, alignItems: "center", justifyContent: "center" },
+  searchButtonText: { color: Colors.darkText, fontWeight: "900" },
+  disabledButton: { opacity: 0.45 },
+  mapButton: { minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: Colors.neonBlue, alignItems: "center", justifyContent: "center" },
+  mapButtonText: { color: Colors.neonBlue, fontWeight: "900" },
   warning: { color: Colors.trickeeYellow, lineHeight: 18, fontSize: 12 },
+  error: { color: Colors.redSoft, lineHeight: 18, fontSize: 12 },
   secondaryButton: { minHeight: 42, borderRadius: 10, borderWidth: 1, borderColor: Colors.borderLight, alignItems: "center", justifyContent: "center", marginTop: 4 },
   secondaryText: { color: Colors.primaryText, fontWeight: "700" },
   textButton: { minHeight: 44, alignItems: "center", justifyContent: "center" },

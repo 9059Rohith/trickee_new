@@ -1,6 +1,13 @@
 # GPS Driver project context
 
-Updated: 2026-09-27. Repository: `gpsdriver`, current isolated worktree branch `feature/plan-aware-trip-guidance-v1.0.22`.
+Updated: 2026-09-30. Repository: `gpsdriver`, current isolated worktree branch `feature/plan-aware-trip-guidance-v1.0.22`.
+
+## Trip-start address search patch (2026-09-30)
+
+- Manual trip destinations now support explicit typed-address search and completed voice-transcript search. The authenticated backend resolves text with the existing server-side Google Places adapter, so the Maps key is not shipped in the Android app.
+- A successful match opens the existing OpenStreetMap picker at the resolved coordinates. The driver can confirm the provider result unchanged or move the pin; moved pins are recorded as `map_pin`, while untouched provider matches remain `search_result`. Editing resolved text clears stale coordinates, and stale in-flight searches cannot overwrite newer input.
+- Search/provider failures preserve the driver's text and expose an error; the app does not fabricate destination coordinates. Destinationless recording remains an explicit acknowledged choice.
+- Source verification: backend full pytest `247 passed` (run before the final mobile-only lifecycle/provenance refinements); mobile Jest `32 suites / 127 tests`, TypeScript, ESLint, and `git diff --check` pass. This patch is source-only at this checkpoint: no new Android version, signed artifact, cloud deployment, Play release, or physical-handset acceptance has been produced or claimed.
 
 ## Plan-aware trip guidance candidate (2026-09-26)
 

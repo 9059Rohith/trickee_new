@@ -103,6 +103,20 @@ class RecurringTemplateRequest(BaseModel):
         return self
 
 
+class DestinationSearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=3, max_length=160)
+
+    @field_validator("query")
+    @classmethod
+    def clean_query(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if len(cleaned) < 3:
+            raise ValueError("Destination search needs at least three characters")
+        return cleaned
+
+
 def _require_driver(db: Session, user: User) -> Driver:
     if user.role != "driver" or not user.driver_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Driver account required")
@@ -322,6 +336,33 @@ def get_next_daily_plan_leg(
         "service_date": plan.service_date.isoformat(),
         "timezone": plan.timezone,
     }, "Next planned leg")
+
+
+@router.post("/resolve-destination")
+def resolve_destination(
+    body: DestinationSearchRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_driver(db, current_user)
+    resolved = daily_plan_tools.resolve_destination(body.query)
+    coordinates = resolved.get("coordinates")
+    if not coordinates:
+        if resolved.get("degraded_reason"):
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Destination search is temporarily unavailable. Try again.",
+            )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No matching destination was found.")
+    return ok({
+        "query": resolved.get("query") or body.query,
+        "place_id": resolved.get("place_id"),
+        "name": resolved.get("name") or resolved.get("formatted_address") or body.query,
+        "formatted_address": resolved.get("formatted_address"),
+        "coordinates": coordinates,
+        "source": resolved.get("source"),
+        "confidence": resolved.get("confidence"),
+    }, "Destination resolved")
 
 
 @router.get("/recurring")

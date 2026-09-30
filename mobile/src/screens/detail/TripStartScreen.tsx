@@ -10,7 +10,9 @@ import { api } from "../../services/api";
 import { runWithSessionRecovery } from "../../services/sessionRecovery";
 import { currentPlannerLocation, prepareTelemetryCollector, startTelemetryTrip } from "../../services/telemetryNative";
 import {
+  adjustManualDestinationPin,
   createTripStartAttemptId,
+  destinationFromSearchResult,
   executeTripStart,
   plannedDestinationFromNextLeg,
   validateTripStart,
@@ -18,7 +20,7 @@ import {
 } from "../../services/tripStart";
 
 const defaultCenter = { lat: 21.1702, lng: 72.8311 };
-const manualDestination = (): TripDestination => ({ mode: "manual", text: "", lat: null, lng: null, source: "map_pin" });
+const manualDestination = (): TripDestination => ({ mode: "manual", text: "", lat: null, lng: null, source: "search_result" });
 
 const TripStartScreen: React.FC<any> = ({ navigation, route }) => {
   const { token, restore } = useAuth();
@@ -40,6 +42,10 @@ const TripStartScreen: React.FC<any> = ({ navigation, route }) => {
   const [mapOpen, setMapOpen] = useState(false);
   const [mapInitial, setMapInitial] = useState(defaultCenter);
   const [mapFallback, setMapFallback] = useState(true);
+  const [mapInitialSource, setMapInitialSource] = useState<"device_location" | "search_result">("device_location");
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const searchAttempt = useRef(0);
   const tripId = useRef(`trip-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`);
   const idempotencyKey = useRef(createTripStartAttemptId());
 
@@ -81,17 +87,57 @@ const TripStartScreen: React.FC<any> = ({ navigation, route }) => {
     const existing = destination.mode === "manual" && destination.lat != null && destination.lng != null
       ? { lat: destination.lat, lng: destination.lng }
       : null;
+    setMapInitialSource(existing && destination.mode === "manual" && destination.source === "search_result" ? "search_result" : "device_location");
     const current = existing || await currentPlannerLocation().catch(() => null);
     setMapInitial(current || defaultCenter);
     setMapFallback(current == null);
     setMapOpen(true);
   };
 
-  const confirmMap = (coordinates: { lat: number; lng: number }) => {
-    const text = destination.mode === "manual" && destination.text.trim()
-      ? destination.text.trim()
-      : "Pinned destination";
-    setDestination({ mode: "manual", text, lat: coordinates.lat, lng: coordinates.lng, source: "map_pin" });
+  const searchDestination = async (query: string) => {
+    const normalized = query.trim().replace(/\s+/g, " ");
+    if (normalized.length < 3) {
+      setSearchError("Enter at least three characters to find a destination.");
+      return;
+    }
+    if (!token) {
+      setSearchError("Sign in again to search for a destination.");
+      return;
+    }
+    const attempt = ++searchAttempt.current;
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const result = await runWithSessionRecovery(token, restore, sessionToken =>
+        api.resolveDestination(sessionToken, normalized)
+      );
+      if (attempt !== searchAttempt.current) return;
+      const resolved = destinationFromSearchResult(result);
+      setDestination(resolved);
+      setMapInitial({ lat: resolved.lat!, lng: resolved.lng! });
+      setMapFallback(false);
+      setMapInitialSource("search_result");
+      setMapOpen(true);
+    } catch (caught) {
+      if (attempt === searchAttempt.current) {
+        setSearchError(caught instanceof Error ? caught.message : "Could not find that destination.");
+      }
+    } finally {
+      if (attempt === searchAttempt.current) setSearching(false);
+    }
+  };
+
+  const confirmMap = (coordinates: { lat: number; lng: number }, adjusted: boolean) => {
+    if (destination.mode === "manual") {
+      const preserveSearchResult = mapInitialSource === "search_result" && !adjusted;
+      setDestination(preserveSearchResult ? {
+        ...destination,
+        lat: coordinates.lat,
+        lng: coordinates.lng,
+      } : adjustManualDestinationPin(destination, coordinates));
+    } else {
+      setDestination({ mode: "manual", text: "Pinned destination", lat: coordinates.lat, lng: coordinates.lng, source: "map_pin" });
+    }
     setMapOpen(false);
   };
 
@@ -126,7 +172,19 @@ const TripStartScreen: React.FC<any> = ({ navigation, route }) => {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {loadingPlan ? <View style={styles.loading}><ActivityIndicator color={Colors.trickeeYellow} /><Text style={styles.muted}>Checking today’s plan…</Text></View> : null}
         {planNotice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{planNotice}</Text> : null}
-        <DestinationPicker destination={destination} onChange={setDestination} onPickMap={openMap} />
+        <DestinationPicker
+          destination={destination}
+          onChange={next => {
+            searchAttempt.current += 1;
+            setSearching(false);
+            setDestination(next);
+            setSearchError(null);
+          }}
+          onPickMap={openMap}
+          onSearch={searchDestination}
+          searching={searching}
+          searchError={searchError}
+        />
         <View style={styles.socBlock}>
           <Text style={styles.label}>Starting dashboard SOC</Text>
           <TextInput
@@ -155,7 +213,7 @@ const TripStartScreen: React.FC<any> = ({ navigation, route }) => {
         </TouchableOpacity>
         <Text style={styles.footnote}>The backend creates the trip first. Native foreground GPS capture starts only after that succeeds.</Text>
       </ScrollView>
-      <LocationPickerModal visible={mapOpen} initialCoordinates={mapInitial} fallbackUsed={mapFallback} onConfirm={confirmMap} onClose={() => setMapOpen(false)} />
+      <LocationPickerModal visible={mapOpen} initialCoordinates={mapInitial} initialSource={mapInitialSource} fallbackUsed={mapFallback} onConfirm={confirmMap} onClose={() => setMapOpen(false)} />
     </View>
   );
 };

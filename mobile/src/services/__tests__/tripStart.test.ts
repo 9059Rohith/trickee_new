@@ -1,6 +1,9 @@
 import {
+  adjustManualDestinationPin,
   buildTripStartPayload,
   createTripStartAttemptId,
+  destinationFromSearchResult,
+  manualDestinationTextChanged,
   validateTripStart,
   type TripStartDraft,
 } from "../tripStart";
@@ -107,5 +110,66 @@ describe("plan-aware trip start policy", () => {
     expect(() => buildTripStartPayload(baseDraft({ startingSoc: Number.NaN }))).toThrow(
       "Enter a battery SOC from 0 to 100%."
     );
+  });
+
+  it("turns a provider result into a valid search destination", () => {
+    const destination = destinationFromSearchResult({
+      query: "Surat railway station",
+      place_id: "places/surat-railway-station",
+      name: "Surat Railway Station",
+      formatted_address: "Station Road, Surat, Gujarat 395003",
+      coordinates: { lat: 21.2049, lng: 72.8406 },
+      source: "google_places",
+      confidence: 0.85,
+    });
+
+    expect(destination).toEqual({
+      mode: "manual",
+      text: "Station Road, Surat, Gujarat 395003",
+      lat: 21.2049,
+      lng: 72.8406,
+      source: "search_result",
+    });
+    expect(validateTripStart(baseDraft({ destination })).valid).toBe(true);
+  });
+
+  it("clears stale search coordinates when the address text changes", () => {
+    const resolved = destinationFromSearchResult({
+      query: "Old address",
+      place_id: "places/old",
+      name: "Old address",
+      formatted_address: null,
+      coordinates: { lat: 21.2, lng: 72.9 },
+      source: "google_places",
+      confidence: 0.85,
+    });
+
+    expect(manualDestinationTextChanged(resolved, "New address")).toEqual({
+      mode: "manual",
+      text: "New address",
+      lat: null,
+      lng: null,
+      source: "search_result",
+    });
+  });
+
+  it("records a user-adjusted provider pin without losing its address label", () => {
+    const resolved = destinationFromSearchResult({
+      query: "Depot",
+      place_id: "places/depot",
+      name: "Depot",
+      formatted_address: "Depot Road, Surat",
+      coordinates: { lat: 21.2, lng: 72.9 },
+      source: "google_places",
+      confidence: 0.85,
+    });
+
+    expect(adjustManualDestinationPin(resolved, { lat: 21.201, lng: 72.901 })).toEqual({
+      mode: "manual",
+      text: "Depot Road, Surat",
+      lat: 21.201,
+      lng: 72.901,
+      source: "map_pin",
+    });
   });
 });

@@ -204,6 +204,68 @@ def test_chat_enriches_each_stop_with_provider_location_evidence():
     assert stop["status"] == "resolved"
 
 
+def test_driver_can_resolve_destination_text_to_a_provider_map_pin(monkeypatch):
+    _, headers = seed_driver()
+
+    class SearchTools(FakeTools):
+        def resolve_destination(self, query):
+            assert query == "Surat railway station"
+            return {
+                "query": query,
+                "place_id": "places/surat-railway-station",
+                "name": "Surat Railway Station",
+                "formatted_address": "Station Road, Surat, Gujarat 395003",
+                "coordinates": {"lat": 21.2049, "lng": 72.8406},
+                "source": "google_places",
+                "evidence_at": "2026-09-30T00:00:00Z",
+                "confidence": 0.85,
+                "degraded_reason": None,
+            }
+
+    monkeypatch.setattr(daily_plans, "daily_plan_tools", SearchTools())
+    response = client.post(
+        "/api/v1/daily-plans/resolve-destination",
+        headers=headers,
+        json={"query": "  Surat   railway station  "},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "query": "Surat railway station",
+        "place_id": "places/surat-railway-station",
+        "name": "Surat Railway Station",
+        "formatted_address": "Station Road, Surat, Gujarat 395003",
+        "coordinates": {"lat": 21.2049, "lng": 72.8406},
+        "source": "google_places",
+        "confidence": 0.85,
+    }
+
+
+def test_destination_resolution_reports_provider_failure_without_fallback_coordinates(monkeypatch):
+    _, headers = seed_driver()
+
+    class UnavailableTools(FakeTools):
+        def resolve_destination(self, query):
+            return {
+                "query": query,
+                "name": None,
+                "coordinates": None,
+                "source": "unavailable",
+                "confidence": 0.0,
+                "degraded_reason": "google_places_timeout",
+            }
+
+    monkeypatch.setattr(daily_plans, "daily_plan_tools", UnavailableTools())
+    response = client.post(
+        "/api/v1/daily-plans/resolve-destination",
+        headers=headers,
+        json={"query": "Unknown depot"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Destination search is temporarily unavailable. Try again."
+
+
 def test_confirmation_accepts_edited_stops_and_map_coordinates_take_precedence():
     _, headers = seed_driver()
     chat = client.post("/api/v1/daily-plans/chat", headers=headers, json={

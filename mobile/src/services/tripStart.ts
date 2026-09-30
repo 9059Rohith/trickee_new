@@ -49,8 +49,59 @@ export type TripStartPayload = {
 
 export type TripStartValidation = { valid: true; reason: null } | { valid: false; reason: string };
 
+export type DestinationSearchResult = {
+  query: string;
+  place_id?: string | null;
+  name?: string | null;
+  formatted_address?: string | null;
+  coordinates: { lat: number; lng: number };
+  source: string;
+  confidence?: number | null;
+};
+
 const validCoordinate = (value: number, min: number, max: number) =>
   Number.isFinite(value) && value >= min && value <= max;
+
+export function destinationFromSearchResult(
+  result: DestinationSearchResult
+): Extract<TripDestination, { mode: "manual" }> {
+  const text = (result.formatted_address || result.name || result.query).trim();
+  if (
+    !text ||
+    !validCoordinate(result.coordinates.lat, -90, 90) ||
+    !validCoordinate(result.coordinates.lng, -180, 180)
+  ) {
+    throw new Error("Destination search returned an invalid map location.");
+  }
+  return {
+    mode: "manual",
+    text,
+    lat: result.coordinates.lat,
+    lng: result.coordinates.lng,
+    source: "search_result",
+  };
+}
+
+export function manualDestinationTextChanged(
+  destination: Extract<TripDestination, { mode: "manual" }>,
+  text: string
+): Extract<TripDestination, { mode: "manual" }> {
+  if (text === destination.text) return destination;
+  return { mode: "manual", text, lat: null, lng: null, source: "search_result" };
+}
+
+export function adjustManualDestinationPin(
+  destination: Extract<TripDestination, { mode: "manual" }>,
+  coordinates: { lat: number; lng: number }
+): Extract<TripDestination, { mode: "manual" }> {
+  return {
+    mode: "manual",
+    text: destination.text.trim() || "Pinned destination",
+    lat: coordinates.lat,
+    lng: coordinates.lng,
+    source: "map_pin",
+  };
+}
 
 export function validateTripStart(draft: TripStartDraft): TripStartValidation {
   if (!draft.tripId.trim() || !draft.vehicleId.trim() || !draft.idempotencyKey.trim()) {
