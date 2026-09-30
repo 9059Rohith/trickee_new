@@ -1,0 +1,7 @@
+GPS Driver 1.0.23
+
+- Type a destination and open the matched address directly on the map.
+- Speak a destination and use the completed transcript for the same search.
+- Review or move the destination pin before starting a trip.
+- Prevent old searches or edited addresses from using stale coordinates.
+- Keep voice recognition active while the destination screen updates.
