@@ -8,6 +8,8 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { Colors } from "../../constants/Colors";
+import { motionColors } from "../../motion/tokens";
+import { fontFamily } from "../../theme/typography";
 import GlassCard from "../../components/GlassCard";
 import EstimatedBadge from "../../components/EstimatedBadge";
 import ConfidenceIndicator from "../../components/ConfidenceIndicator";
@@ -37,14 +39,16 @@ const MonitoringScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.eyebrow}>VEHICLE INTELLIGENCE / 02</Text>
       <View style={styles.header}>
-        <Text style={styles.title}>Vehicle Monitoring</Text>
+        <Text style={styles.title}>Vehicle monitoring</Text>
         <EstimatedBadge
           source={pred?.source}
           estimated={pred?.estimated ?? true}
           size="medium"
         />
       </View>
+      <View style={styles.heroRule} />
 
       <GlassCard style={styles.card} cornerRadius={16}>
         <View style={styles.cardInner}>
@@ -183,21 +187,24 @@ const MonitoringScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.appBackground },
-  content: { padding: 16, paddingTop: 56, paddingBottom: 100 },
+  content: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 100 },
+  eyebrow: { color: motionColors.cyan, fontFamily: fontFamily.technical, fontSize: 7, letterSpacing: 1.1 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginTop: 10,
+    marginBottom: 19,
   },
-  title: { color: Colors.primaryText, fontSize: 22, fontWeight: "700" },
+  heroRule: { height: 1, backgroundColor: "rgba(72,223,244,0.18)", marginBottom: 22 },
+  title: { color: Colors.primaryText, fontFamily: fontFamily.headingBold, fontSize: 26, letterSpacing: -0.8, flexShrink: 1 },
   card: { marginBottom: 12 },
-  cardInner: { padding: 16 },
+  cardInner: { padding: 19 },
   cardLabel: {
-    color: Colors.secondaryText,
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1,
+    color: motionColors.cyan,
+    fontFamily: fontFamily.technical,
+    fontSize: 8,
+    letterSpacing: 0.6,
     marginBottom: 12,
   },
   row: {
@@ -209,13 +216,13 @@ const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   gridItem: { width: "45%", marginBottom: 8 },
   gridLabel: {
-    color: Colors.secondaryText,
-    fontSize: 10,
-    fontWeight: "600",
+    color: "#93A6AA",
+    fontFamily: fontFamily.technical,
+    fontSize: 7,
     textTransform: "uppercase",
-    marginBottom: 2,
+    marginBottom: 7,
   },
-  gridValue: { color: Colors.primaryText, fontSize: 20, fontWeight: "700" },
+  gridValue: { color: Colors.primaryText, fontFamily: fontFamily.headingBold, fontSize: 21 },
   gridSub: { color: Colors.secondaryText, fontSize: 9, marginTop: 2 },
   specWarning: { color: Colors.red, fontSize: 12, fontWeight: "600" },
   specGrid: { gap: 4 },

@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.models.entities import TelemetryWindow, VehicleLiveStateSnapshot
+from app.schemas.api import utc_iso
 from app.streams.redis_client import StreamClient
 
 
@@ -92,7 +93,7 @@ def project_live_state(db: Session, event: dict, streams: StreamClient | None = 
     if state is None:
         state = new_live_state(latest.vehicle_id)
         db.add(state)
-    if latest.sequence_no <= state.sequence_no:
+    if state.trip_id == trip_id and latest.sequence_no <= state.sequence_no:
         return
     previous_health = state.health_payload or {}
     live_distance_km = advance_live_distance_km(
@@ -109,14 +110,26 @@ def project_live_state(db: Session, event: dict, streams: StreamClient | None = 
     state.sequence_no = latest.sequence_no
     state.event_time = latest.event_time
     state.received_at = latest.received_at
-    state.gps_available = latest.gps_available
-    state.latitude = latest.latitude
-    state.longitude = latest.longitude
+    # Keep the last measured position through a GPS gap. A missing one-second
+    # window does not mean the phone lost GPS; sustained gaps do.
+    last_gps = db.query(TelemetryWindow).filter(
+        TelemetryWindow.trip_id == trip_id,
+        TelemetryWindow.gps_available.is_(True),
+        TelemetryWindow.latitude.is_not(None),
+        TelemetryWindow.longitude.is_not(None),
+    ).order_by(TelemetryWindow.sequence_no.desc()).first()
+    if last_gps is not None:
+        state.latitude = last_gps.latitude
+        state.longitude = last_gps.longitude
+    state.gps_available = bool(
+        last_gps is not None
+        and (latest.received_at - last_gps.received_at).total_seconds() <= 5
+    )
     state.health_payload = {
         **(latest.health_payload or {}),
         "live_distance_km": round(live_distance_km, 4),
     }
-    state.freshness = freshness_label(latest.received_at, gps_available=latest.gps_available)
+    state.freshness = freshness_label(latest.received_at, gps_available=state.gps_available)
     state.projection_status = "CURRENT"
     db.flush()
 
@@ -127,8 +140,8 @@ def snapshot_dict(state: VehicleLiveStateSnapshot, *, now: datetime | None = Non
         "trip_id": state.trip_id,
         "state_version": state.state_version or 0,
         "sequence_no": state.sequence_no or 0,
-        "event_time": state.event_time.isoformat() if state.event_time else None,
-        "received_at": state.received_at.isoformat() if state.received_at else None,
+        "event_time": utc_iso(state.event_time),
+        "received_at": utc_iso(state.received_at),
         "freshness": freshness_label(
             state.received_at,
             now=now,
@@ -137,7 +150,8 @@ def snapshot_dict(state: VehicleLiveStateSnapshot, *, now: datetime | None = Non
             degraded=state.projection_status == "DEGRADED",
         ),
         "gps_available": bool(state.gps_available),
-        "location": {"lat": state.latitude, "lng": state.longitude} if state.gps_available else None,
+        "location": {"lat": state.latitude, "lng": state.longitude}
+        if state.latitude is not None and state.longitude is not None else None,
         "health": state.health_payload,
         "distance_km": float((state.health_payload or {}).get("live_distance_km") or 0.0),
         "projection_status": state.projection_status,

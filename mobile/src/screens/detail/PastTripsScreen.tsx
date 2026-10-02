@@ -68,10 +68,10 @@ const TripCard: React.FC<{
           </View>
           {(trip.origin_label || trip.dest_label) && <Text style={styles.route}>{trip.origin_label || "Origin"} → {trip.dest_label || "Destination"}</Text>}
           <View style={styles.statsRow}>
-            <Stat label="Distance" value={trip.distance_km == null ? "Unavailable" : `${fmt(trip.distance_km)} km`} />
-            <Stat label="Energy" value={trip.kwh_used == null ? "Unavailable" : `${fmt(trip.kwh_used, 2)} kWh`} />
-            <Stat label="SOC used" value={socDelta != null ? `${fmt(socDelta)}%` : "Unavailable"} />
-            <Stat label="Duration" value={dur || "Unavailable"} />
+            <Stat label="Distance" value={trip.distance_km == null ? "--" : `${fmt(trip.distance_km)} km`} />
+            <Stat label="Energy" value={trip.kwh_used == null ? "--" : `${fmt(trip.kwh_used, 2)} kWh`} />
+            <Stat label="SOC used" value={socDelta != null ? `${fmt(socDelta)}%` : "--"} />
+            <Stat label="Duration" value={dur || "--"} />
           </View>
           <View style={styles.openRow}><Text style={styles.openText}>View route & summary</Text><Icon name="chevron-right" size={20} color={Colors.trickeeYellow} /></View>
         </View>

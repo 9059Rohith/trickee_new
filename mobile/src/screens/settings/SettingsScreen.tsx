@@ -13,14 +13,16 @@ import { Colors } from "../../constants/Colors";
 import { useAuth } from "../../context/AuthContext";
 import { useLiveData } from "../../context/LiveDataContext";
 import GlassCard from "../../components/GlassCard";
+import DetailHeader from "../../components/DetailHeader";
 
 const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { user, logout } = useAuth();
   const { vehicle } = useLiveData();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Settings</Text>
+    <View style={styles.container}>
+      <DetailHeader title="Settings" />
+      <ScrollView contentContainerStyle={styles.content}>
 
       <GlassCard style={styles.card} cornerRadius={16}>
         <View style={styles.cardInner}>
@@ -74,19 +76,14 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       >
         <Text style={styles.logoutText}>Sign Out</Text>
       </TouchableOpacity>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.appBackground },
-  content: { padding: 16, paddingTop: 56, paddingBottom: 100 },
-  title: {
-    color: Colors.primaryText,
-    fontSize: 22,
-    fontWeight: "700",
-    marginBottom: 16,
-  },
+  content: { padding: 16, paddingBottom: 100 },
   card: { marginBottom: 12 },
   cardInner: { padding: 16 },
   cardLabel: {

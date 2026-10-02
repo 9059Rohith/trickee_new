@@ -26,9 +26,10 @@ export function resolveBackendConfig(
   }
 
   const apiOrigin = configuredApiOrigin || "https://api-not-configured.invalid";
+  const localDemoOrigin = /^http:\/\/(?:localhost|127\.0\.0\.1|10\.0\.2\.2)(?::\d+)?$/i.test(apiOrigin);
   return {
     apiOrigin,
     websocketOrigin: normalizedOrigin(nativeWebsocketOrigin) || apiOrigin,
-    useHostedBackend: true,
+    useHostedBackend: !localDemoOrigin,
   };
 }

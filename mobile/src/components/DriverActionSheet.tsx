@@ -6,7 +6,7 @@
  * - Trip end seals the native Room outbox before declaring final sequence.
  * - SOC entry prompt on trip start for GPS-only vehicles
  */
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useLiveData } from "../context/LiveDataContext";
@@ -33,8 +33,18 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
   const [calculationVisible, setCalculationVisible] = useState(false);
   const [calculationResult, setCalculationResult] = useState<any>();
   const [calculationError, setCalculationError] = useState<string | null>(null);
+  const [actionMode, setActionMode] = useState<"start" | "end" | null>(null);
 
   const activeTrip = me?.active_trip;
+
+  // Keep the sheet's purpose stable while a successful start updates live data.
+  useEffect(() => {
+    if (!visible) {
+      setActionMode(null);
+    } else if (actionMode === null) {
+      setActionMode(activeTrip ? "end" : "start");
+    }
+  }, [visible, actionMode, activeTrip]);
 
   const completeStartTrip = async (startingSoc: number) => {
     if (!token || !vehicle) {
@@ -114,7 +124,7 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
     <>
       {vehicle && (
         <SOCEntryModal
-          visible={visible && !activeTrip}
+          visible={visible && actionMode === "start"}
           onClose={onClose}
           vehicleId={vehicle.id}
           title="Starting trip SOC"
@@ -126,7 +136,7 @@ const DriverActionSheet: React.FC<Props> = ({ visible, onClose }) => {
       )}
       {vehicle && (
         <SOCEntryModal
-          visible={visible && Boolean(activeTrip)}
+          visible={visible && actionMode === "end"}
           onClose={onClose}
           vehicleId={vehicle.id}
           title="End trip SOC"

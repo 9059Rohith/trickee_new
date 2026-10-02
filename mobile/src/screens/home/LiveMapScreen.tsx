@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../../constants/Colors";
+import { motionColors } from "../../motion/tokens";
+import { fontFamily } from "../../theme/typography";
 import GlassCard from "../../components/GlassCard";
 import BackgroundLogo from "../../components/BackgroundLogo";
 import BatteryVisualizer from "../../components/BatteryVisualizer";
@@ -312,6 +314,12 @@ const LiveMapScreen: React.FC = () => {
           />
         }
       >
+        <View style={styles.hero}>
+          <Text style={styles.heroKicker}>LIVE ROUTE / 03</Text>
+          <Text style={styles.heroTitle}>Your world, live.</Text>
+          <Text style={styles.heroCopy}>Position, power and charging options in one view.</Text>
+          <View style={styles.heroRule} />
+        </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -573,10 +581,15 @@ const styles = StyleSheet.create({
   watermarkImage: { width: "100%", height: "100%", opacity: 0.15 },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 22,
     paddingBottom: 160,
     gap: 14,
   },
+  hero: { marginBottom: 3 },
+  heroKicker: { color: motionColors.cyan, fontFamily: fontFamily.technical, fontSize: 7, letterSpacing: 1.2 },
+  heroTitle: { color: motionColors.text, fontFamily: fontFamily.headingBold, fontSize: 28, lineHeight: 34, letterSpacing: -0.8, marginTop: 10 },
+  heroCopy: { color: "#A5B6BA", fontFamily: fontFamily.body, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  heroRule: { height: 1, backgroundColor: "rgba(72,223,244,0.18)", marginTop: 17 },
   filterRow: { flexDirection: "row", gap: 8, paddingVertical: 4 },
   liveWarning: {
     color: Colors.trickeeYellow,

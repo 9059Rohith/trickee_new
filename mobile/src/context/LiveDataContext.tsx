@@ -64,7 +64,8 @@ const LiveDataContext = createContext<LiveDataValue | undefined>(undefined);
 export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { token, restore, setUser } = useAuth();
+  const { token, user, restore, setUser } = useAuth();
+  const isDriver = user?.role === "driver";
   const [me, setMe] = useState<MobileMe | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +79,7 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const load = useCallback(
     async (mode: "initial" | "refresh" | "poll") => {
-      if (!token) {
+      if (!token || !isDriver) {
         return;
       }
       if (mode === "poll" && inFlight.current) {
@@ -123,12 +124,12 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
     },
-    [token, restore, setUser]
+    [token, isDriver, restore, setUser]
   );
 
   // Initial load
   useEffect(() => {
-    if (token) {
+    if (token && isDriver) {
       setLoading(true);
       load("initial");
     } else {
@@ -139,7 +140,7 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => {
       inFlight.current?.abort();
     };
-  }, [token, load]);
+  }, [token, isDriver, load]);
 
   const liveTripId = me?.active_trip?.id ?? null;
   const liveVehicleId = me?.vehicle?.id ?? null;
@@ -205,20 +206,20 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
     const sub = AppState.addEventListener("change", (state) => {
       const wasActive = appActive.current;
       appActive.current = state === "active";
-      if (!wasActive && appActive.current && token) {
+      if (!wasActive && appActive.current && token && isDriver) {
         load("poll");
       }
     });
     return () => sub.remove();
-  }, [token, load]);
+  }, [token, isDriver, load]);
 
   useInterval(
     () => {
-      if (appActive.current && token) {
+      if (appActive.current && token && isDriver) {
         load("poll");
       }
     },
-    token ? LIVE_POLL_INTERVAL_MS : null
+    token && isDriver ? LIVE_POLL_INTERVAL_MS : null
   );
 
   const refresh = useCallback(async () => {
@@ -241,7 +242,7 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const liveTelemetry = useMemo<Telemetry | null>(() => {
-    if (!liveState?.gps_available || !liveState.location) {
+    if (!liveState?.location) {
       return me?.latest_telemetry ?? null;
     }
     return {

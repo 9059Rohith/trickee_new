@@ -8,6 +8,7 @@
  * - Shows estimated_wh_per_km and soc_consumed when SOC absent
  */
 import React, { useEffect, useRef, useState } from "react";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import {
   Alert,
   View,
@@ -19,6 +20,8 @@ import {
   RefreshControl,
 } from "react-native";
 import { Colors } from "../../constants/Colors";
+import { motionColors } from "../../motion/tokens";
+import { fontFamily } from "../../theme/typography";
 import GlassCard from "../../components/GlassCard";
 import EstimatedBadge from "../../components/EstimatedBadge";
 import ConfidenceIndicator from "../../components/ConfidenceIndicator";
@@ -233,6 +236,13 @@ const HomeScreen: React.FC = () => {
           />
         }
       >
+        <View style={styles.hero}>
+          <Text style={styles.heroKicker}>DRIVER COCKPIT / 01</Text>
+          <Text style={styles.heroTitle}>{activeTrip ? "Journey in motion." : "Ready when you are."}</Text>
+          <Text style={styles.heroCopy}>{activeTrip ? "Your live trip and energy signals, at a glance." : "The next journey starts with a clear signal."}</Text>
+          <View style={styles.heroRule} />
+        </View>
+
         {/* GPS TRACKING BANNER */}
         {activeTrip && (
           <TripActiveBanner tripStartedAt={activeTrip.started_at} />
@@ -426,8 +436,9 @@ const HomeScreen: React.FC = () => {
           onPress={() => setActionsOpen(true)}
         >
           <Text style={[styles.actionBtnText, activeTrip && styles.endTripText]}>
-            {activeTrip ? "End Trip" : "Start Trip"}
+            {activeTrip ? "END TRIP" : "START TRIP"}
           </Text>
+          <Icon name="arrow-top-right" size={20} color={activeTrip ? Colors.white : Colors.darkText} />
         </TouchableOpacity>
       </View>
 
@@ -463,11 +474,16 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.appBackground },
   scroll: { flex: 1 },
-  scrollContent: { padding: 16, paddingTop: 56, paddingBottom: 130 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 24 },
+  hero: { marginBottom: 22 },
+  heroKicker: { color: motionColors.cyan, fontFamily: fontFamily.technical, fontSize: 7, letterSpacing: 1.2 },
+  heroTitle: { color: motionColors.text, fontFamily: fontFamily.headingBold, fontSize: 30, lineHeight: 34, letterSpacing: -1, marginTop: 10 },
+  heroCopy: { color: "#A5B6BA", fontFamily: fontFamily.body, fontSize: 12, lineHeight: 19, marginTop: 7 },
+  heroRule: { height: 1, backgroundColor: "rgba(72,223,244,0.18)", marginTop: 20 },
   orderCard: { marginBottom: 12 },
   metricsCard: { marginBottom: 12 },
   alertsCard: { marginBottom: 12 },
-  cardInner: { padding: 16 },
+  cardInner: { padding: 19 },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -475,10 +491,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardLabel: {
-    color: Colors.secondaryText,
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1,
+    color: motionColors.cyan,
+    fontFamily: fontFamily.technical,
+    fontSize: 8,
+    letterSpacing: 0.9,
   },
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 4 },
   greenDot: {
@@ -490,25 +506,26 @@ const styles = StyleSheet.create({
   liveText: { color: Colors.neonGreen, fontSize: 10, fontWeight: "700" },
   idleBadge: {},
   idleText: { color: Colors.secondaryText, fontSize: 10, fontWeight: "700" },
-  vehicleCode: { color: Colors.primaryText, fontSize: 22, fontWeight: "700" },
-  driverInfo: { color: Colors.secondaryText, fontSize: 13, marginTop: 2 },
+  vehicleCode: { color: Colors.primaryText, fontFamily: fontFamily.headingBold, fontSize: 32, letterSpacing: -1 },
+  driverInfo: { color: "#A0B2B5", fontFamily: fontFamily.bodyMedium, fontSize: 12, marginTop: 3 },
   metricsHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
-  metricsGrid: { flexDirection: "row", gap: 12 },
-  metricItem: { flex: 1, alignItems: "center" },
+  metricsGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 12 },
+  metricItem: { width: "31%", minHeight: 78, paddingTop: 12, borderTopWidth: 1, borderTopColor: "rgba(168,208,214,0.14)" },
   metricLabel: {
-    color: Colors.secondaryText,
-    fontSize: 10,
-    fontWeight: "600",
-    marginBottom: 4,
+    color: "#93A6AA",
+    fontFamily: fontFamily.technical,
+    fontSize: 7,
+    marginBottom: 7,
     textTransform: "uppercase",
   },
-  metricValue: { color: Colors.primaryText, fontSize: 24, fontWeight: "700" },
+  metricValue: { color: Colors.primaryText, fontFamily: fontFamily.headingBold, fontSize: 25 },
   addSocBtn: {
+    alignSelf: "flex-start",
     marginTop: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -538,14 +555,17 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   alertAction: { minWidth: 64, minHeight: 44, alignItems: "flex-end", justifyContent: "center", paddingLeft: 10 },
-  stickyAction: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, backgroundColor: Colors.appBackground, borderTopWidth: 1, borderTopColor: Colors.borderSubtle },
+  stickyAction: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, backgroundColor: Colors.appBackground, borderTopWidth: 1, borderTopColor: Colors.borderSubtle },
   actionBtn: {
     backgroundColor: Colors.trickeeYellow,
-    borderRadius: 16,
-    paddingVertical: 18,
+    borderRadius: 11,
+    minHeight: 54,
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "center",
     alignItems: "center",
   },
-  actionBtnText: { color: Colors.darkText, fontWeight: "800", fontSize: 16 },
+  actionBtnText: { color: Colors.darkText, fontFamily: fontFamily.technical, fontSize: 10, letterSpacing: 1.1 },
   endTripBtn: { backgroundColor: Colors.red },
   endTripText: { color: Colors.white },
   stationaryCard: { borderRadius: 16, borderWidth: 1, borderColor: Colors.trickeeYellow, backgroundColor: "rgba(255,202,32,0.1)", padding: 14, gap: 9, marginBottom: 12 },

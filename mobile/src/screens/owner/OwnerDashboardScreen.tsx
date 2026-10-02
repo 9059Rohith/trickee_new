@@ -9,6 +9,8 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
 import { Colors } from "../../constants/Colors";
+import { motionColors } from "../../motion/tokens";
+import { fontFamily } from "../../theme/typography";
 import GlassCard from "../../components/GlassCard";
 import EstimatedBadge from "../../components/EstimatedBadge";
 import ConfidenceIndicator from "../../components/ConfidenceIndicator";
@@ -73,10 +75,12 @@ const OwnerDashboardScreen: React.FC = () => {
         />
       }
     >
+      <Text style={styles.kicker}>FLEET COCKPIT / 01</Text>
       <Text style={styles.title}>Owner Intelligence</Text>
       <Text style={styles.subtitle}>
-        GPS + vehicle specifications · precise provenance on every result
+        GPS and vehicle specifications with clear source data
       </Text>
+      <View style={styles.heroRule} />
       <GlassCard style={styles.card} cornerRadius={18}>
         <View style={styles.inner}>
           <Text style={styles.label}>FLEET TOTALS</Text>
@@ -108,6 +112,13 @@ const OwnerDashboardScreen: React.FC = () => {
       ) : (
         summary.vehicles.map((item) => {
           const pred = item.latest_prediction;
+          const hasRecentSoc = item.soc?.is_recent === true;
+          const missingModel = hasRecentSoc && !pred?.wh_per_km;
+          const rangeReason = !hasRecentSoc
+            ? "Need SOC"
+            : item.spec_incomplete
+              ? "Check specs"
+              : "Model pending";
           return (
             <GlassCard
               key={item.vehicle_id}
@@ -138,7 +149,7 @@ const OwnerDashboardScreen: React.FC = () => {
                   <Text style={styles.metric}>
                     {item.range_available
                       ? fmt(item.estimated_range_km, 0)
-                      : "Need SOC"}
+                      : rangeReason}
                     <Text style={styles.unit}>
                       {item.range_available ? " km" : ""}
                     </Text>
@@ -148,7 +159,13 @@ const OwnerDashboardScreen: React.FC = () => {
                 <Text style={styles.policy}>
                   {item.range_available
                     ? `Recent SOC: ${fmt(item.soc?.value, 0)}%`
-                    : "Remaining range hidden until a recent SOC is recorded."}
+                    : !hasRecentSoc
+                      ? "Remaining range hidden until a recent SOC is recorded."
+                      : item.spec_incomplete
+                        ? "Vehicle specifications are needed for a range estimate."
+                        : missingModel
+                          ? `Recent SOC: ${fmt(item.soc?.value, 0)}%. Range awaits trip processing.`
+                          : "Range estimate is currently unavailable."}
                 </Text>
               </View>
             </GlassCard>
@@ -161,16 +178,19 @@ const OwnerDashboardScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.appBackground },
-  content: { padding: 18, paddingTop: 60, paddingBottom: 40 },
-  title: { color: Colors.primaryText, fontSize: 26, fontWeight: "800" },
+  content: { padding: 18, paddingTop: 22, paddingBottom: 40 },
+  kicker: { color: motionColors.cyan, fontFamily: fontFamily.technical, fontSize: 7, letterSpacing: 1.2 },
+  title: { color: Colors.primaryText, fontFamily: fontFamily.headingBold, fontSize: 29, lineHeight: 35, letterSpacing: -0.7, marginTop: 10 },
   subtitle: {
     color: Colors.secondaryText,
+    fontFamily: fontFamily.body,
     fontSize: 12,
-    marginTop: 4,
-    marginBottom: 18,
+    lineHeight: 18,
+    marginTop: 6,
   },
-  card: { marginBottom: 12 },
-  inner: { padding: 16 },
+  heroRule: { height: 1, backgroundColor: "rgba(72,223,244,0.18)", marginTop: 18, marginBottom: 20 },
+  card: { marginBottom: 14 },
+  inner: { padding: 18 },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -178,21 +198,22 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   label: {
-    color: Colors.secondaryText,
-    fontSize: 10,
-    fontWeight: "700",
-    marginBottom: 12,
+    color: motionColors.cyan,
+    fontFamily: fontFamily.technical,
+    fontSize: 8,
+    letterSpacing: 0.7,
+    marginBottom: 16,
   },
-  vehicle: { color: Colors.primaryText, fontSize: 18, fontWeight: "800" },
-  grid: { flexDirection: "row", flexWrap: "wrap", rowGap: 14 },
+  vehicle: { color: Colors.primaryText, fontFamily: fontFamily.headingBold, fontSize: 20 },
+  grid: { flexDirection: "row", flexWrap: "wrap", rowGap: 18 },
   metric: {
     color: Colors.primaryText,
-    fontSize: 19,
-    fontWeight: "800",
+    fontFamily: fontFamily.bodyBold,
+    fontSize: 20,
     width: "50%",
   },
-  unit: { color: Colors.secondaryText, fontSize: 10, fontWeight: "600" },
-  policy: { color: Colors.secondaryText, fontSize: 11, marginTop: 10 },
+  unit: { color: Colors.secondaryText, fontFamily: fontFamily.bodyMedium, fontSize: 10 },
+  policy: { color: Colors.secondaryText, fontFamily: fontFamily.body, fontSize: 11, lineHeight: 16, marginTop: 12 },
 });
 
 export default OwnerDashboardScreen;

@@ -60,6 +60,10 @@ def driver_trips(
     result = []
     for trip in trips:
         feature = db.query(TripFeature).filter(TripFeature.trip_id == trip.id).first()
+        finalization = db.query(TripFinalization).filter(TripFinalization.trip_id == trip.id).first()
+        final_summary = finalization.summary or {} if finalization and finalization.state == "completed" else {}
+        final_energy = final_summary.get("energy") or {}
+        energy_label = db.query(TripEnergyLabel).filter(TripEnergyLabel.trip_id == trip.id).first()
         prediction = (
             db.query(TripPrediction)
             .filter(TripPrediction.trip_id == trip.id)
@@ -78,18 +82,21 @@ def driver_trips(
                 "dest_lat": trip.destination_lat,
                 "dest_lng": trip.destination_lng,
                 "dest_label": trip.destination_text,
-                "distance_km": feature.distance_km if feature else None,
+                "distance_km": feature.distance_km if feature else final_summary.get("distance_km"),
                 "kwh_used": (
                     prediction.route_energy_wh / 1000.0
                     if prediction and prediction.route_energy_wh is not None
-                    else None
+                    else (energy_label.actual_energy_consumed_wh / 1000.0
+                          if energy_label and energy_label.actual_energy_consumed_wh is not None
+                          else (final_energy["route_energy_wh"] / 1000.0
+                                if final_energy.get("route_energy_wh") is not None else None))
                 ),
-                "route_taken": "GPS tracked" if feature else None,
+                "route_taken": "GPS tracked" if feature or final_summary else None,
                 "recommended_route": None,
                 "followed_nudge": None,
-                "estimated": bool(prediction.estimated) if prediction else False,
-                "confidence": prediction.confidence if prediction else None,
-                "source": prediction.source if prediction else None,
+                "estimated": bool(prediction.estimated) if prediction else energy_label is None,
+                "confidence": prediction.confidence if prediction else final_energy.get("confidence_numeric"),
+                "source": prediction.source if prediction else (energy_label.label_source if energy_label else final_energy.get("source")),
                 "soc_start": (trip.context or {}).get("starting_soc"),
                 "soc_end": (trip.context or {}).get("ending_soc"),
             }
@@ -138,6 +145,8 @@ def driver_trip_day(
         route_points = downsample_route_points(valid_route_points(windows))
         feature = db.query(TripFeature).filter(TripFeature.trip_id == trip.id).first()
         finalization = db.query(TripFinalization).filter(TripFinalization.trip_id == trip.id).first()
+        final_summary = finalization.summary or {} if finalization and finalization.state == "completed" else {}
+        final_energy = final_summary.get("energy") or {}
         label = db.query(TripEnergyLabel).filter(TripEnergyLabel.trip_id == trip.id).first()
         prediction = (
             db.query(TripPrediction)
@@ -180,13 +189,13 @@ def driver_trip_day(
             "route_points": route_points,
             "route_trace_available": bool(route_points),
             "route_trace_unavailable_reason": None if route_points else "recorded_gps_unavailable_or_expired",
-            "features": None if not feature else {
-                "distance_km": feature.distance_km,
-                "duration_minutes": feature.duration_minutes,
-                "avg_speed_kmh": feature.avg_speed_kmh,
-                "max_speed_kmh": feature.max_speed_kmh,
-                "stops_count": feature.stops_count,
-                "total_dwell_minutes": feature.total_dwell_minutes,
+            "features": None if not feature and not final_summary else {
+                "distance_km": feature.distance_km if feature else final_summary.get("distance_km"),
+                "duration_minutes": feature.duration_minutes if feature else final_summary.get("duration_minutes"),
+                "avg_speed_kmh": feature.avg_speed_kmh if feature else None,
+                "max_speed_kmh": feature.max_speed_kmh if feature else None,
+                "stops_count": feature.stops_count if feature else None,
+                "total_dwell_minutes": feature.total_dwell_minutes if feature else None,
             },
             "telemetry_quality": telemetry_quality(
                 stored_windows=len(windows), final_sequence_no=trip.final_sequence_no
@@ -209,13 +218,13 @@ def driver_trip_day(
                 "is_training_eligible": label.is_training_eligible,
                 "eligibility_reason": label.eligibility_reason,
             },
-            "prediction": None if not prediction else {
-                "route_energy_wh": prediction.route_energy_wh,
-                "wh_per_km": prediction.wh_per_km,
-                "soc_consumed_pct": prediction.soc_consumed_pct,
-                "source": prediction.source,
-                "confidence": prediction.confidence,
-                "estimated": bool(prediction.estimated),
+            "prediction": None if not prediction and not final_energy else {
+                "route_energy_wh": prediction.route_energy_wh if prediction else final_energy.get("route_energy_wh"),
+                "wh_per_km": prediction.wh_per_km if prediction else final_energy.get("wh_per_km"),
+                "soc_consumed_pct": prediction.soc_consumed_pct if prediction else (final_summary.get("soc") or {}).get("estimated_consumed_pct"),
+                "source": prediction.source if prediction else final_energy.get("source"),
+                "confidence": prediction.confidence if prediction else final_energy.get("confidence_numeric"),
+                "estimated": bool(prediction.estimated) if prediction else bool(final_energy.get("estimated", True)),
             },
             "events": {
                 "by_severity": dict(severity_counts),

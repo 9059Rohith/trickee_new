@@ -1,5 +1,7 @@
-import React, { useEffect, useRef } from "react";
-import { View, Animated, StyleSheet, Easing } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { View, Animated, StyleSheet, Easing, AppState } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
+import { useReducedMotion } from "react-native-reanimated";
 
 /**
  * BatteryVisualizer — Animated 4-segment battery matching iOS `BatteryVisualizer`.
@@ -17,9 +19,21 @@ interface BatteryVisualizerProps {
 
 const BatteryVisualizer: React.FC<BatteryVisualizerProps> = ({ soc }) => {
   const pulseAnim = useRef(new Animated.Value(0.6)).current;
+  const isFocused = useIsFocused();
+  const reducedMotion = useReducedMotion();
+  const [isForeground, setIsForeground] = useState(AppState.currentState === "active");
 
   useEffect(() => {
-    Animated.loop(
+    const subscription = AppState.addEventListener("change", state => setIsForeground(state === "active"));
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!isFocused || !isForeground || reducedMotion) {
+      pulseAnim.setValue(1);
+      return;
+    }
+    const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
           toValue: 1.0,
@@ -34,8 +48,10 @@ const BatteryVisualizer: React.FC<BatteryVisualizerProps> = ({ soc }) => {
           useNativeDriver: true,
         }),
       ])
-    ).start();
-  }, [pulseAnim]);
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [isFocused, isForeground, pulseAnim, reducedMotion]);
 
   const segments = [25, 50, 75, 100];
   const filledOpacity = { opacity: pulseAnim };

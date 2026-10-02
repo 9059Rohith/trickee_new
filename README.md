@@ -106,8 +106,9 @@ It migrates and idempotently seeds SQLite, starts FastAPI on `8001`, starts
 Metro on `8081`, installs the debug APK on the connected emulator/device, and
 prints log locations and demo accounts. Use `-SkipAndroid` when only the API and
 Metro are needed. The complete PostgreSQL/Redis worker topology is exercised
-with Docker Compose; the lightweight SQLite launcher intentionally does not
-pretend Redis processors are running when Docker Desktop is unavailable.
+with Docker Compose. The lightweight SQLite launcher starts a local processor
+for live GPS state, IMU events, and trip finalization when Docker Desktop is
+unavailable; this local worker is restricted to SQLite pilots.
 Android compiler output is automatically placed under
 `%LOCALAPPDATA%\Trickee\android-build` for OneDrive checkouts to prevent Files
 On-Demand reparse points from corrupting Gradle outputs.

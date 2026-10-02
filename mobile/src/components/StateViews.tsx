@@ -53,6 +53,7 @@ export const EmptyState: React.FC<{
 const styles = StyleSheet.create({
   center: {
     flex: 1,
+    backgroundColor: Colors.appBackground,
     alignItems: "center",
     justifyContent: "center",
     padding: 32,

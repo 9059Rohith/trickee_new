@@ -9,11 +9,12 @@ import inventory from "../../motion/webInventory.json";
 import { fontFamily } from "../../theme/typography";
 
 const REVIEWED_KEY = "trickee.motion.sourceReviewed.v1";
+const LOGO_REST_PROGRESS = motionDurations.introResolved / motionDurations.introTotal;
 type Entry = (typeof inventory)[number];
 
 export default function MotionGalleryScreen({ navigation }: { navigation: any }) {
   const { width } = useWindowDimensions();
-  const progress = useSharedValue(0);
+  const progress = useSharedValue(LOGO_REST_PROGRESS);
   const railWidth = useSharedValue(1);
   const [slow, setSlow] = useState(false);
   const [reducedPreview, setReducedPreview] = useState(false);
@@ -48,9 +49,9 @@ export default function MotionGalleryScreen({ navigation }: { navigation: any })
   }, [fpsCallback, showFps]);
 
   const scrub = useMemo(() => {
-    const pan = Gesture.Pan().onBegin((event) => { progress.value = Math.max(0, Math.min(1, event.x / railWidth.value)); })
+    const pan = Gesture.Pan().onBegin((event) => { cancelAnimation(progress); progress.value = Math.max(0, Math.min(1, event.x / railWidth.value)); })
       .onUpdate((event) => { progress.value = Math.max(0, Math.min(1, event.x / railWidth.value)); });
-    const tap = Gesture.Tap().onEnd((event) => { progress.value = Math.max(0, Math.min(1, event.x / railWidth.value)); });
+    const tap = Gesture.Tap().onEnd((event) => { cancelAnimation(progress); progress.value = Math.max(0, Math.min(1, event.x / railWidth.value)); });
     return Gesture.Simultaneous(pan, tap);
   }, [progress, railWidth]);
 
@@ -58,7 +59,9 @@ export default function MotionGalleryScreen({ navigation }: { navigation: any })
   const replay = useCallback(() => {
     cancelAnimation(progress);
     progress.value = 0;
-    progress.value = withTiming(1, { duration: motionDurations.introTotal * (slow ? 4 : 1), easing: Easing.linear });
+    progress.value = withTiming(1, { duration: motionDurations.introTotal * (slow ? 4 : 1), easing: Easing.linear }, (finished) => {
+      if (finished) progress.value = LOGO_REST_PROGRESS;
+    });
   }, [progress, slow]);
   const step = useCallback((direction: number) => {
     cancelAnimation(progress);

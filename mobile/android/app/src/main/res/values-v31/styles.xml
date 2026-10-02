@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/motion_splash_background</item>
+        <item name="android:windowSplashScreenBackground">@color/motion_splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/trickee_splash_logo</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/motion_splash_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/app_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:editTextBackground">@android:color/transparent</item>
+    </style>
+</resources>

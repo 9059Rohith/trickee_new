@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { AppState, StyleSheet, Text, View } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -13,7 +13,7 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
-import Svg, { Circle, Line, Path } from "react-native-svg";
+import Svg, { Circle, Defs, Image as SvgImage, Line, LinearGradient, Mask, Path, Rect, Stop } from "react-native-svg";
 import { logoRouteCircle, logoRouteLengths, logoRoutePaths, stageProgress } from "../../motion/logoTimeline";
 import { backOut, power2InOut, power2Out, power3Out, sineOut } from "../../motion/easing";
 import { motionColors, motionDurations, motionGeometry } from "../../motion/tokens";
@@ -21,6 +21,7 @@ import { fontFamily } from "../../theme/typography";
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
 const brandArt = require("../../../assets/logo/trickee_logo.png");
 
 type LogoMode = "splash" | "header" | "loader" | "playground";
@@ -65,8 +66,7 @@ export function TrickeeLogoAnimated({
     if (mode === "header") {
       reducedOpacity.value = 1;
       time.value = motionDurations.introResolved;
-      if (!reduced) breathe.value = withRepeat(withTiming(1, { duration: 4600, easing: Easing.inOut(Easing.sin) }), -1, true);
-      return () => { cancelAnimation(breathe); };
+      return;
     }
     if (typeof progress === "number") {
       reducedOpacity.value = 1;
@@ -98,6 +98,27 @@ export function TrickeeLogoAnimated({
     return () => { cancelAnimation(time); };
   }, [breathe, externalProgress, mode, onComplete, progress, reduced, reducedOpacity, speed, time]);
 
+  useEffect(() => {
+    if (mode !== "header" || reduced) {
+      breathe.value = 0;
+      return;
+    }
+    const startBreathe = () => {
+      breathe.value = withRepeat(withTiming(1, { duration: 4600, easing: Easing.inOut(Easing.sin) }), -1, true);
+    };
+    if (AppState.currentState === "active") startBreathe();
+    const subscription = AppState.addEventListener("change", state => {
+      cancelAnimation(breathe);
+      breathe.value = 0;
+      if (state === "active") startBreathe();
+    });
+    return () => {
+      subscription.remove();
+      cancelAnimation(breathe);
+      breathe.value = 0;
+    };
+  }, [breathe, mode, reduced]);
+
   const routeProps1 = useAnimatedProps(() => ({
     strokeDashoffset: logoRouteLengths[0] * (1 - power2InOut(stageProgress(displayTime.value, "route"))),
   }));
@@ -106,6 +127,10 @@ export function TrickeeLogoAnimated({
   }));
   const routeProps3 = useAnimatedProps(() => ({
     strokeDashoffset: logoRouteLengths[2] * (1 - power2InOut(stageProgress(displayTime.value - 320, "route"))),
+  }));
+  const shineProps = useAnimatedProps(() => ({
+    x: -420 + 850 * power2InOut(stageProgress(displayTime.value, "shine")),
+    opacity: reduced || mode === "header" ? 0 : Math.min(1, stageProgress(displayTime.value, "shine") * 8) * Math.min(1, Math.max(0, (3900 - displayTime.value) / 200)),
   }));
   const routeStyle = useAnimatedStyle(() => ({
     opacity: reduced ? 0 : 1 - Math.max(0, Math.min(1, (displayTime.value - 1950) / 650)),
@@ -159,10 +184,13 @@ export function TrickeeLogoAnimated({
     const value = reduced || mode === "header" ? 1 : power3Out(stageProgress(displayTime.value, "caption"));
     return { opacity: value, transform: [{ translateY: (1 - value) * 14 }] };
   });
-  const exitStyle = useAnimatedStyle(() => ({
-    opacity: mode === "splash" || mode === "playground" ? 1 - power2InOut(stageProgress(displayTime.value, "exit")) : 1,
-    transform: [{ translateY: -8 * stageProgress(displayTime.value, "exit") }],
-  }));
+  const exitStyle = useAnimatedStyle(() => {
+    const exit = reduced ? 0 : stageProgress(displayTime.value, "exit");
+    return {
+      opacity: mode === "splash" || mode === "playground" ? 1 - power2InOut(exit) : 1,
+      transform: [{ translateY: -8 * exit }],
+    };
+  });
   const rootStyle = useAnimatedStyle(() => ({ opacity: reducedOpacity.value }));
 
   const compact = mode === "header" || mode === "loader";
@@ -184,6 +212,7 @@ export function TrickeeLogoAnimated({
         <Animated.View style={[styles.ripple, styles.rippleCyan, { width: size, height: size, borderRadius: size * 0.5 }, rippleTwoStyle]} />
         <Animated.View style={[styles.orbit, { width: size * 0.95, height: size * 0.95, borderRadius: size * 0.475, top: size * 0.025, left: size * 0.025 }, orbitStyle]} />
         <Animated.View style={[styles.orbitInner, { width: size * 0.74, height: size * 0.74, borderRadius: size * 0.37, top: size * 0.13, left: size * 0.13 }, orbitStyle]} />
+        <Animated.View style={[styles.orbitOuter, { width: size * 1.15, height: size * 1.15, borderRadius: size * 0.575, top: -size * 0.075, left: -size * 0.075 }, orbitStyle]} />
         <Animated.View style={[StyleSheet.absoluteFill, routeStyle]}>
           <Svg width={size} height={size} viewBox="0 0 500 500" fill="none">
             <AnimatedPath d={logoRoutePaths[0]} stroke={motionColors.yellow} strokeWidth={motionGeometry.logoStrokeWidth} strokeDasharray={`${logoRouteLengths[0]} ${logoRouteLengths[0]}`} animatedProps={routeProps1} />
@@ -193,6 +222,17 @@ export function TrickeeLogoAnimated({
         </Animated.View>
         <Animated.View style={[styles.pulse, { top: size * 0.24, left: size * 0.49 }, pulseStyle]} />
         <Animated.Image source={brandArt} resizeMode="contain" style={[{ width: size, height: size }, artStyle]} />
+        {!compact && <Svg pointerEvents="none" width={size} height={size} viewBox="0 0 500 500" style={StyleSheet.absoluteFill}>
+          <Defs>
+            <LinearGradient id="logoShine" x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor="#FFFBE8" stopOpacity="0" />
+              <Stop offset="0.5" stopColor="#FFFBE8" stopOpacity="0.72" />
+              <Stop offset="1" stopColor="#FFFBE8" stopOpacity="0" />
+            </LinearGradient>
+            <Mask id="logoArtworkMask"><SvgImage href={brandArt} x="0" y="0" width="500" height="500" /></Mask>
+          </Defs>
+          <AnimatedRect y="0" width="110" height="500" fill="url(#logoShine)" mask="url(#logoArtworkMask)" animatedProps={shineProps} />
+        </Svg>}
       </View>
       {!compact && <Animated.View style={[styles.caption, captionStyle]}>
         <Text style={styles.captionText}>EVERY SIGNAL.</Text>
@@ -210,6 +250,7 @@ const styles = StyleSheet.create({
   rippleCyan: { borderColor: "rgba(72,223,244,0.28)" },
   orbit: { position: "absolute", borderWidth: 1, borderColor: "rgba(72,223,244,0.24)" },
   orbitInner: { position: "absolute", borderWidth: 1, borderColor: "rgba(255,224,0,0.28)" },
+  orbitOuter: { position: "absolute", borderWidth: 1, borderColor: "rgba(72,223,244,0.08)" },
   pulse: { position: "absolute", zIndex: 3, width: 10, height: 10, borderRadius: 5, backgroundColor: "#FFF7B2", shadowColor: motionColors.yellow, shadowOpacity: 1, shadowRadius: 24, elevation: 8 },
   caption: { flexDirection: "row", justifyContent: "center", flexWrap: "wrap", gap: 14, marginTop: -10 },
   captionText: { color: "rgba(235,244,247,0.75)", fontFamily: fontFamily.technical, fontSize: 8, letterSpacing: 1.2, lineHeight: 15 },

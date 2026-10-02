@@ -21,6 +21,8 @@ kapt {
 }
 
 def enableProguardInReleaseBuilds = false
+// Keep normal packages universal; a device-test build can package only its emulator ABI.
+def deviceTestAbi = providers.gradleProperty("TRICKEE_DEVICE_TEST_ABI").orNull
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 def releaseSigningPropertyNames = [
     "TRICKEE_RELEASE_STORE_FILE",
@@ -68,6 +70,9 @@ def hasFirebaseConfig = firebasePropertyNames.every {
 def allowReleaseWithoutFirebase = providers.gradleProperty("TRICKEE_ALLOW_RELEASE_WITHOUT_FCM")
     .orNull
     ?.toBoolean() ?: false
+def pilotLocalHttp = providers.gradleProperty("TRICKEE_PILOT_LOCAL_HTTP")
+    .orNull
+    ?.toBoolean() ?: false
 def leafletGeneratedAssetsDir = layout.buildDirectory.dir("generated/leafletAssets")
 def syncLeafletAssets = tasks.register("syncLeafletAssets", Copy) {
     from("$rootDir/../node_modules/leaflet/dist") {
@@ -85,6 +90,16 @@ if (releaseTaskRequested && !hasFirebaseConfig && !allowReleaseWithoutFirebase) 
         "GPS Driver release builds require all TRICKEE_FIREBASE_* properties so FCM cannot be silently omitted."
     )
 }
+if (releaseTaskRequested && !(project.findProperty("TRICKEE_API_ORIGIN")?.toString() ?: "").startsWith("https://")) {
+    throw new GradleException(
+        "GPS Driver release builds require TRICKEE_API_ORIGIN with an HTTPS production backend URL."
+    )
+}
+if (releaseTaskRequested && !(project.findProperty("TRICKEE_GOOGLE_WEB_CLIENT_ID")?.toString() ?: "").trim()) {
+    throw new GradleException(
+        "GPS Driver release builds require TRICKEE_GOOGLE_WEB_CLIENT_ID because Google sign-in is the release login method."
+    )
+}
 
 android {
     ndkVersion rootProject.ext.ndkVersion
@@ -98,6 +113,9 @@ android {
     }
     defaultConfig {
         applicationId "com.trickee.gpsdriverapp"
+        if (deviceTestAbi) {
+            ndk { abiFilters deviceTestAbi }
+        }
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -146,7 +164,7 @@ android {
             initWith release
             signingConfig signingConfigs.debug
             matchingFallbacks = ["release"]
-            manifestPlaceholders = [usesCleartextTraffic: "false"]
+            manifestPlaceholders = [usesCleartextTraffic: pilotLocalHttp ? "true" : "false"]
         }
     }
 }

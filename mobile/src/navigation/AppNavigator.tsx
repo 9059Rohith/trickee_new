@@ -28,6 +28,7 @@ import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
 import { navigationForRole } from "../services/navigationPolicy";
 import { linking } from "./navigationLinking";
 import MotionGalleryScreen from "../screens/dev/MotionGalleryScreen";
+import SettingsScreen from "../screens/settings/SettingsScreen";
 
 const RootStack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -165,6 +166,7 @@ export default function AppNavigator() {
                 name="VehicleOnboarding"
                 component={VehicleOnboardingScreen}
               />
+              <RootStack.Screen name="Settings" component={SettingsScreen} />
               {__DEV__ && <RootStack.Screen name="MotionGallery" component={MotionGalleryScreen} />}
             </RootStack.Group>
           </>

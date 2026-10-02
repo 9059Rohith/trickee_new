@@ -16,6 +16,7 @@ from app.models.entities import (
     MobileTripSession,
     SOCReading,
     TripFeature,
+    TripFinalization,
     TripPrediction,
     Vehicle,
 )
@@ -204,6 +205,20 @@ def get_vehicle_gps_summary(db: Session, vehicle_id: str) -> dict:
         .order_by(TripPrediction.created_at.desc())
         .first()
     )
+    latest_finalized = None
+    final_energy = {}
+    if latest_pred is None:
+        latest_finalized = (
+            db.query(TripFinalization)
+            .join(MobileTripSession, TripFinalization.trip_id == MobileTripSession.id)
+            .filter(
+                MobileTripSession.vehicle_id == vehicle_id,
+                TripFinalization.state == "completed",
+            )
+            .order_by(MobileTripSession.ended_at.desc())
+            .first()
+        )
+        final_energy = (latest_finalized.summary or {}).get("energy") or {} if latest_finalized else {}
 
     # Latest SOC
     latest_soc = (
@@ -217,11 +232,12 @@ def get_vehicle_gps_summary(db: Session, vehicle_id: str) -> dict:
 
     # Estimated range only if we have both SOC and Wh/km
     estimated_range = None
-    if recent_soc is not None and latest_pred and latest_pred.wh_per_km and vehicle.usable_kwh:
+    model_wh_per_km = latest_pred.wh_per_km if latest_pred else final_energy.get("wh_per_km")
+    if recent_soc is not None and model_wh_per_km and vehicle.usable_kwh:
         estimated_range = estimate_remaining_range(
             current_soc_pct=recent_soc,
             usable_kwh=vehicle.usable_kwh,
-            wh_per_km=latest_pred.wh_per_km,
+            wh_per_km=model_wh_per_km,
         )
         estimated_range, _, _ = _cap_range_to_vehicle_limit(
             estimated_range, vehicle, recent_soc
@@ -233,15 +249,15 @@ def get_vehicle_gps_summary(db: Session, vehicle_id: str) -> dict:
         "spec_complete": not vehicle.spec_incomplete,
         "category": vehicle.category,
         "latest_prediction": {
-            "wh_per_km": latest_pred.wh_per_km if latest_pred else None,
-            "route_energy_wh": latest_pred.route_energy_wh if latest_pred else None,
-            "demand_score": latest_pred.demand_score if latest_pred else None,
-            "soc_consumed_pct": latest_pred.soc_consumed_pct if latest_pred else None,
-            "confidence": latest_pred.confidence if latest_pred else None,
-            "source": latest_pred.source if latest_pred else None,
+            "wh_per_km": latest_pred.wh_per_km if latest_pred else final_energy.get("wh_per_km"),
+            "route_energy_wh": latest_pred.route_energy_wh if latest_pred else final_energy.get("route_energy_wh"),
+            "demand_score": latest_pred.demand_score if latest_pred else final_energy.get("demand_score"),
+            "soc_consumed_pct": latest_pred.soc_consumed_pct if latest_pred else (latest_finalized.summary or {}).get("soc", {}).get("estimated_consumed_pct"),
+            "confidence": latest_pred.confidence if latest_pred else final_energy.get("confidence_numeric"),
+            "source": latest_pred.source if latest_pred else final_energy.get("source"),
             "estimated": True,
-            "created_at": utc_iso(latest_pred.created_at) if latest_pred else None,
-        } if latest_pred else None,
+            "created_at": utc_iso(latest_pred.created_at) if latest_pred else utc_iso(latest_finalized.completed_at),
+        } if latest_pred or latest_finalized else None,
         "soc": {
             "value": latest_soc.value if latest_soc else None,
             "source": latest_soc.source if latest_soc else None,

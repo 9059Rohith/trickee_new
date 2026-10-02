@@ -1,10 +1,10 @@
 # Motion performance report
 
-No before/after performance claim is available yet. The baseline APK was not launched before motion changes because this worktree initially lacked an SDK path and its deep Windows path broke Reanimated's CMake build. Source-level baseline tests were recorded in `BASELINE.md`.
+No before/after performance claim is available yet. The baseline APK was not launched before motion changes because this worktree initially lacked an SDK path and its deep Windows path broke Reanimated's CMake build. Source-level baseline tests were recorded in `BASELINE.md`. The motion debug build launched on the `TrickeeMotionTest` Android 36.1 emulator through ADB-reversed Metro. A 27.5 MB bundled `pilot` APK also installed and reached the login screen without Metro. The emulator's slow initial boot and System UI ANR make those launches unsuitable as product performance measurements.
 
 | Metric | Baseline | Current | Budget | Measurement |
 | --- | --- | --- | --- | --- |
-| Cold launch to interactive | not captured | pending emulator launch | <=1.5s mid-range | `adb shell am start -W` plus visible-frame review |
+| Cold launch to interactive | not captured | bundled pilot login rendered; timing not certified | <=1.5s mid-range | `adb shell am start -W` plus visible-frame review on a stable device |
 | Sustained FPS / janky frames | not captured | pending | >=60 FPS, <1% jank | `dumpsys gfxinfo framestats` / trace |
 | Logo frame parity | not captured | pending | SSIM >=0.92 | web frame export and Android gallery frames |
 | Memory after 30-minute soak | not captured | pending | within 10% | `dumpsys meminfo` before/after |

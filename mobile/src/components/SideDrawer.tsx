@@ -17,6 +17,7 @@ const ITEMS = [
   ["Plan My Day", "calendar-clock", "DailyPlanner"],
   ["Route Updates", "bell-outline", "RouteNudges"],
   ["Vehicle Details", "motorbike-electric", "VehicleOnboarding"],
+  ["Settings", "cog-outline", "Settings"],
 ] as const;
 
 const SideDrawer: React.FC<{

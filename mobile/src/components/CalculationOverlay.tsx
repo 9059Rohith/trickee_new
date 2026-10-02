@@ -169,7 +169,7 @@ const CalculationOverlay: React.FC<{
     (unavailable
       ? "Trip saved, but there were not enough valid GPS points to calculate energy. Keep location enabled throughout the next trip."
       : null);
-  const showResult = Boolean(result && !unavailable && minimumComplete);
+  const showResult = Boolean(result && !unavailable && !processing && minimumComplete);
   const showError = Boolean(displayError && minimumComplete);
 
   return (
@@ -198,9 +198,11 @@ const CalculationOverlay: React.FC<{
             <View style={styles.topCopy}>
               <Text style={styles.eyebrow}>TRICKEE PHYSICS LAB</Text>
               <Text style={styles.labTitle}>
-                {showResult
-                  ? "Energy model complete"
-                  : "Building your estimate"}
+                {showError
+                  ? "Trip processing status"
+                  : showResult
+                    ? "Energy model complete"
+                    : "Building your estimate"}
               </Text>
             </View>
             <Text style={styles.counter}>0{showResult ? 7 : step + 1}/07</Text>
@@ -208,8 +210,8 @@ const CalculationOverlay: React.FC<{
 
           {showError ? (
             <View style={styles.center}>
-              <View style={[styles.resultIcon, styles.errorIcon]}>
-                <Icon name="alert-outline" size={31} color="#FFFFFF" />
+              <View style={[styles.resultIcon, !processing && styles.errorIcon]}>
+                <Icon name={processing ? "clock-outline" : "alert-outline"} size={31} color="#FFFFFF" />
               </View>
               <Text style={styles.resultTitle}>
                 {unavailable || processing ? "Trip saved" : "Calculation interrupted"}
@@ -663,6 +665,9 @@ const styles = StyleSheet.create({
   mlText: { color: "#42536D", fontSize: 9, fontWeight: "700" },
   doneButton: {
     height: 48,
+    minWidth: 150,
+    paddingHorizontal: 24,
+    alignSelf: "center",
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",

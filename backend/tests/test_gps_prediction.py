@@ -102,6 +102,28 @@ class TestHealthEndpoint:
 
 
 class TestOwnerSummary:
+    def test_ended_trip_counts_while_energy_processing_is_pending(self, seed_data):
+        db = seed_data["db"]
+        user = seed_data["user"]
+        user.role = "fleet_admin"
+        db.add(MobileTripSession(
+            user_id=user.id,
+            driver_id=seed_data["driver"].id,
+            vehicle_id=seed_data["vehicle"].id,
+            started_at=datetime.utcnow() - timedelta(minutes=5),
+            ended_at=datetime.utcnow(),
+            status="finalizing",
+        ))
+        db.commit()
+
+        token = create_access_token({"sub": user.id})
+        response = client.get(
+            "/api/v1/owner/summary",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["totals"]["trips"] == 1
+
     def test_range_is_capped_by_soc_adjusted_certified_range(self, seed_data):
         capped, ceiling, applied = _cap_range_to_vehicle_limit(
             500.0, seed_data["vehicle"], 78.0

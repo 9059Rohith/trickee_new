@@ -23,7 +23,8 @@ export const LIVE_POLL_INTERVAL_MS = 15000;
 export const DEFAULT_MAP_CENTER = { latitude: 21.1702, longitude: 72.8311 };
 
 export const Features = {
-  passwordLogin: __DEV__,
+  passwordLogin: __DEV__ || !USE_HOSTED_BACKEND,
+  googleLogin: USE_HOSTED_BACKEND,
   liveWebSocket: true,
   driverActions: true,
   gpsFirstModel: true,

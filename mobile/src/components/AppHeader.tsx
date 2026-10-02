@@ -1,98 +1,62 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Colors } from "../constants/Colors";
 import { useLiveData } from "../context/LiveDataContext";
-import { TrickeeLogoAnimated } from "./logo/TrickeeLogoAnimated";
+import { motionColors } from "../motion/tokens";
+import { fontFamily } from "../theme/typography";
 
 const AppHeader: React.FC<{ onMenu: () => void }> = ({ onMenu }) => {
   const insets = useSafeAreaInsets();
   const { alerts, me } = useLiveData();
-  const unresolved = alerts.filter((item) => !item.is_resolved).length;
+  const unresolved = alerts.filter(item => !item.is_resolved).length;
+  const active = Boolean(me?.active_trip);
+
   return (
-    <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
-      <TouchableOpacity
-        style={styles.button}
-        onPress={onMenu}
-        accessibilityLabel="Open navigation menu"
-      >
-        <Icon name="menu" size={25} color={Colors.white} />
-      </TouchableOpacity>
+    <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
       <View style={styles.brand}>
-        <TrickeeLogoAnimated size={58} mode="header" />
-        <Text style={styles.subtitle}>GPS-FIRST EV INTELLIGENCE</Text>
+        <View style={styles.brandRule} />
+        <Text style={styles.wordmark}>T<Text style={styles.yellow}>R</Text>ICKEE</Text>
+        <Text style={styles.brandCaption}>ROUTE INTELLIGENCE</Text>
       </View>
-      <View style={styles.button}>
-        <Icon name="bell-outline" size={23} color={Colors.white} />
-        {unresolved > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{Math.min(unresolved, 9)}</Text>
-          </View>
-        )}
-        <View
-          style={[
-            styles.status,
-            {
-              backgroundColor: me?.active_trip
-                ? Colors.neonGreen
-                : Colors.secondaryText,
-            },
-          ]}
-        />
+      <View style={styles.actions}>
+        <View style={styles.liveStatus} accessibilityLabel={active ? "Trip live" : "Ready"}>
+          <View style={[styles.statusDot, active && styles.statusActive]} />
+          <Text style={styles.statusText}>{active ? "LIVE" : "READY"}</Text>
+        </View>
+        <View style={styles.alerts} accessibilityLabel={`${unresolved} unresolved alerts`}>
+          <Icon name="bell-outline" size={20} color="#C9D5D6" />
+          {unresolved > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{Math.min(unresolved, 9)}</Text></View>}
+        </View>
+        <TouchableOpacity
+          style={styles.menuButton}
+          onPress={onMenu}
+          accessibilityRole="button"
+          accessibilityLabel="Open navigation menu"
+        >
+          <Icon name="menu" size={22} color={motionColors.text} />
+        </TouchableOpacity>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  header: {
-    zIndex: 20,
-    elevation: 10,
-    minHeight: 82,
-    paddingHorizontal: 14,
-    paddingBottom: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#04060A",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
-  },
-  button: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-  brand: { flex: 1, alignItems: "center" },
-  subtitle: {
-    color: Colors.secondaryText,
-    fontSize: 8,
-    fontWeight: "700",
-    letterSpacing: 0.8,
-  },
-  badge: {
-    position: "absolute",
-    right: 4,
-    top: 3,
-    minWidth: 17,
-    height: 17,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.red,
-  },
-  badgeText: { color: Colors.white, fontSize: 9, fontWeight: "900" },
-  status: {
-    position: "absolute",
-    right: 3,
-    bottom: 4,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
+  header: { zIndex: 20, minHeight: 78, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 13, borderBottomWidth: 1, borderBottomColor: "rgba(72,223,244,0.18)", backgroundColor: motionColors.ink },
+  brand: { flexShrink: 1 },
+  brandRule: { width: 28, height: 2, backgroundColor: motionColors.yellow, marginBottom: 5 },
+  wordmark: { color: motionColors.text, fontFamily: fontFamily.headingBold, fontSize: 19, letterSpacing: -1 },
+  yellow: { color: motionColors.yellow },
+  brandCaption: { color: "#8A9BA0", fontFamily: fontFamily.technical, fontSize: 6, letterSpacing: 0.65, marginTop: 1 },
+  actions: { flexDirection: "row", alignItems: "center", gap: 12 },
+  liveStatus: { flexDirection: "row", alignItems: "center", gap: 5 },
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#85979B" },
+  statusActive: { backgroundColor: "#39FF14" },
+  statusText: { color: "#9BAEB1", fontFamily: fontFamily.technical, fontSize: 7, letterSpacing: 0.5 },
+  alerts: { width: 32, height: 40, alignItems: "center", justifyContent: "center" },
+  badge: { position: "absolute", right: 1, top: 3, minWidth: 15, height: 15, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: motionColors.coral },
+  badgeText: { color: motionColors.ink, fontFamily: fontFamily.bodyBold, fontSize: 9 },
+  menuButton: { width: 42, height: 42, borderWidth: 1, borderColor: "rgba(72,223,244,0.26)", borderRadius: 10, alignItems: "center", justifyContent: "center" },
 });
 
 export default AppHeader;

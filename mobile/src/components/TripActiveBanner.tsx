@@ -19,9 +19,9 @@ const TripActiveBanner: React.FC<Props> = ({ tripStartedAt }) => {
   useEffect(() => {
     const interval = setInterval(() => {
       if (tripStartedAt) {
-        const diff = Math.floor(
+        const diff = Math.max(0, Math.floor(
           (Date.now() - new Date(tripStartedAt).getTime()) / 1000
-        );
+        ));
         const mins = Math.floor(diff / 60);
         const secs = diff % 60;
         setElapsed(

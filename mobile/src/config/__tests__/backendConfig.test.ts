@@ -31,4 +31,12 @@ describe("backend configuration", () => {
       useHostedBackend: true,
     });
   });
+
+  it("allows a bundled pilot to use the local demo backend", () => {
+    expect(resolveBackendConfig(false, "android", "http://localhost:8001", "")).toEqual({
+      apiOrigin: "http://localhost:8001",
+      websocketOrigin: "http://localhost:8001",
+      useHostedBackend: false,
+    });
+  });
 });

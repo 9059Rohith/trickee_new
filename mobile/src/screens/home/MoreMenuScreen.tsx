@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../../constants/Colors";
+import { motionColors } from "../../motion/tokens";
+import { fontFamily } from "../../theme/typography";
 import GlassCard from "../../components/GlassCard";
 import BackgroundLogo from "../../components/BackgroundLogo";
 import { useAuth } from "../../context/AuthContext";
@@ -127,7 +129,9 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
+          <Text style={styles.headerKicker}>EXPLORE / 04</Text>
           <Text style={styles.headerTitle}>More</Text>
+          <View style={styles.headerRule} />
         </View>
 
         <View style={styles.menuList}>
@@ -193,9 +197,9 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
             </View>
             <View style={styles.profileDetail}>
               <Icon name="briefcase" size={14} color={Colors.trickeeYellow} />
-              <Text style={styles.profileDetailLabel}>Company</Text>
+              <Text style={styles.profileDetailLabel}>Vehicle</Text>
               <Text style={styles.profileDetailValue}>
-                {vehicle?.make || "xyz"}
+                {vehicle ? `${vehicle.make} ${vehicle.model}`.trim() : "No vehicle assigned"}
               </Text>
             </View>
             <View style={styles.profileDetail}>
@@ -376,25 +380,27 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingTop: 22,
     paddingBottom: 160,
-    gap: 16,
+    gap: 14,
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    marginBottom: 6,
   },
+  headerKicker: { color: motionColors.cyan, fontFamily: fontFamily.technical, fontSize: 7, letterSpacing: 1.1 },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: "700",
+    fontFamily: fontFamily.headingBold,
+    fontSize: 30,
+    letterSpacing: -1,
     color: Colors.white,
+    marginTop: 10,
   },
+  headerRule: { height: 1, backgroundColor: "rgba(72,223,244,0.18)", marginTop: 20 },
   menuList: {
     gap: 12,
   },
   menuCard: {
-    height: 70,
+    height: 66,
     justifyContent: "center",
   },
   menuRow: {
@@ -405,16 +411,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   menuIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
   menuLabel: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: "600",
+    fontFamily: fontFamily.bodyBold,
+    fontSize: 14,
     color: Colors.white,
   },
 
@@ -422,10 +428,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sectionLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "rgba(255,255,255,0.4)",
-    letterSpacing: 1.5,
+    fontFamily: fontFamily.technical,
+    fontSize: 8,
+    color: motionColors.cyan,
+    letterSpacing: 0.8,
   },
 
   profileContent: {
@@ -449,8 +455,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   profileName: {
+    fontFamily: fontFamily.headingBold,
     fontSize: 22,
-    fontWeight: "700",
     color: Colors.white,
   },
   profileRole: {

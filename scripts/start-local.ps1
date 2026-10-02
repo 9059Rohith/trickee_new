@@ -76,6 +76,12 @@ try {
 if ($RestartServices) {
     Stop-PortListener 8001
     Stop-PortListener 8081
+    $workerPidFile = Join-Path $logRoot "local-worker.pid"
+    if (Test-Path -LiteralPath $workerPidFile) {
+        $workerPid = [int](Get-Content -LiteralPath $workerPidFile -Raw)
+        $workerProcess = Get-Process -Id $workerPid -ErrorAction SilentlyContinue
+        if ($workerProcess) { Stop-Process -Id $workerPid -Force }
+    }
 }
 
 if (-not (Get-NetTCPConnection -State Listen -LocalPort 8001 -ErrorAction SilentlyContinue)) {
@@ -84,6 +90,14 @@ if (-not (Get-NetTCPConnection -State Listen -LocalPort 8001 -ErrorAction Silent
     ) $backendRoot
 }
 Wait-Health "http://127.0.0.1:8001/health"
+
+$workerPidFile = Join-Path $logRoot "local-worker.pid"
+$workerPid = if (Test-Path -LiteralPath $workerPidFile) {
+    [int](Get-Content -LiteralPath $workerPidFile -Raw)
+} else { 0 }
+if (-not (Get-Process -Id $workerPid -ErrorAction SilentlyContinue)) {
+    Start-LoggedProcess "local-worker" $python @("-m", "app.local_worker") $backendRoot
+}
 
 $nodeModules = Join-Path $mobileRoot "node_modules"
 if ($mobileRoot.ToLowerInvariant().Contains("\onedrive\")) {
