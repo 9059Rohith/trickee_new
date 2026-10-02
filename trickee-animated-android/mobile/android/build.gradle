@@ -1,0 +1,42 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+    ext {
+        buildToolsVersion = "36.0.0"
+        minSdkVersion = 24
+        compileSdkVersion = 36
+        targetSdkVersion = 36
+        ndkVersion = "27.1.12297006"
+        kotlinVersion = "2.1.20"
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle")
+        classpath("com.facebook.react:react-native-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+    }
+}
+
+apply plugin: "com.facebook.react.rootproject"
+
+// OneDrive Files On-Demand can replace generated Gradle files with reparse
+// points while a build is running. Keep disposable compiler output outside a
+// synced checkout; CI/non-OneDrive checkouts retain Gradle's normal paths.
+def configuredBuildRoot = providers.gradleProperty("TRICKEE_ANDROID_BUILD_ROOT").orNull
+def checkoutIsSynced = rootDir.absolutePath.toLowerCase(Locale.ROOT).contains("${File.separator}onedrive${File.separator}")
+if (configuredBuildRoot || checkoutIsSynced) {
+    def externalBuildRoot = file(configuredBuildRoot ?: "${System.getenv('LOCALAPPDATA')}\\Trickee\\android-build")
+    subprojects { subproject ->
+        def relativeName = subproject.path.tokenize(':').join(File.separator)
+        subproject.layout.buildDirectory.set(new File(externalBuildRoot, relativeName))
+        subproject.plugins.withId("com.android.library") {
+            if (subproject.name == "react-native-reanimated") {
+                subproject.extensions.getByName("android").externalNativeBuild.cmake.buildStagingDirectory =
+                    new File(externalBuildRoot, "cxx${File.separator}react-native-reanimated")
+            }
+        }
+    }
+}
