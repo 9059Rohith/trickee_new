@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../constants/Colors";
+import { fontFamily } from "../theme/typography";
 
 /** Full-area loading spinner with a caption. */
 export const LoadingState: React.FC<{ label?: string }> = ({
@@ -64,10 +65,10 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 8,
   },
-  title: { fontSize: 16, fontWeight: "700", color: Colors.white },
+  title: { fontSize: 16, fontFamily: fontFamily.heading, color: Colors.white },
   emptyTitle: {
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: fontFamily.bodySemibold,
     color: "rgba(255,255,255,0.7)",
   },
   caption: {
@@ -75,6 +76,7 @@ const styles = StyleSheet.create({
     color: Colors.secondaryText,
     textAlign: "center",
     lineHeight: 18,
+    fontFamily: fontFamily.body,
   },
   retryButton: {
     flexDirection: "row",
@@ -86,7 +88,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.trickeeYellow,
     marginTop: 6,
   },
-  retryText: { fontSize: 14, fontWeight: "700", color: Colors.buttonText },
+  retryText: { fontSize: 14, fontFamily: fontFamily.bodyBold, color: Colors.buttonText },
 });
 
 export default { LoadingState, ErrorState, EmptyState };

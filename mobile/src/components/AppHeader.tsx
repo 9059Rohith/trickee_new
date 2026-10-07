@@ -4,6 +4,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../constants/Colors";
 import { useLiveData } from "../context/LiveDataContext";
+import { fontFamily } from "../theme/typography";
 
 const AppHeader: React.FC<{ onMenu: () => void }> = ({ onMenu }) => {
   const insets = useSafeAreaInsets();
@@ -53,7 +54,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#04060A",
+    backgroundColor: "rgba(2, 6, 9, 0.96)",
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.1)",
   },
@@ -69,13 +70,13 @@ const styles = StyleSheet.create({
   title: {
     color: Colors.trickeeYellow,
     fontSize: 21,
-    fontWeight: "900",
+    fontFamily: fontFamily.headingBold,
     letterSpacing: 1.6,
   },
   subtitle: {
     color: Colors.secondaryText,
     fontSize: 8,
-    fontWeight: "700",
+    fontFamily: fontFamily.technical,
     letterSpacing: 0.8,
   },
   badge: {
@@ -89,7 +90,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: Colors.red,
   },
-  badgeText: { color: Colors.white, fontSize: 9, fontWeight: "900" },
+  badgeText: { color: Colors.white, fontSize: 9, fontFamily: fontFamily.bodyHeavy },
   status: {
     position: "absolute",
     right: 3,

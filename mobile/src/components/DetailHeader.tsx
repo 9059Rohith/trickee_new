@@ -4,6 +4,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../constants/Colors";
+import { fontFamily } from "../theme/typography";
 
 /** Shared back-navigation header for pushed detail screens. */
 const DetailHeader: React.FC<{ title: string; subtitle?: string }> = ({
@@ -39,7 +40,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 12,
     paddingBottom: 12,
-    backgroundColor: "rgba(4, 6, 10, 0.85)",
+    backgroundColor: "rgba(2, 6, 9, 0.94)",
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.08)",
   },
@@ -50,8 +51,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   titleBlock: { flex: 1, alignItems: "center" },
-  title: { fontSize: 18, fontWeight: "700", color: Colors.white },
-  subtitle: { fontSize: 12, color: Colors.secondaryText, marginTop: 2 },
+  title: { fontSize: 18, fontFamily: fontFamily.heading, color: Colors.white },
+  subtitle: { fontSize: 12, fontFamily: fontFamily.body, color: Colors.secondaryText, marginTop: 2 },
   spacer: { width: 40 },
 });
 

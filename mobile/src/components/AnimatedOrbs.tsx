@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet, Easing } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, AppState, StyleSheet, Easing } from "react-native";
 
 /**
  * AnimatedOrbs — Reusable drifting background orbs matching iOS OnboardingView/AuthView.
@@ -11,12 +11,23 @@ import { Animated, StyleSheet, Easing } from "react-native";
  *
  * All animation runs on the native driver so the JS thread stays free (avoids ANR).
  */
-const AnimatedOrbs: React.FC = () => {
+const AnimatedOrbs: React.FC<{ active?: boolean }> = ({ active = true }) => {
   const yellow = useRef(new Animated.Value(0)).current;
   const blue = useRef(new Animated.Value(0)).current;
   const purple = useRef(new Animated.Value(0)).current;
+  const [appActive, setAppActive] = useState(AppState.currentState === "active");
 
   useEffect(() => {
+    const subscription = AppState.addEventListener("change", state => {
+      setAppActive(state === "active");
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!active || !appActive) {
+      return;
+    }
     const drift = (value: Animated.Value, duration: number) =>
       Animated.loop(
         Animated.sequence([
@@ -42,7 +53,7 @@ const AnimatedOrbs: React.FC = () => {
     ];
     animations.forEach((a) => a.start());
     return () => animations.forEach((a) => a.stop());
-  }, [yellow, blue, purple]);
+  }, [active, appActive, yellow, blue, purple]);
 
   const range = (value: Animated.Value, x: number, y: number) => ({
     transform: [

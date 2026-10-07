@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   Animated,
   Modal,
   Pressable,
@@ -12,6 +13,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../constants/Colors";
 import { useAuth } from "../context/AuthContext";
 import { useLiveData } from "../context/LiveDataContext";
+import { fontFamily } from "../theme/typography";
 
 const ITEMS = [
   ["Plan My Day", "calendar-clock", "DailyPlanner"],
@@ -25,9 +27,20 @@ const SideDrawer: React.FC<{
   onNavigate: (route: string, params?: Record<string, unknown>) => void;
 }> = ({ visible, onClose, onNavigate }) => {
   const x = useRef(new Animated.Value(-330)).current;
+  const [reducedMotion, setReducedMotion] = useState(false);
   const { logout, user } = useAuth();
   const { vehicle } = useLiveData();
   useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion).catch(() => undefined);
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReducedMotion);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      x.setValue(visible ? 0 : -330);
+      return;
+    }
     Animated.spring(x, {
       toValue: visible ? 0 : -330,
       damping: 22,
@@ -35,7 +48,7 @@ const SideDrawer: React.FC<{
       mass: 0.9,
       useNativeDriver: true,
     }).start();
-  }, [visible, x]);
+  }, [reducedMotion, visible, x]);
 
   return (
     <Modal visible={visible} transparent onRequestClose={onClose}>
@@ -114,7 +127,7 @@ const styles = StyleSheet.create({
     paddingTop: 54,
     paddingHorizontal: 18,
     paddingBottom: 30,
-    backgroundColor: "#09111F",
+    backgroundColor: Colors.motionPanel,
     borderRightWidth: 1,
     borderRightColor: "rgba(255,202,32,0.25)",
   },
@@ -134,12 +147,12 @@ const styles = StyleSheet.create({
   },
   profileText: { flex: 1 },
   closeButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  name: { color: Colors.white, fontSize: 16, fontWeight: "800" },
-  vehicle: { color: Colors.secondaryText, fontSize: 12, marginTop: 2 },
+  name: { color: Colors.white, fontSize: 16, fontFamily: fontFamily.heading },
+  vehicle: { color: Colors.secondaryText, fontSize: 12, fontFamily: fontFamily.body, marginTop: 2 },
   section: {
     color: Colors.secondaryText,
     fontSize: 10,
-    fontWeight: "800",
+    fontFamily: fontFamily.technical,
     letterSpacing: 1.5,
     marginBottom: 9,
   },
@@ -153,7 +166,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
     backgroundColor: "rgba(255,255,255,0.035)",
   },
-  label: { flex: 1, color: Colors.white, fontSize: 14, fontWeight: "600" },
+  label: { flex: 1, color: Colors.white, fontSize: 14, fontFamily: fontFamily.bodySemibold },
   spacer: { flex: 1 },
   logout: {
     height: 48,
@@ -164,7 +177,7 @@ const styles = StyleSheet.create({
     gap: 10,
     backgroundColor: "rgba(255,68,68,0.08)",
   },
-  logoutText: { color: Colors.red, fontWeight: "800" },
+  logoutText: { color: Colors.red, fontFamily: fontFamily.bodyHeavy },
 });
 
 export default SideDrawer;

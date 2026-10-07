@@ -29,6 +29,7 @@ const GlassCard: React.FC<GlassCardProps> = ({
     >
       {/* Inner border overlay */}
       <View
+        pointerEvents="none"
         style={[
           isPremium ? styles.premiumInnerBorder : styles.liquidGlassInnerBorder,
           { borderRadius: cornerRadius },
@@ -36,6 +37,7 @@ const GlassCard: React.FC<GlassCardProps> = ({
       />
       {/* Top-edge highlight bar (mimics iOS inner glow gradient) */}
       <View
+        pointerEvents="none"
         style={[
           styles.topHighlight,
           {
@@ -62,16 +64,15 @@ const styles = StyleSheet.create({
     borderColor: Colors.premiumCardBorder,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: 0.34,
+    shadowRadius: 14,
+    elevation: 7,
     overflow: "hidden",
   },
   premiumInnerBorder: {
     ...StyleSheet.absoluteFillObject,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: Colors.premiumCardInnerBorder,
-    zIndex: -1,
   },
 
   // Liquid Glass variant (matches iOS LiquidGlassModifier)
@@ -83,14 +84,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
-    elevation: 6,
+    elevation: 5,
     overflow: "hidden",
   },
   liquidGlassInnerBorder: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.04)",
-    zIndex: -1,
   },
 
   // Shared top-edge highlight

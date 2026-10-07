@@ -30,6 +30,7 @@ import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
 import { navigationForRole } from "../services/navigationPolicy";
 import { linking } from "./navigationLinking";
 import { fontFamily } from "../theme/typography";
+import { DETAIL_ROUTE_NAMES, MAIN_TAB_NAMES } from "../services/navigationPresentation";
 
 const RootStack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -104,7 +105,7 @@ function MainTabs({ navigation }: any) {
         tabBar={renderTabBar}
         screenOptions={{ headerShown: false }}
       >
-        <MainTab.Screen name="Home">
+        <MainTab.Screen name={MAIN_TAB_NAMES[0]}>
           {() => roleNavigation.home === "owner" ? <OwnerDashboardScreen /> : (
             <HomeScreen
               bottomTabBarHeight={bottomTabBarHeight}
@@ -112,9 +113,9 @@ function MainTabs({ navigation }: any) {
             />
           )}
         </MainTab.Screen>
-        <MainTab.Screen name="Live Map" component={LiveMapScreen} />
-        <MainTab.Screen name="Monitoring" component={MonitoringScreen} />
-        <MainTab.Screen name="More">
+        <MainTab.Screen name={MAIN_TAB_NAMES[1]} component={LiveMapScreen} />
+        <MainTab.Screen name={MAIN_TAB_NAMES[2]} component={MonitoringScreen} />
+        <MainTab.Screen name={MAIN_TAB_NAMES[3]}>
           {() => (
             <MoreMenuScreen
               onNavigate={navigateFromMore}
@@ -154,33 +155,33 @@ export default function AppNavigator() {
             />
             <RootStack.Group screenOptions={{ animation: "slide_from_right" }}>
               <RootStack.Screen
-                name="AIAssistant"
+                name={DETAIL_ROUTE_NAMES[0]}
                 component={AIAssistantScreen}
               />
               <RootStack.Screen
-                name="RouteIntel"
+                name={DETAIL_ROUTE_NAMES[1]}
                 component={RouteIntelScreen}
               />
-              <RootStack.Screen name="PastTrips" component={PastTripsScreen} />
-              <RootStack.Screen name="TripDetails" component={TripDetailsScreen} />
+              <RootStack.Screen name={DETAIL_ROUTE_NAMES[2]} component={PastTripsScreen} />
+              <RootStack.Screen name={DETAIL_ROUTE_NAMES[3]} component={TripDetailsScreen} />
               <RootStack.Screen
-                name="DailyImpact"
+                name={DETAIL_ROUTE_NAMES[4]}
                 component={DailyImpactScreen}
               />
               <RootStack.Screen
-                name="RouteNudges"
+                name={DETAIL_ROUTE_NAMES[5]}
                 component={RouteNudgesScreen}
               />
               <RootStack.Screen
-                name="DailyPlanner"
+                name={DETAIL_ROUTE_NAMES[6]}
                 component={DailyPlannerScreen}
               />
               <RootStack.Screen
-                name="TripStart"
+                name={DETAIL_ROUTE_NAMES[7]}
                 component={TripStartScreen}
               />
               <RootStack.Screen
-                name="VehicleOnboarding"
+                name={DETAIL_ROUTE_NAMES[8]}
                 component={VehicleOnboardingScreen}
               />
             </RootStack.Group>
