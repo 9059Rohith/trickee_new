@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import {
   createNavigationContainerRef,
   NavigationContainer,
@@ -29,6 +29,7 @@ import SideDrawer from "../components/SideDrawer";
 import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
 import { navigationForRole } from "../services/navigationPolicy";
 import { linking } from "./navigationLinking";
+import { fontFamily } from "../theme/typography";
 
 const RootStack = createNativeStackNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -132,6 +133,8 @@ export default function AppNavigator() {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color={Colors.accent} />
+        <Text style={styles.loadingTitle}>TRICKEE GPS DRIVER</Text>
+        <Text style={styles.loadingCopy}>Restoring your secure driver session…</Text>
       </View>
     );
   }
@@ -197,5 +200,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: Colors.appBackground,
+  },
+  loadingTitle: {
+    marginTop: 20,
+    color: Colors.accent,
+    fontFamily: fontFamily.technical,
+    fontSize: 10,
+    letterSpacing: 2.2,
+  },
+  loadingCopy: {
+    marginTop: 10,
+    color: Colors.secondaryText,
+    fontFamily: fontFamily.bodyMedium,
+    fontSize: 14,
   },
 });
