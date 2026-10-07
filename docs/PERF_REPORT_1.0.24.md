@@ -21,7 +21,7 @@ This report compares the immutable production baseline (`47bf810`) with the `1.0
 | Janky frames | 4/6 (66.7%) | 7/7 (100%) | insufficient sample | Unverified: no authenticated interaction |
 | PSS delta over 10 minutes | -27,409 KiB | -8,361 KiB | neither build grew | Pass: no idle growth |
 | Ending PSS | 43,346 KiB | 56,910 KiB | +13,564 KiB | Recorded; emulator-only |
-| Release AAB size | pending | pending | pending | <= 35 MB |
+| Release AAB size | 28.81 MiB (1.0.23) | 29.40 MiB / 30,829,465 bytes | +0.59 MiB | Pass: <= 35 MB |
 
 ## Raw evidence
 

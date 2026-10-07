@@ -1,6 +1,15 @@
 # GPS Driver project context
 
-Updated: 2026-09-30. Repository: `gpsdriver`, current isolated worktree branch `feature/plan-aware-trip-guidance-v1.0.22`.
+Updated: 2026-10-07. Repository: `gpsdriver`, current isolated worktree branch `feature/animated-ui-v1.0.24`.
+
+## Animated UI Android release candidate (2026-10-07)
+
+- Selectively ported the approved visual language from `trickee-animated-android` into the production GPS Driver app. The production navigation graph, authentication, trip orchestration, voice input, live maps, Room telemetry queue, background service, API contracts, package ID and role access were preserved. Motion is bounded, lifecycle-aware, disabled by reduced-motion preference, and concentrated in presentation components.
+- The release source is commit `3dc40cc4f7a5b13aca3d65359447c6bd39f7faaa` on pushed branch `feature/animated-ui-v1.0.24`. Signed Android identity is `com.trickee.gpsdriverapp`, `1.0.24 (26)`, target SDK 36. The registered upload-certificate SHA-1 and remote Firebase configuration were independently verified.
+- AAB: `C:\Users\AJEYA\AppData\Local\Trickee\gpsdriver-public-android-build\release\Trickee-GPS-Driver-public-1.0.24-26.aab`, 30,829,465 bytes (29.40 MiB), SHA-256 `C76F418250FD161AE03F472E4236B6A5ED056B24991BB05105CC8DE9F4180C0B`. APK SHA-256 is `80858773D0134335A8E9A4BF17ED95C8AC58E9417FA420BA9D6EC1F8F296B0C4`.
+- Fresh gates passed: mobile Jest `42 suites / 180 tests`, TypeScript, ESLint, Android debug and release JVM tests, `lintRelease`, strict signed AAB/APK build, independent JAR/APK signature checks, package/version/SDK inspection, and the 35 MiB artifact-size gate.
+- Same-emulator performance evidence records median normal launch improving from 3,320 ms to 2,362 ms (-28.9%) and no idle PSS growth over ten minutes. Authenticated map-interaction jank, physical-handset GPS/background collection, OEM process survival, Google sign-in, voice, FCM and update-in-place behavior remain physical acceptance gates.
+- Production backend was not changed or deployed. Live API health was `ok`, required trip/telemetry/destination/guidance/push routes were present, Cloud Run API revision `trickee-pilot-api-00020-qdq` was ready, and the checked recent log window contained zero severity-ERROR entries. Google Play upload/publication is not claimed.
 
 ## Trip-start search production release (2026-09-30)
 
