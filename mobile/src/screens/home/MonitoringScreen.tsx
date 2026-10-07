@@ -15,6 +15,7 @@ import { LoadingState, ErrorState } from "../../components/StateViews";
 import { useLiveData } from "../../context/LiveDataContext";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { freshnessPresentation, metricText } from "../../services/presentation";
+import { fontFamily } from "../../theme/typography";
 
 const fmt = (val: number | null | undefined, d = 1) =>
   typeof val === "number" && Number.isFinite(val) ? val.toFixed(d) : "--";
@@ -36,7 +37,7 @@ const MonitoringScreen: React.FC = () => {
   const freshnessColor = freshness.state === "live" ? Colors.neonGreen : freshness.state === "offline" ? Colors.red : Colors.trickeeYellow;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView testID="animated-monitoring-screen" style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text style={styles.title}>Vehicle Monitoring</Text>
         <EstimatedBadge
@@ -190,13 +191,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  title: { color: Colors.primaryText, fontSize: 22, fontWeight: "700" },
+  title: { color: Colors.primaryText, fontSize: 22, fontFamily: fontFamily.headingBold },
   card: { marginBottom: 12 },
   cardInner: { padding: 16 },
   cardLabel: {
     color: Colors.secondaryText,
     fontSize: 10,
-    fontWeight: "700",
+    fontFamily: fontFamily.technical,
     letterSpacing: 1,
     marginBottom: 12,
   },
@@ -211,20 +212,20 @@ const styles = StyleSheet.create({
   gridLabel: {
     color: Colors.secondaryText,
     fontSize: 10,
-    fontWeight: "600",
+    fontFamily: fontFamily.bodySemibold,
     textTransform: "uppercase",
     marginBottom: 2,
   },
-  gridValue: { color: Colors.primaryText, fontSize: 20, fontWeight: "700" },
+  gridValue: { color: Colors.primaryText, fontSize: 20, fontFamily: fontFamily.heading },
   gridSub: { color: Colors.secondaryText, fontSize: 9, marginTop: 2 },
   specWarning: { color: Colors.red, fontSize: 12, fontWeight: "600" },
   specGrid: { gap: 4 },
-  specItem: { color: Colors.primaryText, fontSize: 13 },
+  specItem: { color: Colors.primaryText, fontSize: 13, fontFamily: fontFamily.body },
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 5 },
   liveBadgeText: { color: Colors.primaryText, fontSize: 10, fontWeight: "800" },
   evidenceText: { color: Colors.secondaryText, fontSize: 11, lineHeight: 17, marginTop: 10 },
   technicalToggle: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderWidth: 1, borderColor: Colors.premiumCardBorder, borderRadius: 13, marginBottom: 12 },
-  technicalToggleText: { color: Colors.neonBlue, fontSize: 14, fontWeight: "800" },
+  technicalToggleText: { color: Colors.motionCyan, fontSize: 14, fontFamily: fontFamily.bodyHeavy },
 });
 
 export default MonitoringScreen;

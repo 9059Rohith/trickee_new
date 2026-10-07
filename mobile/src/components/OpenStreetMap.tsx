@@ -3,6 +3,8 @@ import { StyleSheet, Text, View } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { WebView } from "react-native-webview";
 import { buildOpenStreetMapHtml, buildOpenStreetMapUpdateScript } from "../services/openStreetMapHtml";
+import { Colors } from "../constants/Colors";
+import { fontFamily } from "../theme/typography";
 
 export interface MapMarker {
   id: string;
@@ -76,6 +78,7 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
   return (
     <View style={[styles.map, fill ? styles.fill : { height }, { borderRadius }]}>
       <WebView
+        testID="static-map-webview"
         ref={webView}
         originWhitelist={["file://*", "https://*", "about:blank"]}
         source={source}
@@ -117,7 +120,7 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
           <Text style={styles.statusText}>Map tiles unavailable. Recorded route and markers remain visible.</Text>
         </View>
       ) : null}
-      {pickerMode ? <View pointerEvents="none" style={styles.centerPin}><Icon name="map-marker" size={42} color="#ffca20" /></View> : null}
+      {pickerMode ? <View pointerEvents="none" style={styles.centerPin}><Icon name="map-marker" size={42} color={Colors.motionYellow} /></View> : null}
     </View>
   );
 };
@@ -125,15 +128,15 @@ const OpenStreetMap: React.FC<OpenStreetMapProps> = ({
 const styles = StyleSheet.create({
   map: {
     overflow: "hidden",
-    backgroundColor: "#081019",
+    backgroundColor: Colors.motionPanel,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
-  webview: { flex: 1, backgroundColor: "#081019" },
+  webview: { flex: 1, backgroundColor: Colors.motionPanel },
   fill: { flex: 1 },
   centerPin: { position: "absolute", left: "50%", top: "50%", marginLeft: -21, marginTop: -42 },
   statusBanner: { position: "absolute", left: 10, right: 10, top: 10, borderRadius: 10, backgroundColor: "rgba(8,16,25,0.94)", paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: "rgba(255,202,32,0.5)" },
-  statusText: { color: "#ffca20", fontSize: 13, fontWeight: "700", textAlign: "center" },
+  statusText: { color: Colors.motionYellow, fontSize: 13, fontFamily: fontFamily.bodyBold, textAlign: "center" },
 });
 
 export default OpenStreetMap;

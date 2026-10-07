@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Colors } from "../constants/Colors";
 import { telemetryStatus } from "../services/telemetryNative";
+import { fontFamily } from "../theme/typography";
 
 type Props = {
   tripStartedAt?: string;
@@ -43,7 +44,7 @@ const TripActiveBanner: React.FC<Props> = ({ tripStartedAt }) => {
   }
 
   return (
-    <View style={styles.banner}>
+    <View testID="animated-trip-active-banner" style={styles.banner} accessibilityLiveRegion="polite">
       <View style={styles.indicator}>
         <View style={styles.pulseDot} />
         <Text style={styles.trackingText}>
@@ -79,16 +80,16 @@ const styles = StyleSheet.create({
   trackingText: {
     color: Colors.neonGreen,
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fontFamily.technical,
     letterSpacing: 1,
   },
   elapsed: {
     color: Colors.primaryText,
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: fontFamily.headingBold,
     fontVariant: ["tabular-nums"],
   },
-  points: { color: Colors.secondaryText, fontSize: 11, fontWeight: "600" },
+  points: { color: Colors.secondaryText, fontSize: 11, fontFamily: fontFamily.bodySemibold },
 });
 
 export default TripActiveBanner;

@@ -30,6 +30,7 @@ import {
   resolveChargerLocation,
   type TimestampedLocation,
 } from "../../services/locationFreshness";
+import { fontFamily } from "../../theme/typography";
 
 const FilterPill: React.FC<{
   title: string;
@@ -72,7 +73,7 @@ const filterStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.08)",
   },
-  pillText: { fontSize: 11, fontWeight: "700", color: "rgba(255,255,255,0.5)" },
+  pillText: { fontSize: 11, fontFamily: fontFamily.bodyBold, color: "rgba(255,255,255,0.5)" },
 });
 
 const isFast = (c: ChargerOption) =>
@@ -310,7 +311,7 @@ const LiveMapScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View testID="animated-live-map-screen" style={styles.container}>
       <BackgroundLogo />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -611,7 +612,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   hudPlateRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  hudPlateText: { fontSize: 18, fontWeight: "700", color: Colors.white },
+  hudPlateText: { fontSize: 18, fontFamily: fontFamily.heading, color: Colors.white },
   hudMovingBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -620,7 +621,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(57, 255, 20, 0.4)",
   },
-  hudMovingText: { fontSize: 9, fontWeight: "700", color: Colors.neonGreen },
+  hudMovingText: { fontSize: 9, fontFamily: fontFamily.technical, color: Colors.neonGreen },
   hudSubText: { fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 4 },
   hudStatsRow: {
     flexDirection: "row",
@@ -630,12 +631,12 @@ const styles = StyleSheet.create({
   hudStat: { gap: 4 },
   hudStatLabel: {
     fontSize: 9,
-    fontWeight: "700",
+    fontFamily: fontFamily.technical,
     color: "rgba(255,255,255,0.4)",
   },
   hudSocRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  hudSocValue: { fontSize: 24, fontWeight: "900", color: Colors.trickeeYellow },
-  hudStatValue: { fontSize: 20, fontWeight: "700", color: Colors.white },
+  hudSocValue: { fontSize: 24, fontFamily: fontFamily.headingBold, color: Colors.trickeeYellow },
+  hudStatValue: { fontSize: 20, fontFamily: fontFamily.heading, color: Colors.white },
   hudDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.08)" },
   hudDestRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   hudDestText: {
@@ -695,8 +696,8 @@ const styles = StyleSheet.create({
   },
   blueCharger: { backgroundColor: "rgba(0, 229, 255, 0.1)" },
   chargerInfo: { flex: 1, gap: 2 },
-  chargerName: { fontSize: 14, fontWeight: "700", color: Colors.white },
-  chargerAddress: { fontSize: 12, color: Colors.secondaryText },
+  chargerName: { fontSize: 14, fontFamily: fontFamily.heading, color: Colors.white },
+  chargerAddress: { fontSize: 12, color: Colors.secondaryText, fontFamily: fontFamily.body },
   chargerMeta: { alignItems: "flex-end", gap: 4 },
   chargerDistance: {
     fontSize: 13,

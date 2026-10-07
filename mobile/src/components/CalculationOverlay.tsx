@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../constants/Colors";
+import { progressBarMotionStyle } from "../services/mapMotionSafety";
+import { fontFamily } from "../theme/typography";
 
 const STEPS = [
   {
@@ -85,47 +87,50 @@ const CalculationOverlay: React.FC<{
       () => setStep((value) => Math.min(value + 1, STEPS.length - 1)),
       500
     );
-    Animated.parallel([
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    const calculationAnimation = Animated.parallel([
       Animated.timing(progress, {
         toValue: 1,
         duration: 4000,
         easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: false,
+        useNativeDriver: true,
       }),
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, {
-            toValue: 1,
-            duration: 700,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulse, {
-            toValue: 0,
-            duration: 700,
-            useNativeDriver: true,
-          }),
-        ])
-      ),
-    ]).start();
+      pulseAnimation,
+    ]);
+    calculationAnimation.start();
     Animated.spring(cardIn, {
       toValue: 1,
       damping: 14,
       stiffness: 150,
       useNativeDriver: true,
     }).start();
-    const completionTimer = setTimeout(() => setMinimumComplete(true), 4000);
+    const completionTimer = setTimeout(() => {
+      clearInterval(stepTimer);
+      pulseAnimation.stop();
+      setMinimumComplete(true);
+    }, 4000);
     return () => {
       clearInterval(stepTimer);
       clearTimeout(completionTimer);
+      calculationAnimation.stop();
       pulse.stopAnimation();
     };
   }, [visible, progress, pulse, cardIn]);
 
   const prediction = result?.prediction;
-  const width = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["2%", "100%"],
-  });
   const glowScale = pulse.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 1.16],
@@ -193,7 +198,7 @@ const CalculationOverlay: React.FC<{
         >
           <View style={styles.topRow}>
             <View style={styles.labMark}>
-              <Icon name="atom" size={17} color="#FFFFFF" />
+              <Icon name="atom" size={17} color={Colors.motionInk} />
             </View>
             <View style={styles.topCopy}>
               <Text style={styles.eyebrow}>TRICKEE PHYSICS LAB</Text>
@@ -332,7 +337,7 @@ const CalculationOverlay: React.FC<{
               </Animated.View>
 
               <View style={styles.track}>
-                <Animated.View style={[styles.fill, { width }]} />
+                <Animated.View style={[styles.fill, progressBarMotionStyle(progress)]} />
               </View>
               <View style={styles.pipeline}>
                 {STEPS.map((item, index) => (
@@ -383,10 +388,12 @@ const styles = StyleSheet.create({
     width: "100%",
     borderRadius: 30,
     padding: 22,
-    backgroundColor: "#F8FAFD",
-    shadowColor: "#EAF3FF",
+    backgroundColor: Colors.motionPanel,
+    borderWidth: 1,
+    borderColor: Colors.liquidGlassBorder,
+    shadowColor: Colors.motionCyan,
     shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.55,
+    shadowOpacity: 0.22,
     shadowRadius: 28,
     elevation: 24,
   },
@@ -397,23 +404,23 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#11213C",
+    backgroundColor: Colors.motionCyan,
   },
   topCopy: { flex: 1, marginLeft: 11 },
   eyebrow: {
-    color: "#738199",
+    color: Colors.motionCyan,
     fontSize: 9,
-    fontWeight: "900",
+    fontFamily: fontFamily.technical,
     letterSpacing: 1.25,
   },
-  labTitle: { color: "#101B30", fontSize: 16, fontWeight: "900", marginTop: 2 },
-  counter: { color: "#91A0B5", fontSize: 11, fontWeight: "900" },
+  labTitle: { color: Colors.white, fontSize: 16, fontFamily: fontFamily.heading, marginTop: 2 },
+  counter: { color: Colors.secondaryText, fontSize: 11, fontFamily: fontFamily.technical },
   visualizer: {
     height: 150,
     overflow: "hidden",
     borderRadius: 22,
     marginTop: 20,
-    backgroundColor: "#EAF0F8",
+    backgroundColor: Colors.motionInk,
   },
   axisX: {
     position: "absolute",
@@ -489,8 +496,8 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#15284B",
-    shadowColor: "#6A8FC8",
+    backgroundColor: Colors.motionCyan,
+    shadowColor: Colors.motionCyan,
     shadowOpacity: 0.45,
     shadowRadius: 12,
     elevation: 10,
@@ -499,9 +506,9 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     padding: 17,
     marginTop: 14,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(2,6,9,0.72)",
     borderWidth: 1,
-    borderColor: "#E5EAF1",
+    borderColor: Colors.liquidGlassBorder,
     shadowColor: "#8FA0B8",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
@@ -520,20 +527,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFD750",
   },
   formulaLabel: {
-    color: "#172033",
+    color: Colors.white,
     fontSize: 13,
     fontWeight: "900",
     marginLeft: 9,
   },
   formula: {
-    color: "#13274A",
+    color: Colors.motionCyan,
     fontSize: 17,
     fontWeight: "700",
     letterSpacing: -0.35,
     marginTop: 14,
   },
   formulaDetail: {
-    color: "#77869B",
+    color: Colors.secondaryText,
     fontSize: 10,
     lineHeight: 15,
     marginTop: 6,
@@ -545,7 +552,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     backgroundColor: "#E2E8F0",
   },
-  fill: { height: 5, borderRadius: 4, backgroundColor: "#172A4D" },
+  fill: { height: 5, borderRadius: 4, backgroundColor: Colors.motionCyan },
   pipeline: { marginTop: 16 },
   pipelineItem: {
     minHeight: 20,
