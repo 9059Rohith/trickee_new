@@ -1,8 +1,8 @@
 # GPS Driver Animated UI 1.0.24 Design
 
-**Date:** 2026-10-07  
-**Status:** Approved design awaiting written-spec review  
-**Production baseline:** `feature/plan-aware-trip-guidance-v1.0.22` at `47bf810` (application source `8cd1dfb`), Android `1.0.23 (25)`  
+**Date:** 2026-10-07
+**Status:** Approved design awaiting written-spec review
+**Production baseline:** `feature/plan-aware-trip-guidance-v1.0.22` at `47bf810` (application source `8cd1dfb`), Android `1.0.23 (25)`
 **Visual reference:** `gpsdriver-latest` at `9184ae8`, published under `main/trickee-animated-android` at `9edbf2f`
 
 ## Purpose
