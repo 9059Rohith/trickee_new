@@ -1,0 +1,6 @@
+GPS Driver 1.0.24
+
+- Refresh the complete driver experience with a smoother Trickee visual system and bounded motion.
+- Show a fast, skippable branded introduction once for this release, with reduced-motion support.
+- Keep live maps, trip collection, destination entry, voice input, daily plans and telemetry delivery behavior unchanged.
+- Improve native startup with a non-blank branded handoff while React Native loads.

@@ -13,9 +13,9 @@ class AppIdentityTest {
     }
 
     @Test
-    fun appVersionMatchesDestinationSearchRelease() {
-        assertEquals(25, BuildConfig.VERSION_CODE)
-        assertEquals("1.0.23", BuildConfig.VERSION_NAME)
+    fun appVersionMatchesAnimatedUiRelease() {
+        assertEquals(26, BuildConfig.VERSION_CODE)
+        assertEquals("1.0.24", BuildConfig.VERSION_NAME)
     }
 
     @Test
