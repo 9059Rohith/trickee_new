@@ -9,6 +9,7 @@ import {
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../../constants/Colors";
 import DetailHeader from "../../components/DetailHeader";
+import RouteIdentityStrip from "../../components/RouteIdentityStrip";
 import GlassCard from "../../components/GlassCard";
 import BackgroundLogo from "../../components/BackgroundLogo";
 import { ErrorState, LoadingState } from "../../components/StateViews";
@@ -91,6 +92,7 @@ const DailyImpactScreen: React.FC = () => {
     <View style={styles.container}>
       <BackgroundLogo />
       <DetailHeader title="Daily Impact" subtitle="Your contribution today" />
+      <RouteIdentityStrip route="DailyImpact" compact />
       {loading ? (
         <LoadingState label="Calculating impact…" />
       ) : loadError && !trips.length ? (

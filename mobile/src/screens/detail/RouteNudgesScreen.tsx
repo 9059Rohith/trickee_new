@@ -11,6 +11,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Colors } from "../../constants/Colors";
 import BackgroundLogo from "../../components/BackgroundLogo";
 import DetailHeader from "../../components/DetailHeader";
+import RouteIdentityStrip from "../../components/RouteIdentityStrip";
 import RouteNudgeCard from "../../components/RouteNudgeCard";
 import { EmptyState, ErrorState, LoadingState } from "../../components/StateViews";
 import { useAuth } from "../../context/AuthContext";
@@ -143,6 +144,7 @@ const RouteNudgesScreen: React.FC = () => {
     <View style={styles.container}>
       <BackgroundLogo />
       <DetailHeader title="Route Updates" subtitle="Routes, charging and departure guidance" />
+      <RouteIdentityStrip route="RouteNudges" compact />
       {loading ? (
         <LoadingState label="Loading route updates…" />
       ) : error && !nudges.length ? (

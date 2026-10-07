@@ -13,6 +13,7 @@ import {
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../../constants/Colors";
 import DetailHeader from "../../components/DetailHeader";
+import RouteIdentityStrip from "../../components/RouteIdentityStrip";
 import BackgroundLogo from "../../components/BackgroundLogo";
 import VoiceInputButton from "../../components/VoiceInputButton";
 import { useAuth } from "../../context/AuthContext";
@@ -101,6 +102,7 @@ const AIAssistantScreen: React.FC = () => {
         title="AI Intelligence"
         subtitle="Grounded in GPS-first vehicle data"
       />
+      <RouteIdentityStrip route="AIAssistant" compact />
       <ScrollView
         ref={scrollRef}
         keyboardShouldPersistTaps="handled"

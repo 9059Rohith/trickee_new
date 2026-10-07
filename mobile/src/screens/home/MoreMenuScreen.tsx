@@ -12,6 +12,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../../constants/Colors";
 import GlassCard from "../../components/GlassCard";
 import BackgroundLogo from "../../components/BackgroundLogo";
+import RouteIdentityStrip from "../../components/RouteIdentityStrip";
 import { useAuth } from "../../context/AuthContext";
 import { useLiveData } from "../../context/LiveDataContext";
 import {
@@ -125,6 +126,7 @@ const MoreMenuScreen: React.FC<MoreMenuScreenProps> = ({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        <RouteIdentityStrip route="More" compact />
         <View style={styles.header}>
           <Text style={styles.headerTitle}>More</Text>
         </View>

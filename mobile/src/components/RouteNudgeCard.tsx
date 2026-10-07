@@ -5,6 +5,7 @@ import { Colors } from "../constants/Colors";
 import { nudgeActionState } from "../services/mapNavigation";
 import type { RouteNudge, RouteNudgeEvent } from "../services/types";
 import { liveNudgePresentation } from "../services/presentation";
+import { fontFamily } from "../theme/typography";
 
 const formatLeaveTime = (value?: string | null) => {
   if (!value) return null;
@@ -117,11 +118,11 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: Colors.trickeeYellow,
     fontSize: 10,
-    fontWeight: "900",
+    fontFamily: fontFamily.technical,
     letterSpacing: 1.3,
   },
-  title: { color: Colors.white, fontSize: 17, fontWeight: "800", marginTop: 10 },
-  body: { color: Colors.secondaryText, fontSize: 13, lineHeight: 19, marginTop: 6 },
+  title: { color: Colors.white, fontSize: 17, fontFamily: fontFamily.heading, marginTop: 10 },
+  body: { color: Colors.secondaryText, fontSize: 13, fontFamily: fontFamily.body, lineHeight: 19, marginTop: 6 },
   fact: { color: Colors.white, fontSize: 13, fontWeight: "600", marginTop: 8 },
   evidence: { color: Colors.neonGreen, fontSize: 12, marginTop: 10 },
   warning: { color: Colors.trickeeYellow, fontSize: 12, lineHeight: 17, marginTop: 10 },

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import BackgroundLogo from "../../components/BackgroundLogo";
 import DetailHeader from "../../components/DetailHeader";
+import RouteIdentityStrip from "../../components/RouteIdentityStrip";
 import OpenStreetMap, { type MapMarker } from "../../components/OpenStreetMap";
 import { ErrorState, LoadingState } from "../../components/StateViews";
 import { Colors } from "../../constants/Colors";
@@ -82,9 +83,10 @@ const TripDetailsScreen: React.FC<{ route: any }> = ({ route }) => {
   }), [visibleTrips]);
   const center = polylines[0]?.points[0] || { latitude: 21.1702, longitude: 72.8311 };
 
-  if (loading) return <View style={styles.container}><DetailHeader title="Trip details" /><LoadingState label="Loading recorded route…" /></View>;
-  if (error) return <View style={styles.container}><DetailHeader title="Trip details" /><ErrorState message={error} onRetry={() => load()} /></View>;
+  if (loading) return <View style={styles.container}><DetailHeader title="Trip details" /><RouteIdentityStrip route="TripDetails" compact /><LoadingState label="Loading recorded route…" /></View>;
+  if (error) return <View style={styles.container}><DetailHeader title="Trip details" /><RouteIdentityStrip route="TripDetails" compact /><ErrorState message={error} onRetry={() => load()} /></View>;
   return <View style={styles.container}><BackgroundLogo /><DetailHeader title="Trip details" subtitle={`${serviceDate} · recorded evidence`} />
+    <RouteIdentityStrip route="TripDetails" compact />
     <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Colors.trickeeYellow} colors={[Colors.trickeeYellow]} />}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
         <TouchableOpacity style={[styles.chip, selectedTripId === null && styles.chipActive]} onPress={() => setSelectedTripId(null)}><Text style={[styles.chipText, selectedTripId === null && styles.chipTextActive]}>All day</Text></TouchableOpacity>

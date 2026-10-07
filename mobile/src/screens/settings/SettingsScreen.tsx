@@ -13,6 +13,7 @@ import { Colors } from "../../constants/Colors";
 import { useAuth } from "../../context/AuthContext";
 import { useLiveData } from "../../context/LiveDataContext";
 import GlassCard from "../../components/GlassCard";
+import RouteIdentityStrip from "../../components/RouteIdentityStrip";
 
 const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { user, logout } = useAuth();
@@ -20,6 +21,7 @@ const SettingsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <RouteIdentityStrip route="Settings" compact />
       <Text style={styles.title}>Settings</Text>
 
       <GlassCard style={styles.card} cornerRadius={16}>

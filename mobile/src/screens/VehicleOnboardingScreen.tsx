@@ -21,6 +21,7 @@ import { Colors } from "../constants/Colors";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import DetailHeader from "../components/DetailHeader";
+import RouteIdentityStrip from "../components/RouteIdentityStrip";
 import { canEditAdvancedVehicleSpecs } from "../services/navigationPolicy";
 
 const CATEGORIES = ["2W_passenger", "2W_cargo", "3W_passenger", "3W_cargo"];
@@ -142,6 +143,7 @@ const VehicleOnboardingScreen: React.FC<{ navigation: any; route: any }> = ({
         title={isEdit ? "Vehicle details" : "Add vehicle"}
         subtitle={canEdit ? "Verified specifications" : "Fleet-managed specifications"}
       />
+      <RouteIdentityStrip route="VehicleOnboarding" compact />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text style={styles.subtitle}>
         {canEdit

@@ -12,6 +12,7 @@ import { Colors } from "../../constants/Colors";
 import GlassCard from "../../components/GlassCard";
 import EstimatedBadge from "../../components/EstimatedBadge";
 import ConfidenceIndicator from "../../components/ConfidenceIndicator";
+import RouteIdentityStrip from "../../components/RouteIdentityStrip";
 import {
   EmptyState,
   ErrorState,
@@ -73,6 +74,7 @@ const OwnerDashboardScreen: React.FC = () => {
         />
       }
     >
+      <RouteIdentityStrip route="OwnerDashboard" compact />
       <Text style={styles.title}>Owner Intelligence</Text>
       <Text style={styles.subtitle}>
         GPS + vehicle specifications · precise provenance on every result

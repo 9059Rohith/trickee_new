@@ -9,6 +9,7 @@ import {
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../../constants/Colors";
 import DetailHeader from "../../components/DetailHeader";
+import RouteIdentityStrip from "../../components/RouteIdentityStrip";
 import GlassCard from "../../components/GlassCard";
 import BackgroundLogo from "../../components/BackgroundLogo";
 import {
@@ -143,6 +144,7 @@ const PastTripsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     <View style={styles.container}>
       <BackgroundLogo />
       <DetailHeader title="Past Trips" subtitle={driver?.full_name} />
+      <RouteIdentityStrip route="PastTrips" compact />
       {loading ? (
         <LoadingState label="Loading trips…" />
       ) : error ? (

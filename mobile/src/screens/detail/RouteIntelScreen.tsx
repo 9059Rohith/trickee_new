@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity } from "r
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Colors } from "../../constants/Colors";
 import DetailHeader from "../../components/DetailHeader";
+import RouteIdentityStrip from "../../components/RouteIdentityStrip";
 import GlassCard from "../../components/GlassCard";
 import BackgroundLogo from "../../components/BackgroundLogo";
 import { LoadingState, EmptyState } from "../../components/StateViews";
@@ -155,6 +156,7 @@ const RouteIntelScreen: React.FC = () => {
     <View style={styles.container}>
       <BackgroundLogo />
       <DetailHeader title="Route Intel" subtitle="Range & charging guidance" />
+      <RouteIdentityStrip route="RouteIntel" compact />
       {loading ? (
         <LoadingState label="Analyzing route…" />
       ) : !vehicle ? (

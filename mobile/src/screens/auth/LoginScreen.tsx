@@ -13,6 +13,8 @@ import {
 import { Colors } from "../../constants/Colors";
 import { useAuth } from "../../context/AuthContext";
 import { DEMO_LOGINS, Features, SHOW_DEMO_LOGINS } from "../../config";
+import RouteIdentityStrip from "../../components/RouteIdentityStrip";
+import { fontFamily } from "../../theme/typography";
 
 const LoginScreen: React.FC = () => {
   const { login, googleLogin, loading, error } = useAuth();
@@ -30,6 +32,7 @@ const LoginScreen: React.FC = () => {
       <View style={styles.inner}>
         <Text style={styles.brand}>TRICKEE</Text>
         <Text style={styles.subtitle}>GPS-First EV Intelligence</Text>
+        <RouteIdentityStrip route="Login" compact />
 
         {Features.passwordLogin && (
           <View>
@@ -110,7 +113,7 @@ const styles = StyleSheet.create({
   brand: {
     color: Colors.trickeeYellow,
     fontSize: 36,
-    fontWeight: "900",
+    fontFamily: fontFamily.headingBold,
     letterSpacing: 4,
     textAlign: "center",
   },
@@ -119,6 +122,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     marginBottom: 40,
+    fontFamily: fontFamily.body,
   },
   input: {
     backgroundColor: Colors.cardBackground,
