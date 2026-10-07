@@ -2,6 +2,7 @@ import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Colors } from "../constants/Colors";
 import type { DailyPlanLeg } from "../services/types";
+import { fontFamily } from "../theme/typography";
 
 const formatTime = (value: string | null) =>
   value
@@ -40,16 +41,16 @@ const DailyPlanLegCard: React.FC<{ leg: DailyPlanLeg; onStart?: () => void }> = 
 const styles = StyleSheet.create({
   card: { backgroundColor: Colors.premiumCardBg, borderColor: Colors.premiumCardBorder, borderWidth: 1, borderRadius: 16, padding: 15, gap: 7 },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  title: { flex: 1, color: Colors.white, fontSize: 16, fontWeight: "800" },
-  badge: { fontSize: 10, fontWeight: "900", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+  title: { flex: 1, color: Colors.white, fontSize: 16, fontFamily: fontFamily.heading },
+  badge: { fontSize: 9, fontFamily: fontFamily.technical, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
   ok: { color: Colors.greenAccent, backgroundColor: "rgba(51,204,128,0.12)" },
   warn: { color: Colors.trickeeYellow, backgroundColor: "rgba(255,202,32,0.12)" },
-  line: { color: Colors.secondaryText, fontSize: 13 },
-  soc: { color: Colors.neonCyan, fontSize: 14, fontWeight: "700" },
-  source: { color: Colors.secondaryText, fontSize: 10 },
+  line: { color: Colors.secondaryText, fontSize: 13, fontFamily: fontFamily.body },
+  soc: { color: Colors.motionCyan, fontSize: 14, fontFamily: fontFamily.bodyBold },
+  source: { color: Colors.secondaryText, fontSize: 10, fontFamily: fontFamily.technical },
   reason: { color: Colors.trickeeYellow, fontSize: 12 },
   startButton: { minHeight: 44, borderRadius: 11, backgroundColor: Colors.trickeeYellow, alignItems: "center", justifyContent: "center", marginTop: 4 },
-  startText: { color: Colors.darkText, fontWeight: "900" },
+  startText: { color: Colors.darkText, fontFamily: fontFamily.bodyHeavy },
 });
 
 export default DailyPlanLegCard;

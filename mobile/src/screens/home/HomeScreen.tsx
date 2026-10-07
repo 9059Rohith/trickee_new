@@ -45,6 +45,7 @@ import {
   acknowledgeStationaryNudge,
   telemetryStatus,
 } from "../../services/telemetryNative";
+import { fontFamily } from "../../theme/typography";
 
 const fmt = (val: number | null | undefined, digits = 1) =>
   typeof val === "number" && Number.isFinite(val) ? val.toFixed(digits) : "--";
@@ -248,6 +249,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ bottomTabBarHeight = 0, onStart
       />
 
       <ScrollView
+        testID="animated-home-flow"
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
@@ -513,7 +515,7 @@ const styles = StyleSheet.create({
   cardLabel: {
     color: Colors.secondaryText,
     fontSize: 10,
-    fontWeight: "700",
+    fontFamily: fontFamily.technical,
     letterSpacing: 1,
   },
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 4 },
@@ -523,11 +525,11 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: Colors.neonGreen,
   },
-  liveText: { color: Colors.neonGreen, fontSize: 10, fontWeight: "700" },
+  liveText: { color: Colors.neonGreen, fontSize: 10, fontFamily: fontFamily.technical },
   idleBadge: {},
-  idleText: { color: Colors.secondaryText, fontSize: 10, fontWeight: "700" },
-  vehicleCode: { color: Colors.primaryText, fontSize: 22, fontWeight: "700" },
-  driverInfo: { color: Colors.secondaryText, fontSize: 13, marginTop: 2 },
+  idleText: { color: Colors.secondaryText, fontSize: 10, fontFamily: fontFamily.technical },
+  vehicleCode: { color: Colors.primaryText, fontSize: 22, fontFamily: fontFamily.headingBold },
+  driverInfo: { color: Colors.secondaryText, fontSize: 13, marginTop: 2, fontFamily: fontFamily.body },
   metricsHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -539,11 +541,11 @@ const styles = StyleSheet.create({
   metricLabel: {
     color: Colors.secondaryText,
     fontSize: 10,
-    fontWeight: "600",
+    fontFamily: fontFamily.bodySemibold,
     marginBottom: 4,
     textTransform: "uppercase",
   },
-  metricValue: { color: Colors.primaryText, fontSize: 24, fontWeight: "700" },
+  metricValue: { color: Colors.primaryText, fontSize: 24, fontFamily: fontFamily.headingBold },
   addSocBtn: {
     marginTop: 6,
     paddingHorizontal: 10,
@@ -581,12 +583,12 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     alignItems: "center",
   },
-  actionBtnText: { color: Colors.darkText, fontWeight: "800", fontSize: 16 },
+  actionBtnText: { color: Colors.darkText, fontFamily: fontFamily.bodyHeavy, fontSize: 16 },
   endTripBtn: { backgroundColor: Colors.red },
   endTripText: { color: Colors.white },
   stationaryCard: { borderRadius: 16, borderWidth: 1, borderColor: Colors.trickeeYellow, backgroundColor: "rgba(255,202,32,0.1)", padding: 14, gap: 9, marginBottom: 12 },
-  stationaryTitle: { color: Colors.white, fontSize: 17, fontWeight: "900" },
-  stationaryCopy: { color: Colors.primaryText, fontSize: 14, lineHeight: 20 },
+  stationaryTitle: { color: Colors.white, fontSize: 17, fontFamily: fontFamily.heading },
+  stationaryCopy: { color: Colors.primaryText, fontSize: 14, lineHeight: 20, fontFamily: fontFamily.body },
   stationaryActions: { gap: 8 },
   stationarySecondary: { minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 12, borderWidth: 1, borderColor: Colors.premiumCardBorder },
   stationarySecondaryText: { color: Colors.neonBlue, fontSize: 14, fontWeight: "800" },

@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity
 import { Colors } from "../constants/Colors";
 import { manualDestinationTextChanged, type TripDestination } from "../services/tripStart";
 import VoiceInputButton from "./VoiceInputButton";
+import { fontFamily } from "../theme/typography";
 
 type Props = {
   destination: TripDestination;
@@ -41,7 +42,7 @@ const DestinationPicker: React.FC<Props> = ({ destination, onChange, onPickMap, 
   };
 
   return (
-    <View style={styles.container}>
+    <View testID="animated-destination-picker" style={styles.container}>
       <Text style={styles.label}>Destination</Text>
       {destination.mode === "planned" ? (
         <View style={styles.plannedCard}>
@@ -113,25 +114,25 @@ const DestinationPicker: React.FC<Props> = ({ destination, onChange, onPickMap, 
 
 const styles = StyleSheet.create({
   container: { gap: 10 },
-  label: { color: Colors.primaryText, fontWeight: "800", fontSize: 14 },
+  label: { color: Colors.primaryText, fontFamily: fontFamily.heading, fontSize: 15 },
   plannedCard: { padding: 14, borderRadius: 14, borderWidth: 1, borderColor: Colors.greenAccent, backgroundColor: "rgba(51,204,128,0.08)", gap: 6 },
   manualCard: { padding: 14, borderRadius: 14, borderWidth: 1, borderColor: Colors.premiumCardBorder, backgroundColor: Colors.premiumCardBg, gap: 10 },
   destinationlessCard: { padding: 14, borderRadius: 14, borderWidth: 1, borderColor: Colors.trickeeYellow, backgroundColor: Colors.estimatedBadgeBg, gap: 8 },
-  provenance: { color: Colors.greenAccent, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
-  destination: { color: Colors.white, fontSize: 18, fontWeight: "900" },
-  coordinates: { color: Colors.secondaryText, fontSize: 12 },
-  input: { minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderLight, color: Colors.white, paddingHorizontal: 13, backgroundColor: Colors.appBackground },
+  provenance: { color: Colors.greenAccent, fontSize: 10, fontFamily: fontFamily.technical, letterSpacing: 1 },
+  destination: { color: Colors.white, fontSize: 18, fontFamily: fontFamily.headingBold },
+  coordinates: { color: Colors.secondaryText, fontSize: 12, fontFamily: fontFamily.body },
+  input: { minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: Colors.liquidGlassBorder, color: Colors.white, paddingHorizontal: 13, backgroundColor: Colors.motionInk, fontFamily: fontFamily.bodyMedium },
   searchButton: { minHeight: 48, borderRadius: 12, backgroundColor: Colors.trickeeYellow, alignItems: "center", justifyContent: "center" },
-  searchButtonText: { color: Colors.darkText, fontWeight: "900" },
+  searchButtonText: { color: Colors.darkText, fontFamily: fontFamily.bodyHeavy },
   disabledButton: { opacity: 0.45 },
-  mapButton: { minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: Colors.neonBlue, alignItems: "center", justifyContent: "center" },
-  mapButtonText: { color: Colors.neonBlue, fontWeight: "900" },
+  mapButton: { minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: Colors.motionCyan, alignItems: "center", justifyContent: "center" },
+  mapButtonText: { color: Colors.motionCyan, fontFamily: fontFamily.bodyHeavy },
   warning: { color: Colors.trickeeYellow, lineHeight: 18, fontSize: 12 },
   error: { color: Colors.redSoft, lineHeight: 18, fontSize: 12 },
   secondaryButton: { minHeight: 42, borderRadius: 10, borderWidth: 1, borderColor: Colors.borderLight, alignItems: "center", justifyContent: "center", marginTop: 4 },
-  secondaryText: { color: Colors.primaryText, fontWeight: "700" },
+  secondaryText: { color: Colors.primaryText, fontFamily: fontFamily.bodyBold },
   textButton: { minHeight: 44, alignItems: "center", justifyContent: "center" },
-  textButtonLabel: { color: Colors.secondaryText, textDecorationLine: "underline", fontWeight: "700" },
+  textButtonLabel: { color: Colors.secondaryText, textDecorationLine: "underline", fontFamily: fontFamily.bodyBold },
 });
 
 export default DestinationPicker;

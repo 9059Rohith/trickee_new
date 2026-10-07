@@ -47,6 +47,7 @@ import { currentPlannerLocation } from "../../services/telemetryNative";
 import { showTestHighPriorityNotification } from "../../services/telemetryNative";
 import type { DailyPlan, RecurringPlanTemplate } from "../../services/types";
 import type { PlanConfirmationStage } from "../../services/planConfirmationState";
+import { fontFamily } from "../../theme/typography";
 
 const localDate = () => {
   const date = new Date();
@@ -320,7 +321,11 @@ const DailyPlannerScreen: React.FC = () => {
       <BackgroundLogo />
       <DetailHeader title="Plan My Day" subtitle="AI conversation, verified route and SOC tools" />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView testID="animated-daily-planner-flow" contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.technicalHeader}>
+            <Text style={styles.technicalEyebrow}>DAY ROUTE COMPOSER</Text>
+            <Text style={styles.technicalTitle}>Turn your schedule into verified trip legs.</Text>
+          </View>
           <View style={styles.assistantBubble}>
             <Text style={styles.assistantText}>
               Tell me every stop and arrival time for the day. Example: Office at 9 am, client at 12:30 pm, warehouse at 4 pm, home by 7 pm.
@@ -466,31 +471,34 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.appBackground },
   flex: { flex: 1 },
   content: { padding: 16, gap: 12, paddingBottom: 50 },
-  assistantBubble: { alignSelf: "flex-start", maxWidth: "92%", backgroundColor: "rgba(0,229,255,0.09)", borderColor: "rgba(0,229,255,0.28)", borderWidth: 1, borderRadius: 16, borderBottomLeftRadius: 4, padding: 14 },
-  assistantText: { color: Colors.primaryText, lineHeight: 20, fontSize: 14 },
-  input: { backgroundColor: Colors.premiumCardBg, color: Colors.white, borderWidth: 1, borderColor: Colors.premiumCardBorder, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 12 },
+  technicalHeader: { gap: 6, padding: 15, borderRadius: 16, borderWidth: 1, borderColor: Colors.liquidGlassBorder, backgroundColor: "rgba(72,223,244,0.045)" },
+  technicalEyebrow: { color: Colors.motionCyan, fontFamily: fontFamily.technical, fontSize: 9, letterSpacing: 1.2 },
+  technicalTitle: { color: Colors.white, fontFamily: fontFamily.headingBold, fontSize: 21, lineHeight: 25 },
+  assistantBubble: { alignSelf: "flex-start", maxWidth: "92%", backgroundColor: "rgba(72,223,244,0.07)", borderColor: "rgba(72,223,244,0.25)", borderWidth: 1, borderRadius: 16, borderBottomLeftRadius: 4, padding: 14 },
+  assistantText: { color: Colors.primaryText, lineHeight: 20, fontSize: 14, fontFamily: fontFamily.body },
+  input: { backgroundColor: Colors.premiumCardBg, color: Colors.white, borderWidth: 1, borderColor: Colors.premiumCardBorder, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 12, fontFamily: fontFamily.bodyMedium },
   messageInput: { minHeight: 100, textAlignVertical: "top" },
-  fieldLabel: { color: Colors.primaryText, fontSize: 14, fontWeight: "800" },
-  required: { color: Colors.trickeeYellow, fontSize: 12, fontWeight: "700" },
+  fieldLabel: { color: Colors.primaryText, fontSize: 14, fontFamily: fontFamily.bodyHeavy },
+  required: { color: Colors.trickeeYellow, fontSize: 12, fontFamily: fontFamily.bodyBold },
   dateShortcuts: { flexDirection: "row", gap: 8 },
   dateChip: { minHeight: 44, paddingHorizontal: 18, borderRadius: 22, borderWidth: 1, borderColor: Colors.premiumCardBorder, alignItems: "center", justifyContent: "center" },
   dateChipActive: { borderColor: Colors.trickeeYellow, backgroundColor: "rgba(255,196,0,0.12)" },
-  dateChipText: { color: Colors.primaryText, fontSize: 14, fontWeight: "800" },
+  dateChipText: { color: Colors.primaryText, fontSize: 14, fontFamily: fontFamily.bodyHeavy },
   inputRow: { flexDirection: "row", gap: 10 },
   half: { flex: 1 },
   dateButton: { justifyContent: "center" },
   dateLabel: { color: Colors.primaryText, fontSize: 14, fontWeight: "800" },
   dateValue: { color: Colors.white, fontWeight: "800", marginTop: 2 },
   primaryButton: { minHeight: 50, borderRadius: 14, backgroundColor: Colors.trickeeYellow, alignItems: "center", justifyContent: "center", padding: 10 },
-  primaryText: { color: Colors.darkText, fontWeight: "900" },
-  testButton: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: Colors.neonBlue, alignItems: "center", justifyContent: "center", padding: 10 },
-  testButtonText: { color: Colors.neonBlue, fontWeight: "800" },
+  primaryText: { color: Colors.darkText, fontFamily: fontFamily.bodyHeavy },
+  testButton: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: Colors.motionCyan, alignItems: "center", justifyContent: "center", padding: 10 },
+  testButtonText: { color: Colors.motionCyan, fontFamily: fontFamily.bodyHeavy },
   saveRow: { minHeight: 30, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   saveText: { color: Colors.greenAccent, fontSize: 13 },
   saveError: { color: Colors.redSoft },
   discardText: { color: Colors.redSoft, fontSize: 13, fontWeight: "800", paddingVertical: 8 },
   section: { gap: 11, marginTop: 8 },
-  sectionTitle: { color: Colors.white, fontSize: 20, fontWeight: "900" },
+  sectionTitle: { color: Colors.white, fontSize: 20, fontFamily: fontFamily.headingBold },
   stopRow: { flexDirection: "row", padding: 13, borderRadius: 12, backgroundColor: Colors.premiumCardBg },
   stopName: { flex: 1, color: Colors.white, fontWeight: "700" },
   stopTime: { color: Colors.trickeeYellow, fontWeight: "800" },

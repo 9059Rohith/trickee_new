@@ -18,6 +18,7 @@ import {
 import { Colors } from "../constants/Colors";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { fontFamily } from "../theme/typography";
 
 type Props = {
   visible: boolean;
@@ -180,6 +181,8 @@ const styles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: Colors.cardBackground,
+    borderTopWidth: 1,
+    borderColor: Colors.liquidGlassBorder,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
@@ -188,7 +191,7 @@ const styles = StyleSheet.create({
   title: {
     color: Colors.primaryText,
     fontSize: 20,
-    fontWeight: "700",
+    fontFamily: fontFamily.heading,
     marginBottom: 4,
   },
   subtitle: {
@@ -196,9 +199,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 20,
     lineHeight: 18,
+    fontFamily: fontFamily.body,
   },
-  fieldLabel: { color: Colors.primaryText, fontSize: 14, fontWeight: "800", marginBottom: 8 },
-  required: { color: Colors.trickeeYellow, fontSize: 12, fontWeight: "700" },
+  fieldLabel: { color: Colors.primaryText, fontSize: 14, fontFamily: fontFamily.bodyHeavy, marginBottom: 8 },
+  required: { color: Colors.trickeeYellow, fontSize: 12, fontFamily: fontFamily.bodyBold },
   input: {
     backgroundColor: Colors.appBackground,
     borderWidth: 1,
@@ -206,7 +210,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     color: Colors.primaryText,
     fontSize: 32,
-    fontWeight: "700",
+    fontFamily: fontFamily.headingBold,
     textAlign: "center",
     paddingVertical: 16,
     marginBottom: 4,
@@ -231,7 +235,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.trickeeYellow,
     backgroundColor: Colors.estimatedBadgeBg,
   },
-  sourceText: { color: Colors.secondaryText, fontSize: 12, fontWeight: "600" },
+  sourceText: { color: Colors.secondaryText, fontSize: 12, fontFamily: fontFamily.bodySemibold },
   sourceTextActive: { color: Colors.trickeeYellow },
   error: {
     color: Colors.red,
@@ -248,7 +252,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderLight,
     alignItems: "center",
   },
-  cancelText: { color: Colors.secondaryText, fontWeight: "600" },
+  cancelText: { color: Colors.secondaryText, fontFamily: fontFamily.bodySemibold },
   saveBtn: {
     flex: 2,
     paddingVertical: 14,
@@ -256,7 +260,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.trickeeYellow,
     alignItems: "center",
   },
-  saveText: { color: Colors.darkText, fontWeight: "700", fontSize: 15 },
+  saveText: { color: Colors.darkText, fontFamily: fontFamily.bodyBold, fontSize: 15 },
 });
 
 export default SOCEntryModal;

@@ -2,6 +2,7 @@ import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Colors } from "../constants/Colors";
 import type { NextDailyPlanLeg } from "../services/types";
+import { fontFamily } from "../theme/typography";
 
 const timeLabel = (value: string | null) => {
   if (!value) return "Time not available";
@@ -10,7 +11,7 @@ const timeLabel = (value: string | null) => {
 };
 
 const NextTripCard: React.FC<{ leg: NextDailyPlanLeg; onStart: () => void }> = ({ leg, onStart }) => (
-  <View style={styles.card}>
+  <View testID="animated-next-trip-card" style={styles.card}>
     <View style={styles.copy}>
       <Text style={styles.eyebrow}>NEXT PLANNED STOP</Text>
       <Text style={styles.title}>{leg.destination_text}</Text>
@@ -23,13 +24,13 @@ const NextTripCard: React.FC<{ leg: NextDailyPlanLeg; onStart: () => void }> = (
 );
 
 const styles = StyleSheet.create({
-  card: { marginBottom: 12, padding: 15, borderRadius: 18, borderWidth: 1, borderColor: "rgba(0,229,255,0.35)", backgroundColor: "rgba(0,229,255,0.08)", flexDirection: "row", alignItems: "center", gap: 12 },
+  card: { marginBottom: 12, padding: 15, borderRadius: 18, borderWidth: 1, borderColor: "rgba(72,223,244,0.32)", backgroundColor: "rgba(72,223,244,0.07)", flexDirection: "row", alignItems: "center", gap: 12 },
   copy: { flex: 1, gap: 3 },
-  eyebrow: { color: Colors.neonBlue, fontWeight: "900", fontSize: 10, letterSpacing: 1 },
-  title: { color: Colors.white, fontWeight: "900", fontSize: 16 },
-  meta: { color: Colors.secondaryText, fontSize: 12 },
-  button: { minHeight: 42, borderRadius: 12, backgroundColor: Colors.neonBlue, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" },
-  buttonText: { color: Colors.darkText, fontWeight: "900", fontSize: 12 },
+  eyebrow: { color: Colors.motionCyan, fontFamily: fontFamily.technical, fontSize: 9, letterSpacing: 1 },
+  title: { color: Colors.white, fontFamily: fontFamily.heading, fontSize: 16 },
+  meta: { color: Colors.secondaryText, fontFamily: fontFamily.body, fontSize: 12 },
+  button: { minHeight: 42, borderRadius: 12, backgroundColor: Colors.motionCyan, paddingHorizontal: 13, alignItems: "center", justifyContent: "center" },
+  buttonText: { color: Colors.darkText, fontFamily: fontFamily.bodyHeavy, fontSize: 12 },
 });
 
 export default NextTripCard;

@@ -18,6 +18,7 @@ import {
   validateTripStart,
   type TripDestination,
 } from "../../services/tripStart";
+import { fontFamily } from "../../theme/typography";
 
 const defaultCenter = { lat: 21.1702, lng: 72.8311 };
 const manualDestination = (): TripDestination => ({ mode: "manual", text: "", lat: null, lng: null, source: "search_result" });
@@ -169,7 +170,12 @@ const TripStartScreen: React.FC<any> = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <DetailHeader title="Start Trip" subtitle="Confirm destination and dashboard SOC" />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView testID="animated-trip-start-flow" contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.introCard}>
+          <Text style={styles.eyebrow}>TRIP INITIALIZATION</Text>
+          <Text style={styles.introTitle}>Pin where you are going.</Text>
+          <Text style={styles.introCopy}>Search, speak, or move the map pin. The selected destination stays editable until GPS capture begins.</Text>
+        </View>
         {loadingPlan ? <View style={styles.loading}><ActivityIndicator color={Colors.trickeeYellow} /><Text style={styles.muted}>Checking today’s plan…</Text></View> : null}
         {planNotice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{planNotice}</Text> : null}
         <DestinationPicker
@@ -221,18 +227,22 @@ const TripStartScreen: React.FC<any> = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.appBackground },
   content: { padding: 16, gap: 18, paddingBottom: 48 },
+  introCard: { gap: 7, padding: 15, borderRadius: 16, borderWidth: 1, borderColor: Colors.liquidGlassBorder, backgroundColor: "rgba(72,223,244,0.045)" },
+  eyebrow: { color: Colors.motionCyan, fontFamily: fontFamily.technical, fontSize: 9, letterSpacing: 1.2 },
+  introTitle: { color: Colors.white, fontFamily: fontFamily.headingBold, fontSize: 22 },
+  introCopy: { color: Colors.secondaryText, fontFamily: fontFamily.body, fontSize: 13, lineHeight: 19 },
   loading: { flexDirection: "row", alignItems: "center", gap: 10 },
-  muted: { color: Colors.secondaryText },
+  muted: { color: Colors.secondaryText, fontFamily: fontFamily.body },
   notice: { color: Colors.trickeeYellow, borderWidth: 1, borderColor: "rgba(255,202,32,0.35)", backgroundColor: Colors.estimatedBadgeBg, borderRadius: 12, padding: 12, lineHeight: 18 },
   socBlock: { gap: 8 },
-  label: { color: Colors.primaryText, fontWeight: "800", fontSize: 14 },
-  socInput: { minHeight: 62, borderRadius: 14, borderWidth: 1, borderColor: Colors.borderLight, color: Colors.white, backgroundColor: Colors.premiumCardBg, textAlign: "center", fontWeight: "900", fontSize: 28 },
-  evidence: { color: Colors.secondaryText, fontSize: 12, textAlign: "center" },
+  label: { color: Colors.primaryText, fontFamily: fontFamily.heading, fontSize: 14 },
+  socInput: { minHeight: 62, borderRadius: 14, borderWidth: 1, borderColor: Colors.liquidGlassBorder, color: Colors.white, backgroundColor: Colors.premiumCardBg, textAlign: "center", fontFamily: fontFamily.headingBold, fontSize: 28 },
+  evidence: { color: Colors.secondaryText, fontFamily: fontFamily.body, fontSize: 12, textAlign: "center" },
   error: { color: Colors.redSoft, lineHeight: 18, textAlign: "center" },
   submit: { minHeight: 54, borderRadius: 15, backgroundColor: Colors.trickeeYellow, alignItems: "center", justifyContent: "center" },
   submitDisabled: { opacity: 0.45 },
-  submitText: { color: Colors.darkText, fontWeight: "900", fontSize: 16 },
-  footnote: { color: Colors.secondaryText, fontSize: 11, lineHeight: 16, textAlign: "center" },
+  submitText: { color: Colors.darkText, fontFamily: fontFamily.bodyHeavy, fontSize: 16 },
+  footnote: { color: Colors.secondaryText, fontFamily: fontFamily.body, fontSize: 11, lineHeight: 16, textAlign: "center" },
 });
 
 export default TripStartScreen;

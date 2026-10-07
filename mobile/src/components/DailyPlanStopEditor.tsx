@@ -10,6 +10,7 @@ import {
   updatePlannerStop,
   type PlannerStop,
 } from "../services/plannerForm";
+import { fontFamily } from "../theme/typography";
 
 type Props = {
   stops: PlannerStop[];
@@ -46,17 +47,17 @@ const DailyPlanStopEditor: React.FC<Props> = ({ stops, onChange, onSelectMap, on
 
 const styles = StyleSheet.create({
   list: { gap: 10 }, card: { backgroundColor: Colors.premiumCardBg, borderWidth: 1, borderColor: Colors.premiumCardBorder, borderRadius: 14, padding: 12, gap: 9 },
-  heading: { flexDirection: "row", alignItems: "center", gap: 5 }, title: { flex: 1, color: Colors.white, fontWeight: "900" },
+  heading: { flexDirection: "row", alignItems: "center", gap: 5 }, title: { flex: 1, color: Colors.white, fontFamily: fontFamily.heading },
   iconButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 12 },
-  fieldLabel: { color: Colors.primaryText, fontSize: 14, fontWeight: "800", marginTop: 2 },
-  required: { color: Colors.trickeeYellow, fontSize: 12, fontWeight: "700" },
-  input: { color: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.premiumCardBorder, paddingVertical: 8 },
+  fieldLabel: { color: Colors.primaryText, fontSize: 14, fontFamily: fontFamily.bodyHeavy, marginTop: 2 },
+  required: { color: Colors.trickeeYellow, fontSize: 12, fontFamily: fontFamily.bodyBold },
+  input: { color: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.premiumCardBorder, paddingVertical: 8, fontFamily: fontFamily.bodyMedium },
   timeButton: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: Colors.premiumCardBorder, borderRadius: 12, paddingHorizontal: 12 },
-  timeText: { flex: 1, color: Colors.white, fontSize: 15, fontWeight: "800" },
-  placeholder: { color: Colors.secondaryText, fontWeight: "600" },
-  mapButton: { flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 5 }, mapText: { color: Colors.neonBlue, fontWeight: "800" },
+  timeText: { flex: 1, color: Colors.white, fontSize: 15, fontFamily: fontFamily.bodyHeavy },
+  placeholder: { color: Colors.secondaryText, fontFamily: fontFamily.bodySemibold },
+  mapButton: { flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 5 }, mapText: { color: Colors.motionCyan, fontFamily: fontFamily.bodyHeavy },
   evidence: { color: Colors.secondaryText, fontSize: 11, lineHeight: 16 }, coords: { color: Colors.greenAccent, fontSize: 11 }, unresolved: { color: Colors.trickeeYellow, fontSize: 11 },
-  addButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, padding: 13, borderWidth: 1, borderColor: Colors.premiumCardBorder, borderRadius: 12 }, addText: { color: Colors.greenAccent, fontWeight: "800" }, dim: { color: Colors.secondaryText },
+  addButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, padding: 13, borderWidth: 1, borderColor: Colors.premiumCardBorder, borderRadius: 12 }, addText: { color: Colors.greenAccent, fontFamily: fontFamily.bodyHeavy }, dim: { color: Colors.secondaryText },
 });
 
 export default DailyPlanStopEditor;

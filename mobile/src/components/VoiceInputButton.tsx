@@ -9,6 +9,7 @@ import {
   voiceErrorMessage,
   voiceSubscriptionFailureMessage,
 } from "../services/voiceInput";
+import { fontFamily } from "../theme/typography";
 
 type Props = {
   value: string;
@@ -135,7 +136,7 @@ const VoiceInputButton: React.FC<Props> = ({ value, onChangeText, onFinalText, l
         style={[styles.button, listening && styles.active, starting && styles.disabled]}
         onPress={start}
       >
-        <Icon name={listening ? "stop-circle-outline" : "microphone-outline"} size={21} color={listening ? Colors.darkText : Colors.neonBlue} />
+        <Icon name={listening ? "stop-circle-outline" : "microphone-outline"} size={21} color={listening ? Colors.darkText : Colors.motionCyan} />
         <Text style={[styles.label, listening && styles.activeLabel]}>{listening ? "Stop and transcribe" : starting ? "Starting..." : label}</Text>
       </TouchableOpacity>
       {status ? <Text accessibilityLiveRegion="polite" style={styles.status}>{status}</Text> : null}
@@ -145,12 +146,12 @@ const VoiceInputButton: React.FC<Props> = ({ value, onChangeText, onFinalText, l
 
 const styles = StyleSheet.create({
   wrapper: { gap: 6 },
-  button: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, borderWidth: 1, borderColor: Colors.neonBlue, paddingHorizontal: 14 },
+  button: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, borderWidth: 1, borderColor: Colors.motionCyan, paddingHorizontal: 14, backgroundColor: "rgba(72,223,244,0.04)" },
   active: { backgroundColor: Colors.trickeeYellow, borderColor: Colors.trickeeYellow },
   disabled: { opacity: 0.65 },
-  label: { color: Colors.neonBlue, fontSize: 14, fontWeight: "900" },
+  label: { color: Colors.motionCyan, fontSize: 14, fontFamily: fontFamily.bodyHeavy },
   activeLabel: { color: Colors.darkText },
-  status: { color: Colors.secondaryText, fontSize: 13, lineHeight: 18 },
+  status: { color: Colors.secondaryText, fontSize: 13, lineHeight: 18, fontFamily: fontFamily.body },
 });
 
 export default VoiceInputButton;
